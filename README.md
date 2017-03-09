@@ -1,0 +1,2 @@
+# symbols-extractor
+WIP
