@@ -1,0 +1,636 @@
+{
+	"$schema": "http://json-schema.org/draft-04/schema#",
+	"title": "Golang project exported api artefact",
+	"description": "Definition of exported api of a golang project",
+	"type": "object",
+	"properties": {
+		"artefact": {
+			"description": "Artefact name",
+			"type": "string"
+		},
+		"repository": {
+			"anyOf": [
+				{ "$ref": "#/definitions/github" },
+				{ "$ref": "#/definitions/bitbucket" }
+			]
+		},
+		"commit": {
+			"description": "Repository project commit",
+			"type": "string"
+		},
+		"packages": {
+			"type": "array",
+			"description": "definition of exported API for defined packages",
+			"items": {
+				"type": "object",
+				"description": "list of packages with exported symbols",
+				"properties": {
+					"package": {
+						"type": "string",
+						"description": "Package name",
+						"minLength": 1
+					},
+					"datatypes": {
+						"description": "Definition of all data types for a given package",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"description": "Data type definition",
+							"properties": {
+								"name": {
+									"type": "string",
+									"description": "Data type name",
+									"minLength": 1
+								},
+								"def": {
+									"oneOf": [
+										{ "$ref": "#/definitions/identifier" },
+										{ "$ref": "#/definitions/selector" },
+										{ "$ref": "#/definitions/channel" },
+										{ "$ref": "#/definitions/slice" },
+										{ "$ref": "#/definitions/array" },
+										{ "$ref": "#/definitions/map" },
+										{ "$ref": "#/definitions/pointer" },
+										{ "$ref": "#/definitions/ellipsis" },
+										{ "$ref": "#/definitions/function" },
+										{ "$ref": "#/definitions/method" },
+										{ "$ref": "#/definitions/interface" },
+										{ "$ref": "#/definitions/struct" }
+									]
+								}
+							},
+							"required": ["name", "def"]
+						}
+					},
+					"functions": {
+						"description": "Definition of all functions for a given package",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"description": "Function type definition",
+							"properties": {
+								"name": {
+									"type": "string",
+									"description": "Function type name",
+									"minLength": 1
+								},
+								"def": {
+									"oneOf": [
+										{ "$ref": "#/definitions/function" },
+										{ "$ref": "#/definitions/method" }
+									]
+								}
+							},
+							"required": ["name", "def"]
+						}
+
+					},
+					"variables": {
+						"description": "Definition of all exported variables for a given package",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"description": "Variable type definition",
+							"properties": {
+								"name": {
+									"type": "string",
+									"description": "Data type name",
+									"minLength": 1
+								},
+								"def": {
+									"oneOf": [
+										{ "$ref": "#/definitions/identifier" },
+										{ "$ref": "#/definitions/selector" },
+										{ "$ref": "#/definitions/channel" },
+										{ "$ref": "#/definitions/slice" },
+										{ "$ref": "#/definitions/array" },
+										{ "$ref": "#/definitions/map" },
+										{ "$ref": "#/definitions/pointer" },
+										{ "$ref": "#/definitions/function" },
+										{ "$ref": "#/definitions/method" },
+										{ "$ref": "#/definitions/interface" },
+										{ "$ref": "#/definitions/struct" }
+									]
+								}
+							},
+							"required": ["name"]
+						}
+					},
+					"constants": {
+						"description": "Definition of all exported constants for a given package",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"description": "Variable type definition",
+							"properties": {
+								"name": {
+									"type": "string",
+									"description": "Data type name",
+									"minLength": 1
+								},
+								"def": {
+									"oneOf": [
+										{ "$ref": "#/definitions/identifier" },
+										{ "$ref": "#/definitions/selector" },
+										{ "$ref": "#/definitions/channel" },
+										{ "$ref": "#/definitions/slice" },
+										{ "$ref": "#/definitions/array" },
+										{ "$ref": "#/definitions/map" },
+										{ "$ref": "#/definitions/pointer" },
+										{ "$ref": "#/definitions/function" },
+										{ "$ref": "#/definitions/method" },
+										{ "$ref": "#/definitions/interface" },
+										{ "$ref": "#/definitions/struct" }
+									]
+								}
+							},
+							"required": ["name", "def"]
+						}
+					}
+				}
+			},
+			"uniqueItems": true
+		}
+	},
+	"required": ["artefact", "repository", "commit", "packages"],
+	"definitions": {
+		"identifier": {
+			"type": "object",
+			"description": "Identifier definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Type identifier",
+					"oneOf": [
+						{"enum": ["identifier"]}
+					]
+				},
+				"def": {
+					"type": "string",
+					"description": "Primitive type or ID",
+					"minLength": 1
+				}
+			},
+			"required": ["type", "def"]
+		},
+		"selector": {
+			"type": "object",
+			"description": "Identifier definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Type identifier",
+					"oneOf": [
+						{"enum": ["selector"]}
+					]
+				},
+				"prefix": {
+					"type": "object",
+					"description": "Prefix definition",
+					"oneOf": [
+						{ "$ref": "#/definitions/identifier" }
+					]
+				},
+				"item": {
+					"type": "string",
+					"description": "Item identifier",
+					"minLength": 1
+				}
+			},
+			"required": ["type", "prefix", "item"]
+		},
+		"channel": {
+			"type": "object",
+			"description": "Channel definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Type identifier",
+					"oneOf": [
+						{"enum": ["channel"]}
+					]
+				},
+				"dir": {
+					"type": "string",
+					"description": "Direction specification",
+					"oneOf": [
+						{"enum": ["1", "2", "3"]}
+					]
+				},
+				"value": {
+					"type": "object",
+					"description": "Value definition",
+					"oneOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				}
+			},
+			"required": ["type", "dir", "value"]
+		},
+		"slice": {
+			"type": "object",
+			"description": "Slice definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Type identifier",
+					"oneOf": [
+						{"enum": ["slice"]}
+					]
+				},
+				"elmtype": {
+					"type": "object",
+					"description": "Element type definition",
+					"oneOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				}
+			},
+			"required": ["type", "elmtype"]
+		},
+		"array": {
+			"type": "object",
+			"description": "Array definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "type identifier",
+					"oneOf": [
+						{"enum": ["array"]}
+					]
+				},
+				"elmtype": {
+					"type": "object",
+					"description": "element type definition",
+					"anyOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				}
+			},
+			"required": ["type", "elmtype"]
+		},
+		"map": {
+			"type": "object",
+			"description": "Map definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "type identifier",
+					"oneOf": [
+						{"enum": ["map"]}
+					]
+				},
+				"keytype": {
+					"type": "object",
+					"description": "Key type definition",
+					"anyOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				},
+				"valuetype": {
+					"type": "object",
+					"description": "Key type definition",
+					"anyOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				}
+
+			},
+			"required": ["type", "keytype", "valuetype"]
+		},
+		"pointer": {
+			"type": "object",
+			"description": "Pointer definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "type identifier",
+					"oneOf": [
+						{"enum": ["pointer"]}
+					]
+				},
+				"def": {
+					"type": "object",
+					"description": "Pointed type definition",
+					"anyOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				}
+			},
+			"required": ["type", "def"]
+		},
+		"ellipsis": {
+			"type": "object",
+			"description": "Pointer definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "type identifier",
+					"oneOf": [
+						{"enum": ["ellipsis"]}
+					]
+				},
+				"def": {
+					"type": "object",
+					"description": "Ellipses type definition",
+					"anyOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/channel" },
+						{ "$ref": "#/definitions/slice" },
+						{ "$ref": "#/definitions/array" },
+						{ "$ref": "#/definitions/map" },
+						{ "$ref": "#/definitions/pointer" },
+						{ "$ref": "#/definitions/function" },
+						{ "$ref": "#/definitions/method" },
+						{ "$ref": "#/definitions/interface" },
+						{ "$ref": "#/definitions/struct" }
+					]
+				}
+			},
+			"required": ["type", "def"]
+		},
+		"function": {
+			"type": "object",
+			"description": "Function definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Type identifier",
+					"oneOf": [
+						{"enum": ["function"]}
+					]
+				},
+				"params": {
+					"type": "array",
+					"description": "List of parameters",
+					"items": {
+						"type": "object",
+						"description": "Parameter type definition",
+						"anyOf": [
+							{ "$ref": "#/definitions/identifier" },
+							{ "$ref": "#/definitions/selector" },
+							{ "$ref": "#/definitions/channel" },
+							{ "$ref": "#/definitions/slice" },
+							{ "$ref": "#/definitions/array" },
+							{ "$ref": "#/definitions/map" },
+							{ "$ref": "#/definitions/pointer" },
+							{ "$ref": "#/definitions/ellipsis" },
+							{ "$ref": "#/definitions/function" },
+							{ "$ref": "#/definitions/method" },
+							{ "$ref": "#/definitions/interface" },
+							{ "$ref": "#/definitions/struct" }
+						]
+
+					}
+				},
+				"results": {
+					"type": "array",
+					"description": "List of results",
+					"items": {
+						"type": "object",
+						"description": "Results type definition",
+						"anyOf": [
+							{ "$ref": "#/definitions/identifier" },
+							{ "$ref": "#/definitions/selector" },
+							{ "$ref": "#/definitions/channel" },
+							{ "$ref": "#/definitions/slice" },
+							{ "$ref": "#/definitions/array" },
+							{ "$ref": "#/definitions/map" },
+							{ "$ref": "#/definitions/pointer" },
+							{ "$ref": "#/definitions/function" },
+							{ "$ref": "#/definitions/method" },
+							{ "$ref": "#/definitions/interface" },
+							{ "$ref": "#/definitions/struct" }
+						]
+
+					}
+				}
+
+			},
+			"required": ["type", "params", "results"]
+		},
+		"method": {
+			"type": "object",
+			"description": "Method definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "type identifier",
+					"oneOf": [
+						{"enum": ["method"]}
+					]
+				},
+				"receiver": {
+					"type": "object",
+					"description": "Receiver type definition",
+					"anyOf": [
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/selector" },
+						{ "$ref": "#/definitions/pointer" }
+					]
+				},
+				"def": {
+					"type": "object",
+					"description": "Function type definition",
+					"oneOf": [
+						{ "$ref": "#/definitions/function" }
+					]
+				}
+			},
+			"required": ["receiver", "def"]
+		},
+		"interface": {
+			"type": "object",
+			"description": "Interface definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "type identifier",
+					"oneOf": [
+						{"enum": ["interface"]}
+					]
+				},
+				"methods": {
+					"type": "array",
+					"description": "List of methods",
+					"items": {
+						"type": "object",
+						"description": "Method definition",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Method name",
+								"minLength": 1
+							},
+							"def": {
+								"type": "object",
+								"description": "Function type definition",
+								"oneOf": [
+									{ "$ref": "#/definitions/function" }
+								]	
+							}
+						},
+						"required": ["name", "def"]
+					},
+					"uniqueItems": true
+				}
+			},
+			"required": ["type", "methods"]
+		},
+		"struct": {
+			"type": "object",
+			"description": "Struct definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Type identifier",
+					"oneOf": [
+						{"enum": ["struct"]}
+					]
+				},
+				"fields": {
+					"type": "array",
+					"description": "Definition of fields",
+					"items": {
+						"type": "object",
+						"description": "Field definition",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Field name. Anonymous if omited."
+							},
+							"def": {
+								"type": "object",
+								"description": "Type definition",
+								"anyOf": [
+									{ "$ref": "#/definitions/identifier" },
+									{ "$ref": "#/definitions/selector" },
+									{ "$ref": "#/definitions/channel" },
+									{ "$ref": "#/definitions/slice" },
+									{ "$ref": "#/definitions/array" },
+									{ "$ref": "#/definitions/map" },
+									{ "$ref": "#/definitions/pointer" },
+									{ "$ref": "#/definitions/function" },
+									{ "$ref": "#/definitions/method" },
+									{ "$ref": "#/definitions/interface" },
+									{ "$ref": "#/definitions/struct" }
+								]
+							}
+						},
+						"required": ["def"]
+					}
+				}
+			},
+			"required": ["type", "fields"]
+		},
+		"github": {
+			"description": "Github repository",
+			"type": "object",
+			"properties": {
+				"provider": {
+					"description": "Provider",
+					"type": "string",
+					"oneOf": [
+						{"enum": ["github"]}
+					]
+				},
+				"username": {
+					"description": "Github username",
+					"type": "string",
+					"minLength": 1
+				},
+				"project": {
+					"description": "Github project",
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": ["provider", "username", "project"]
+		},
+		"bitbucket": {
+			"description": "Bitbucket repository",
+			"type": "object",
+			"properties": {
+				"provider": {
+					"description": "Provider",
+					"type": "string",
+					"oneOf": [
+						{"enum": ["bitbucket"]}
+					]
+				},
+				"username": {
+					"description": "Bitbucket username",
+					"type": "string",
+					"minLength": 1
+				},
+				"project": {
+					"description": "Bitbucket project",
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": ["provider", "username", "project"]
+		}
+	}
+}
