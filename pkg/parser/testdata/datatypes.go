@@ -26,3 +26,9 @@ type Struct struct {
 	simpleMethodWithEllipsis func(arg1 string, ellipsis ...string) (string, error)
 	//
 }
+
+type Kohout string
+
+var VarStr string = "Jecminek!"
+
+const ConstStr = "Kure"

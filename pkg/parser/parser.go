@@ -4,9 +4,61 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/parser"
+	"go/token"
 
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	gost "github.com/gofed/symbols-extractor/pkg/types/symboltable"
 )
+
+//TODO: add func ParsePackage
+
+//NOTE: it's ugly but big modification is really expected here...
+// This will be main function used from outside for parsing of whole files
+func ParseFiles(fname []string, symtab gost.SymbolTable) (gost.SymbolTable, error) {
+	//TODO: support parsing through all files, for now, just one file is processed
+	//      but in future is expected set of files as input
+	//TODO: at first, create ASTs of all files, then start parsing
+	var sym *gost.DeclType
+	fset := token.NewFileSet()
+	gofile := fname[0]
+	f, err := parser.ParseFile(fset, gofile, nil, 0)
+	if err != nil {
+		//TODO: log or err.... log.Println(err)
+		return nil, err
+	}
+	//TODO: use generator in future to get declared types instead of range ...*,
+	//      so it will be possible to parse types from various places in code
+	//      of this file in future -- global variables are expected to be used
+	for _, d := range f.Decls {
+		switch decl := d.(type) {
+		case *ast.GenDecl:
+			// get position of type declaration, which is part of 'decl' var
+			tokPosition := fset.Position(decl.TokPos)
+			position := gost.DeclPos{
+				File: tokPosition.Filename,
+				Line: uint(tokPosition.Line), //TODO: may use int instead of uint
+			}
+			for _, spec := range decl.Specs {
+				switch d := spec.(type) {
+				case *ast.TypeSpec:
+					//TODO: for now parse just non-conflict types
+					parsedType, err := parseTypeSpec(d)
+					if err != nil {
+						return nil, err
+					}
+					sym = &gost.DeclType{
+						Pos:  position,
+						Name: d.Name.Name,
+						Def:  parsedType,
+					}
+					symtab.AddSymbol(d.Name.Name, sym)
+				}
+			}
+		}
+	}
+	return symtab, nil
+}
 
 func printDataType(dataType gotypes.DataType) {
 	byteSlice, _ := json.Marshal(dataType)
@@ -24,6 +76,7 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 
 	// TODO(jchaloup): store type's ID and definition into a symbol table.
 	// Or make it a part of the definition itself
+	// --- pstodulk: symbol table, I am going to do that
 	printDataType(typeDef)
 	return typeDef, nil
 }
@@ -253,6 +306,8 @@ func (tp *typesParser) parseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
 	}
 	return nil, fmt.Errorf("ast.Expr (%#v) not recognized", expr)
 }
+
+type AllocatedSymbolsTable gost.HST
 
 type typesParser struct {
 	allocatedSymbolsTable *AllocatedSymbolsTable
