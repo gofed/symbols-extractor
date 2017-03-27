@@ -9,11 +9,6 @@ import (
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
-//func TestAddSymbol(t *testing.T) {
-//  var st SymbolTable = make(HST)
-//
-//}
-
 func TestMarshalUnmarshal(t *testing.T) {
 	id := &gotypes.Identifier{Def: "Poker"}
 	channel := &gotypes.Channel{
@@ -24,14 +19,11 @@ func TestMarshalUnmarshal(t *testing.T) {
 		Elmtype: channel,
 	}
 
-	var sym Symbol
-	var st SymbolTable = make(HST)
-	var pkg *Package = &Package{
-		Project:     "", //TODO: need change in schema to store complete ID
-		Imports:     nil,
-		SymbolTable: st,
-		Name:        "paegas",
-	}
+	var sym *SymbolDef
+	var pkg *Package = &Package{}
+	pkg.Init()
+	pkg.Name = "paegas"
+
 	pkgMap := make(PackageMap)
 	pkgMap[pkg.Name] = pkg
 
@@ -39,19 +31,19 @@ func TestMarshalUnmarshal(t *testing.T) {
 	//NOTE: use zero values for DeclPos, because is not part of JSON scheme
 	//      now and DeepEqueal fails otherwise
 	{
-		sym = &DeclType{
+		sym = &SymbolDef{
 			Pos:  DeclPos{"", 0},
 			Name: "someChannel",
 			Def:  channel,
 		}
-		st.AddSymbol(sym.GetName(), sym)
+		pkg.AddDataType(sym.GetName(), sym)
 
-		sym = &DeclType{
+		sym = &SymbolDef{
 			Pos:  DeclPos{"", 0},
 			Name: "sliceChan",
 			Def:  slice,
 		}
-		st.AddSymbol(sym.GetName(), sym)
+		pkg.AddDataType(sym.GetName(), sym)
 	}
 
 	byteSlice, err := json.Marshal(&pkgMap)

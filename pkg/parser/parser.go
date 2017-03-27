@@ -307,8 +307,6 @@ func (tp *typesParser) parseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
 	return nil, fmt.Errorf("ast.Expr (%#v) not recognized", expr)
 }
 
-type AllocatedSymbolsTable gost.HST
-
 type typesParser struct {
 	allocatedSymbolsTable *AllocatedSymbolsTable
 }
