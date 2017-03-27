@@ -1,5 +1,7 @@
 package testdata
 
+import "net/http"
+
 type Struct struct {
 	// Simple ID
 	simpleID uint64
@@ -24,5 +26,7 @@ type Struct struct {
 	}
 	// Ellipsis
 	simpleMethodWithEllipsis func(arg1 string, ellipsis ...string) (string, error)
-	//
+
+	// fully qualified ID
+	qid http.MethodGet
 }

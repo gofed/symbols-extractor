@@ -53,21 +53,47 @@ func TestMarshalUnmarshal(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		newObject := test.empty
-		byteSlice, _ := json.Marshal(test.value)
+		{
+			newObject := test.empty
+			byteSlice, _ := json.Marshal(test.value)
 
-		t.Logf("\nBefore: %v", string(byteSlice))
+			t.Logf("\nBefore: %v", string(byteSlice))
 
-		if err := json.Unmarshal(byteSlice, newObject); err != nil {
-			t.Errorf("Error: %v", err)
+			if err := json.Unmarshal(byteSlice, newObject); err != nil {
+				t.Errorf("Error: %v", err)
+			}
+
+			// compare
+			if !reflect.DeepEqual(test.value, newObject) {
+				t.Errorf("%#v != %#v", test.value, newObject)
+			}
+
+			t.Logf("\nAfter: %#v", newObject)
 		}
 
-		// compare
-		if !reflect.DeepEqual(test.value, newObject) {
-			t.Errorf("%#v != %#v", test.value, newObject)
-		}
+		// wrap the type into a symbol
+		{
+			def := &SymbolDef{
+				Pos:  "Ppzice",
+				Name: "Name",
+				Def:  test.value,
+			}
 
-		t.Logf("\nAfter: %#v", newObject)
+			t.Logf("%v\n", def)
+			byteSlice, _ := json.Marshal(def)
+
+			t.Logf("\nBefore: %v", string(byteSlice))
+			newObject := &SymbolDef{}
+			if err := json.Unmarshal(byteSlice, newObject); err != nil {
+				t.Errorf("Error: %v", err)
+			}
+
+			// compare
+			if !reflect.DeepEqual(def, newObject) {
+				t.Errorf("%#v != %#v", def, newObject)
+			}
+
+			t.Logf("\nAfter: %#v", newObject)
+		}
 	}
-
 }

@@ -197,6 +197,56 @@ def parseDefinition(dataType, definition):
     print obj
     return obj
 
+def printSymbolDefinition(dataTypes):
+        template_str = """
+
+type SymbolDef struct {
+       Pos  string   `json:"pos"`
+       Name string   `json:"name"`
+       Def  DataType `json:"def"`
+}
+
+func (o *SymbolDef) UnmarshalJSON(b []byte) error {
+	var objMap map[string]*json.RawMessage
+
+	if err := json.Unmarshal(b, &objMap); err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(*objMap["pos"], &o.Pos); err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(*objMap["name"], &o.Name); err != nil {
+		return err
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(*objMap["def"], &m); err != nil {
+		return err
+	}
+
+    switch dataType := m["type"]; dataType {
+    {% for recursiveType in DataTypes %}
+    case {{ recursiveType|capitalize }}Type:
+        r := &{{ recursiveType|capitalize }}{}
+        if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+            return err
+        }
+        o.Def = r
+    {% endfor %}
+    }
+
+	return nil
+}"""
+
+        template_vars = {
+            "DataTypes": dataTypes,
+        }
+
+        return jinja2.Environment().from_string(template_str).render(template_vars)
+
+
 if __name__ == "__main__":
     with open("golang-project-exported-api.json", "r") as f:
         data = json.load(f)
@@ -210,9 +260,14 @@ type DataType interface {
 	GetType() string
 }"""
 
+    dataTypes = ["identifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
+
     for definition in data["definitions"]:
-        if definition not in ["identifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]:
+        if definition not in dataTypes:
             continue
 
         parseDefinition(definition.capitalize(), data["definitions"][definition])
         #printDefinition(definition, data["definitions"][definition])
+
+    #
+    print printSymbolDefinition(dataTypes)
