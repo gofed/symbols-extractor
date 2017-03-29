@@ -85,6 +85,17 @@ func (tp *typesParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) 
 	return funcDef, nil
 }
 
+func (tp *typesParser) parseFuncBody(d *ast.FuncDecl) error {
+	// Function/method signature is already stored in a symbol table.
+	// From function/method's AST get its receiver, parameters and results,
+	// construct a first level of a multi-level symbol table stack..
+	// For each new block (including the body) push another level into the stack.
+
+	// Here!!! The symbol type analysis is carried here!!! Yes, HERE!!!
+
+	return nil
+}
+
 func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (*gotypes.Identifier, error) {
 	// TODO(jchaloup): store symbol's origin as well (in a case a symbol is imported without qid)
 	// Check if the identifier is in the any of the global symbol tables (in a case a symbol is imported without qid).
@@ -384,7 +395,14 @@ func (tp *typesParser) Parse(gofile string) error {
 		case *ast.FuncDecl:
 			// process function definitions as the last
 			//fmt.Printf("%+v\n", d)
-			tp.parseFuncDecl(decl)
+			_, err := tp.parseFuncDecl(decl)
+			if err != nil {
+				return err
+			}
+
+			// if an error is returned, put the function's AST into a context list
+			// and continue with other definition
+			tp.parseFuncBody(decl)
 		}
 	}
 
