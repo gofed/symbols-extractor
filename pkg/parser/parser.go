@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -29,7 +30,7 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 		Def:  typeDef,
 	})
 
-	printDataType(typeDef)
+	//printDataType(typeDef)
 	return typeDef, nil
 }
 
@@ -75,21 +76,110 @@ func (tp *typesParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) 
 			Def:  methodDef,
 		})
 
-		printDataType(methodDef)
+		//printDataType(methodDef)
 
 		return methodDef, nil
 	}
 
-	printDataType(funcDef)
+	//printDataType(funcDef)
 
 	return funcDef, nil
 }
 
-func (tp *typesParser) parseFuncBody(d *ast.FuncDecl) error {
+func (tp *typesParser) parseDefExpr(expr ast.Expr) {
+	fmt.Printf("Expr: %#v\n", expr)
+	switch exprType := expr.(type) {
+	// Basic literal carries
+	case *ast.BasicLit:
+		fmt.Printf("BasicLit: %#v\n", exprType)
+	}
+}
+
+func (tp *typesParser) parseStatement(statement ast.Stmt) error {
+	switch stmtExpr := statement.(type) {
+	case *ast.ReturnStmt:
+		fmt.Printf("Return: %#v\n", stmtExpr)
+		for _, result := range stmtExpr.Results {
+			tp.parseDefExpr(result)
+		}
+	}
+
+	return nil
+}
+
+func (tp *typesParser) parseFuncBody(funcDecl *ast.FuncDecl) error {
 	// Function/method signature is already stored in a symbol table.
 	// From function/method's AST get its receiver, parameters and results,
 	// construct a first level of a multi-level symbol table stack..
 	// For each new block (including the body) push another level into the stack.
+
+	stack := symboltable.NewStack()
+
+	stack.Push()
+
+	if funcDecl.Recv != nil {
+		// Receiver has a single parametr
+		// https://golang.org/ref/spec#Receiver
+		if len((*funcDecl.Recv).List) != 1 || len((*funcDecl.Recv).List[0].Names) != 1 {
+			return fmt.Errorf("Receiver is not a single parameter")
+		}
+
+		def, err := tp.parseTypeExpr((*funcDecl.Recv).List[0].Type)
+		if err != nil {
+			return err
+		}
+		stack.AddDataType(&gotypes.SymbolDef{
+			Name: (*funcDecl.Recv).List[0].Names[0].Name,
+			Def:  def,
+		})
+	}
+
+	if funcDecl.Type.Params != nil {
+		for _, field := range funcDecl.Type.Params.List {
+			def, err := tp.parseTypeExpr(field.Type)
+			if err != nil {
+				return err
+			}
+
+			// field.Names is always non-empty if param's datatype is defined
+			for _, name := range field.Names {
+				fmt.Printf("Name: %v\n", name.Name)
+				stack.AddDataType(&gotypes.SymbolDef{
+					Name: name.Name,
+					Def:  def,
+				})
+			}
+		}
+	}
+
+	if funcDecl.Type.Results != nil {
+		for _, field := range funcDecl.Type.Results.List {
+			def, err := tp.parseTypeExpr(field.Type)
+			if err != nil {
+				return err
+			}
+
+			for _, name := range field.Names {
+				fmt.Printf("Name: %v\n", name.Name)
+				stack.AddDataType(&gotypes.SymbolDef{
+					Name: name.Name,
+					Def:  def,
+				})
+			}
+		}
+	}
+
+	stack.Push()
+
+	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
+	for _, statement := range funcDecl.Body.List {
+		fmt.Printf("statement: %#v\n", statement)
+		if err := tp.parseStatement(statement); err != nil {
+			return err
+		}
+	}
+
+	//stack.Print()
 
 	// Here!!! The symbol type analysis is carried here!!! Yes, HERE!!!
 
@@ -297,7 +387,11 @@ func (tp *typesParser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function
 			if err != nil {
 				return nil, err
 			}
-			params = append(params, def)
+
+			// field.Names list must be singletion at least
+			for i := 0; i < len(field.Names); i++ {
+				params = append(params, def)
+			}
 		}
 
 		if len(params) > 0 {
@@ -311,7 +405,16 @@ func (tp *typesParser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function
 			if err != nil {
 				return nil, err
 			}
-			results = append(results, def)
+
+			// results can be identifier free
+			if len(field.Names) == 0 {
+				results = append(results, def)
+			} else {
+				for i := 0; i < len(field.Names); i++ {
+					results = append(results, def)
+				}
+			}
+
 		}
 
 		if len(results) > 0 {
@@ -349,13 +452,20 @@ func (tp *typesParser) parseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
 }
 
 type typesParser struct {
-	symbolTable           *SymbolTable
+	// per file symbol table
+	symbolTable *symboltable.Table
+	// per file allocatable ST
 	allocatedSymbolsTable *AllocatedSymbolsTable
+
+	// TODO(jchaloup):
+	// - create a project scoped symbol table in a higher level struct (e.g. ProjectParser)
+	// - merge all per file symbol tables continuously in the higher level struct (each time a new symbol definition is process)
+	//
 }
 
 func NewParser() *typesParser {
 	return &typesParser{
-		symbolTable:           NewSymbolTable(),
+		symbolTable:           symboltable.NewTable(),
 		allocatedSymbolsTable: NewAllocatableSymbolsTable(),
 	}
 }
@@ -411,7 +521,7 @@ func (tp *typesParser) Parse(gofile string) error {
 	byteSlice, _ := json.Marshal(tp.symbolTable)
 	fmt.Printf("\nSymbol table: %v\n", string(byteSlice))
 
-	newObject := &SymbolTable{}
+	newObject := &symboltable.Table{}
 	if err := json.Unmarshal(byteSlice, newObject); err != nil {
 		fmt.Printf("Error: %v", err)
 	}

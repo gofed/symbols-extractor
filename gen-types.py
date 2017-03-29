@@ -65,6 +65,7 @@ func (o *{{ Name }}) UnmarshalJSON(b []byte) error {
     }
 
     {% for item in AtomicFields %}
+    // TODO(jchaloup): check the objMap[\"{{ item|lower }}\"] actually exists
     if err := json.Unmarshal(*objMap[\"{{ item|lower }}\"], &o.{{ item|capitalize }}); err != nil {
         return err
     }

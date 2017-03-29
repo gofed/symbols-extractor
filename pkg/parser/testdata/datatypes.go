@@ -40,6 +40,10 @@ func (s *Struct) JustAFunction(a, b int, list map[string]string) (string, error)
 	return "", nil
 }
 
+func (s *Struct) JustAnotherFunction(a, b int, list map[string]string) (str string, err error) {
+	return "", nil
+}
+
 func TestMarshalUnmarshal(t *testing.T) {
 
 	id := &Identifier{Def: "Poker"}
