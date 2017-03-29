@@ -86,13 +86,41 @@ func (tp *typesParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) 
 	return funcDef, nil
 }
 
-func (tp *typesParser) parseDefExpr(expr ast.Expr) {
+func (tp *typesParser) parseDefExpr(expr ast.Expr) (gotypes.DataType, error) {
+	// Given an expression we must always return its final data type
+	// User defined symbols has its corresponding structs under parser/pkg/types.
+	// In order to cover all possible symbol data types, we need to cover
+	// golang language embedded data types as well
 	fmt.Printf("Expr: %#v\n", expr)
 	switch exprType := expr.(type) {
 	// Basic literal carries
 	case *ast.BasicLit:
 		fmt.Printf("BasicLit: %#v\n", exprType)
+		switch exprType.Kind {
+		case token.INT:
+			return &gotypes.Integer{}, nil
+		case token.FLOAT:
+			return &gotypes.Float{}, nil
+		case token.IMAG:
+			return &gotypes.Imag{}, nil
+		case token.STRING:
+			return &gotypes.String{}, nil
+		case token.CHAR:
+			return &gotypes.Char{}, nil
+		}
+	case *ast.Ident:
+		// TODO(jchaloup): put the nil into the allocated symbol table
+		if exprType.Name == "nil" {
+			return &gotypes.Nil{}, nil
+		}
+
+		// TODO(jchaloup): put the identifier into the allocated symbol table
+		return &gotypes.Identifier{
+			Def: exprType.Name,
+		}, nil
 	}
+
+	return nil, nil
 }
 
 func (tp *typesParser) parseStatement(statement ast.Stmt) error {
@@ -100,7 +128,11 @@ func (tp *typesParser) parseStatement(statement ast.Stmt) error {
 	case *ast.ReturnStmt:
 		fmt.Printf("Return: %#v\n", stmtExpr)
 		for _, result := range stmtExpr.Results {
-			tp.parseDefExpr(result)
+			exprType, err := tp.parseDefExpr(result)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("ExprType: %#v\n", exprType)
 		}
 	}
 
