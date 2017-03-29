@@ -24,55 +24,78 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 		return nil, err
 	}
 
-	// TODO(jchaloup): store type's ID and definition into a symbol table.
-	// Or make it a part of the definition itself
+	tp.symbolTable.AddDataType(&gotypes.SymbolDef{
+		Name: d.Name.Name,
+		Def:  typeDef,
+	})
+
 	printDataType(typeDef)
 	return typeDef, nil
 }
 
-func (tp *typesParser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error) {
-	structType := &gotypes.Struct{}
-	structType.Fields = make([]gotypes.StructFieldsItem, 0)
-
-	if typedExpr.Fields.List == nil {
-		return structType, nil
+func (tp *typesParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
+	// parseFunction does not store name of params, resp. results
+	// as the names are not important. Just params, resp. results ordering is.
+	// Thus, this method is used to parse function's signature only.
+	funcDef, err := tp.parseFunction(d.Type)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, field := range typedExpr.Fields.List {
-		// anonymous field?
-		if field.Names == nil {
-			def, err := tp.parseTypeExpr(field.Type)
-			if err != nil {
-				return nil, err
-			}
+	// Names of function params, resp. results are needed only when function's body is processed.
+	// Thus, we can collect params, resp. results definition from symbol table and get names from
+	// function's AST. (the ast is processed twice but in the second case, only params, resp. results names are read).
 
-			item := gotypes.StructFieldsItem{
-				Name: "",
-				Def:  def,
-			}
+	// The function/method signature belongs to a package/file level symbol table.
+	// The functonn/methods's params, resp. results, resp. receiver identifiers belong to
+	// multi-level symbol table that is function/method's scoped. Once the body is left,
+	// the multi-level symbol table is dropped.
 
-			structType.Fields = append(structType.Fields, item)
-			// named fields
-		} else {
-			for _, name := range field.Names {
-				def, err := tp.parseTypeExpr(field.Type)
-				if err != nil {
-					return nil, err
-				}
-
-				item := gotypes.StructFieldsItem{
-					Name: name.Name,
-					Def:  def,
-				}
-				structType.Fields = append(structType.Fields, item)
-			}
+	if d.Recv != nil {
+		// Receiver has a single parametr
+		// https://golang.org/ref/spec#Receiver
+		if len((*d.Recv).List) != 1 || len((*d.Recv).List[0].Names) != 1 {
+			return nil, fmt.Errorf("Receiver is not a single parameter")
 		}
+
+		//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
+
+		recDef, err := tp.parseTypeExpr((*d.Recv).List[0].Type)
+		if err != nil {
+			return nil, err
+		}
+
+		methodDef := &gotypes.Method{
+			Def:      funcDef,
+			Receiver: recDef,
+		}
+
+		tp.symbolTable.AddFunction(&gotypes.SymbolDef{
+			Name: d.Name.Name,
+			Def:  methodDef,
+		})
+
+		printDataType(methodDef)
+
+		return methodDef, nil
 	}
-	return structType, nil
+
+	printDataType(funcDef)
+
+	return funcDef, nil
 }
 
 func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (*gotypes.Identifier, error) {
-	// TODO(jchaloup): store symbol's origin as well
+	// TODO(jchaloup): store symbol's origin as well (in a case a symbol is imported without qid)
+	// Check if the identifier is in the any of the global symbol tables (in a case a symbol is imported without qid).
+	// If it is, the origin is known. If it is not, the origin is the current package.
+	// Check if the identifier is embedded type first. Then the origin is empty.
+
+	// Every data type definition consists of a set of identifiers.
+	// Whenever an identifier is used in the definition,
+	// it is allocated.
+	tp.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+
 	return &gotypes.Identifier{
 		Def: typedExpr.Name,
 	}, nil
@@ -123,7 +146,24 @@ func (tp *typesParser) parseEllipsis(typedExpr *ast.Ellipsis) (*gotypes.Ellipsis
 }
 
 func (tp *typesParser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, error) {
-	// X.Sel
+	// X.Sel a.k.a Prefix.Item
+
+	id, ok := typedExpr.X.(*ast.Ident)
+	// if the prefix is identifier only, the selector is in a form qui.identifier,
+	// i.e. fully qualified identifier
+	// TODO(jchaloup): check id.function(), is that selector as well or not?
+	if ok {
+		// TODO(jchaloup): replace the id.Name with full package path
+		// E.g. instead of (qid, identifier) use (github.com/coreos/etcd/pkg/wait, Wait)
+		tp.allocatedSymbolsTable.AddSymbol(id.Name, typedExpr.Sel.Name)
+		return &gotypes.Selector{
+			Item: typedExpr.Sel.Name,
+			Prefix: &gotypes.Identifier{
+				Def: id.Name,
+			},
+		}, nil
+	}
+
 	def, err := tp.parseTypeExpr(typedExpr.X)
 	if err != nil {
 		return nil, err
@@ -132,6 +172,47 @@ func (tp *typesParser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Sele
 		Item:   typedExpr.Sel.Name,
 		Prefix: def,
 	}, nil
+}
+
+func (tp *typesParser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error) {
+	structType := &gotypes.Struct{}
+	structType.Fields = make([]gotypes.StructFieldsItem, 0)
+
+	if typedExpr.Fields.List == nil {
+		return structType, nil
+	}
+
+	for _, field := range typedExpr.Fields.List {
+		// anonymous field?
+		if field.Names == nil {
+			def, err := tp.parseTypeExpr(field.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			item := gotypes.StructFieldsItem{
+				Name: "",
+				Def:  def,
+			}
+
+			structType.Fields = append(structType.Fields, item)
+			// named fields
+		} else {
+			for _, name := range field.Names {
+				def, err := tp.parseTypeExpr(field.Type)
+				if err != nil {
+					return nil, err
+				}
+
+				item := gotypes.StructFieldsItem{
+					Name: name.Name,
+					Def:  def,
+				}
+				structType.Fields = append(structType.Fields, item)
+			}
+		}
+	}
+	return structType, nil
 }
 
 func (tp *typesParser) parseMap(typedExpr *ast.MapType) (*gotypes.Map, error) {
@@ -257,12 +338,14 @@ func (tp *typesParser) parseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
 }
 
 type typesParser struct {
+	symbolTable           *SymbolTable
 	allocatedSymbolsTable *AllocatedSymbolsTable
 }
 
 func NewParser() *typesParser {
 	return &typesParser{
-		allocatedSymbolsTable: &AllocatedSymbolsTable{},
+		symbolTable:           NewSymbolTable(),
+		allocatedSymbolsTable: NewAllocatableSymbolsTable(),
 	}
 }
 
@@ -301,7 +384,21 @@ func (tp *typesParser) Parse(gofile string) error {
 		case *ast.FuncDecl:
 			// process function definitions as the last
 			//fmt.Printf("%+v\n", d)
+			tp.parseFuncDecl(decl)
 		}
 	}
+
+	tp.allocatedSymbolsTable.Print()
+
+	byteSlice, _ := json.Marshal(tp.symbolTable)
+	fmt.Printf("\nSymbol table: %v\n", string(byteSlice))
+
+	newObject := &SymbolTable{}
+	if err := json.Unmarshal(byteSlice, newObject); err != nil {
+		fmt.Printf("Error: %v", err)
+	}
+
+	fmt.Printf("\nAfter: %#v", newObject)
+
 	return nil
 }
