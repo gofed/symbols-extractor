@@ -26,6 +26,8 @@ func isBinaryOperator(operator token.Token) bool {
 
 // functionParser parses declaration and definition of a function/method
 type functionParser struct {
+	// package name
+	packageName string
 	// per file symbol table
 	symbolTable *symboltable.Table
 	// per file allocatable ST
@@ -35,11 +37,64 @@ type functionParser struct {
 }
 
 // NewFunctionParser create an instance of a function parser
-func NewFunctionParser(symbolTable *symboltable.Table, allocatedSymbolsTable *AllocatedSymbolsTable, typesParser *typesParser) *functionParser {
+func NewFunctionParser(packageName string, symbolTable *symboltable.Table, allocatedSymbolsTable *AllocatedSymbolsTable, typesParser *typesParser) *functionParser {
 	return &functionParser{
+		packageName:           packageName,
 		symbolTable:           symbolTable,
 		allocatedSymbolsTable: allocatedSymbolsTable,
 		typesParser:           typesParser,
+	}
+}
+
+func (fp *functionParser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes.DataType, error) {
+	// Receiver's type must be of the form T or *T (possibly using parentheses) where T is a type name.
+	switch typedExpr := receiver.(type) {
+	case *ast.Ident:
+		// search the identifier in the symbol table
+		def, err := fp.symbolTable.Lookup(typedExpr.Name)
+		if err != nil {
+			fmt.Printf("Lookup error: %v\n", err)
+			// Return an error so the function body processing can be postponed
+			// TODO(jchaloup): return more information about the missing symbol so the
+			// body can be re-processed right after the symbol is stored into the symbol table.
+			return nil, err
+		}
+
+		if !skip_allocated {
+			fp.allocatedSymbolsTable.AddSymbol(def.Package, typedExpr.Name)
+		}
+
+		return &gotypes.Identifier{
+			Def: typedExpr.Name,
+		}, nil
+	case *ast.StarExpr:
+		fmt.Printf("Start: %#v\n", typedExpr)
+		switch idExpr := typedExpr.X.(type) {
+		case *ast.Ident:
+			// search the identifier in the symbol table
+			def, err := fp.symbolTable.Lookup(idExpr.Name)
+			if err != nil {
+				fmt.Printf("Lookup error: %v\n", err)
+				// Return an error so the function body processing can be postponed
+				// TODO(jchaloup): return more information about the missing symbol so the
+				// body can be re-processed right after the symbol is stored into the symbol table.
+				return nil, err
+			}
+
+			if !skip_allocated {
+				fp.allocatedSymbolsTable.AddSymbol(def.Package, idExpr.Name)
+			}
+
+			return &gotypes.Pointer{
+				Def: &gotypes.Identifier{
+					Def: idExpr.Name,
+				},
+			}, nil
+		default:
+			return nil, fmt.Errorf("Method receiver %#v is not a pointer to an identifier", idExpr)
+		}
+	default:
+		return nil, fmt.Errorf("Method receiver %#v is not a pointer to an identifier not an identifier", typedExpr)
 	}
 }
 
@@ -70,7 +125,7 @@ func (fp *functionParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, erro
 
 		//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
 
-		recDef, err := fp.typesParser.parseTypeExpr((*d.Recv).List[0].Type)
+		recDef, err := fp.parseReceiver((*d.Recv).List[0].Type, false)
 		if err != nil {
 			return nil, err
 		}
@@ -81,8 +136,9 @@ func (fp *functionParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, erro
 		}
 
 		fp.symbolTable.AddFunction(&gotypes.SymbolDef{
-			Name: d.Name.Name,
-			Def:  methodDef,
+			Name:    d.Name.Name,
+			Package: fp.packageName,
+			Def:     methodDef,
 		})
 
 		//printDataType(methodDef)
@@ -92,8 +148,9 @@ func (fp *functionParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, erro
 
 	// Empty receiver => Function
 	fp.symbolTable.AddFunction(&gotypes.SymbolDef{
-		Name: d.Name.Name,
-		Def:  funcDef,
+		Name:    d.Name.Name,
+		Package: fp.packageName,
+		Def:     funcDef,
 	})
 
 	//printDataType(funcDef)
@@ -190,7 +247,7 @@ func (fp *functionParser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType,
 
 		// Store the symbol to the allocated ST
 		// TODO(jchaloup): get the symbol's origin from the higher parser structures
-		fp.allocatedSymbolsTable.AddSymbol("", exprType.Name)
+		fp.allocatedSymbolsTable.AddSymbol(def.Package, exprType.Name)
 
 		switch funcType := def.Def.(type) {
 		case *gotypes.Function:
@@ -270,7 +327,7 @@ func (fp *functionParser) parseFuncBody(funcDecl *ast.FuncDecl) error {
 			return fmt.Errorf("Receiver is not a single parameter")
 		}
 
-		def, err := fp.typesParser.parseTypeExpr((*funcDecl.Recv).List[0].Type)
+		def, err := fp.parseReceiver((*funcDecl.Recv).List[0].Type, true)
 		if err != nil {
 			return err
 		}

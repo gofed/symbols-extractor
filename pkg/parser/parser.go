@@ -26,8 +26,9 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 	}
 
 	tp.symbolTable.AddDataType(&gotypes.SymbolDef{
-		Name: d.Name.Name,
-		Def:  typeDef,
+		Name:    d.Name.Name,
+		Package: tp.packageName,
+		Def:     typeDef,
 	})
 
 	//printDataType(typeDef)
@@ -300,6 +301,8 @@ func (tp *typesParser) parseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
 }
 
 type typesParser struct {
+	// package name
+	packageName string
 	// per file symbol table
 	symbolTable *symboltable.Table
 	// per file allocatable ST
@@ -313,12 +316,13 @@ type typesParser struct {
 	//
 }
 
-func NewParser() *typesParser {
+func NewParser(packageName string) *typesParser {
 	tp := &typesParser{
+		packageName:           packageName,
 		symbolTable:           symboltable.NewTable(),
 		allocatedSymbolsTable: NewAllocatableSymbolsTable(),
 	}
-	tp.functionParser = NewFunctionParser(tp.symbolTable, tp.allocatedSymbolsTable, tp)
+	tp.functionParser = NewFunctionParser(packageName, tp.symbolTable, tp.allocatedSymbolsTable, tp)
 	return tp
 }
 

@@ -1556,9 +1556,10 @@ func (o *Channel) UnmarshalJSON(b []byte) error {
 }
 
 type SymbolDef struct {
-	Pos  string   `json:"pos"`
-	Name string   `json:"name"`
-	Def  DataType `json:"def"`
+	Pos     string   `json:"pos"`
+	Name    string   `json:"name"`
+	Package string   `json:"package"`
+	Def     DataType `json:"def"`
 }
 
 func (o *SymbolDef) UnmarshalJSON(b []byte) error {
