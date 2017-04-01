@@ -74,48 +74,52 @@ func (o *{{ Name }}) UnmarshalJSON(b []byte) error {
     {% for item in NonAtomicFields %}
     // block for {{ item }} field
     {
-    var m map[string]interface{}
-    if err := json.Unmarshal(*objMap[\"{{ item|lower }}\"], &m); err != nil {
-        return err
-    }
+        if objMap[\"{{ item|lower }}\"] != nil {
+            var m map[string]interface{}
+            if err := json.Unmarshal(*objMap[\"{{ item|lower }}\"], &m); err != nil {
+                return err
+            }
 
-    switch dataType := m["type"]; dataType {
-    {% for recursiveType in NonAtomicFields[item]["constraint"] %}
-    case {{ recursiveType|capitalize }}Type:
-        r := &{{ recursiveType|capitalize }}{}
-        if err := json.Unmarshal(*objMap["{{ item|lower }}"], &r); err != nil {
-            return err
+            switch dataType := m["type"]; dataType {
+            {% for recursiveType in NonAtomicFields[item]["constraint"] %}
+            case {{ recursiveType|capitalize }}Type:
+                r := &{{ recursiveType|capitalize }}{}
+                if err := json.Unmarshal(*objMap["{{ item|lower }}"], &r); err != nil {
+                    return err
+                }
+                o.{{ item|capitalize }} = r
+            {% endfor %}
+            }
         }
-        o.{{ item|capitalize }} = r
-    {% endfor %}
-    }
     }
     {% endfor %}
 
     {% for item in ArrayFields %}
     // block for {{ item }} field
     {
-        var l []*json.RawMessage
-        if err := json.Unmarshal(*objMap["{{ item|lower }}"], &l); err != nil {
-            return err
-        }
-
-        o.{{ item }} = make([]{{ ArrayFields[item]["type"] }}, 0)
-        for _, item := range l {
-            var m map[string]interface{}
-            if err := json.Unmarshal(*item, &m); err != nil {
+        if objMap[\"{{ item|lower }}\"] != nil {
+            var l []*json.RawMessage
+            if err := json.Unmarshal(*objMap["{{ item|lower }}"], &l); err != nil {
                 return err
             }
 
-            switch dataType := m["type"]; dataType {
-            {% for recursiveType in ArrayFields[item]["constraint"] %}
-            case {{ recursiveType|capitalize }}Type:
-                r := &{{ recursiveType|capitalize }}{}
-                if err := json.Unmarshal(*item, &r); err != nil {
+            o.{{ item }} = make([]{{ ArrayFields[item]["type"] }}, 0)
+            for _, item := range l {
+                var m map[string]interface{}
+                if err := json.Unmarshal(*item, &m); err != nil {
                     return err
                 }
-                o.{{ item }} = append(o.{{ item }}, r)
-            {% endfor %}
+
+                switch dataType := m["type"]; dataType {
+                {% for recursiveType in ArrayFields[item]["constraint"] %}
+                case {{ recursiveType|capitalize }}Type:
+                    r := &{{ recursiveType|capitalize }}{}
+                    if err := json.Unmarshal(*item, &r); err != nil {
+                        return err
+                    }
+                    o.{{ item }} = append(o.{{ item }}, r)
+                {% endfor %}
+                }
             }
         }
     }
