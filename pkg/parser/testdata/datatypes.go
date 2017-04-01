@@ -36,12 +36,19 @@ type Struct struct {
 	qid http.MethodGet
 }
 
-func (s *Struct) JustAFunction(a, b int, list map[string]string) (string, error) {
+func (s *Struct) JustAnotherFunction(a, b int, list map[string]string) (str string, err error) {
 	return "", nil
 }
 
-func (s *Struct) JustAnotherFunction(a, b int, list map[string]string) (str string, err error) {
+func reallyAFunction() string {
+	return "NotAnEmptyString"
+}
+
+func (s *Struct) JustAFunction(a, b int, list map[string]string) (string, error) {
 	return "", nil
+	return "" + "", nil
+	return JustAnotherFunction(a, b, list)
+	return "" + reallyAFunction(), nil
 }
 
 func TestMarshalUnmarshal(t *testing.T) {

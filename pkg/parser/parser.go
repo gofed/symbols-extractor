@@ -34,190 +34,6 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 	return typeDef, nil
 }
 
-func (tp *typesParser) parseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
-	// parseFunction does not store name of params, resp. results
-	// as the names are not important. Just params, resp. results ordering is.
-	// Thus, this method is used to parse function's signature only.
-	funcDef, err := tp.parseFunction(d.Type)
-	if err != nil {
-		return nil, err
-	}
-
-	// Names of function params, resp. results are needed only when function's body is processed.
-	// Thus, we can collect params, resp. results definition from symbol table and get names from
-	// function's AST. (the ast is processed twice but in the second case, only params, resp. results names are read).
-
-	// The function/method signature belongs to a package/file level symbol table.
-	// The functonn/methods's params, resp. results, resp. receiver identifiers belong to
-	// multi-level symbol table that is function/method's scoped. Once the body is left,
-	// the multi-level symbol table is dropped.
-
-	if d.Recv != nil {
-		// Receiver has a single parametr
-		// https://golang.org/ref/spec#Receiver
-		if len((*d.Recv).List) != 1 || len((*d.Recv).List[0].Names) != 1 {
-			return nil, fmt.Errorf("Receiver is not a single parameter")
-		}
-
-		//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
-
-		recDef, err := tp.parseTypeExpr((*d.Recv).List[0].Type)
-		if err != nil {
-			return nil, err
-		}
-
-		methodDef := &gotypes.Method{
-			Def:      funcDef,
-			Receiver: recDef,
-		}
-
-		tp.symbolTable.AddFunction(&gotypes.SymbolDef{
-			Name: d.Name.Name,
-			Def:  methodDef,
-		})
-
-		//printDataType(methodDef)
-
-		return methodDef, nil
-	}
-
-	//printDataType(funcDef)
-
-	return funcDef, nil
-}
-
-func (tp *typesParser) parseDefExpr(expr ast.Expr) (gotypes.DataType, error) {
-	// Given an expression we must always return its final data type
-	// User defined symbols has its corresponding structs under parser/pkg/types.
-	// In order to cover all possible symbol data types, we need to cover
-	// golang language embedded data types as well
-	fmt.Printf("Expr: %#v\n", expr)
-	switch exprType := expr.(type) {
-	// Basic literal carries
-	case *ast.BasicLit:
-		fmt.Printf("BasicLit: %#v\n", exprType)
-		switch exprType.Kind {
-		case token.INT:
-			return &gotypes.Integer{}, nil
-		case token.FLOAT:
-			return &gotypes.Float{}, nil
-		case token.IMAG:
-			return &gotypes.Imag{}, nil
-		case token.STRING:
-			return &gotypes.String{}, nil
-		case token.CHAR:
-			return &gotypes.Char{}, nil
-		}
-	case *ast.Ident:
-		// TODO(jchaloup): put the nil into the allocated symbol table
-		if exprType.Name == "nil" {
-			return &gotypes.Nil{}, nil
-		}
-
-		// TODO(jchaloup): put the identifier into the allocated symbol table
-		return &gotypes.Identifier{
-			Def: exprType.Name,
-		}, nil
-	}
-
-	return nil, nil
-}
-
-func (tp *typesParser) parseStatement(statement ast.Stmt) error {
-	switch stmtExpr := statement.(type) {
-	case *ast.ReturnStmt:
-		fmt.Printf("Return: %#v\n", stmtExpr)
-		for _, result := range stmtExpr.Results {
-			exprType, err := tp.parseDefExpr(result)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("ExprType: %#v\n", exprType)
-		}
-	}
-
-	return nil
-}
-
-func (tp *typesParser) parseFuncBody(funcDecl *ast.FuncDecl) error {
-	// Function/method signature is already stored in a symbol table.
-	// From function/method's AST get its receiver, parameters and results,
-	// construct a first level of a multi-level symbol table stack..
-	// For each new block (including the body) push another level into the stack.
-
-	stack := symboltable.NewStack()
-
-	stack.Push()
-
-	if funcDecl.Recv != nil {
-		// Receiver has a single parametr
-		// https://golang.org/ref/spec#Receiver
-		if len((*funcDecl.Recv).List) != 1 || len((*funcDecl.Recv).List[0].Names) != 1 {
-			return fmt.Errorf("Receiver is not a single parameter")
-		}
-
-		def, err := tp.parseTypeExpr((*funcDecl.Recv).List[0].Type)
-		if err != nil {
-			return err
-		}
-		stack.AddDataType(&gotypes.SymbolDef{
-			Name: (*funcDecl.Recv).List[0].Names[0].Name,
-			Def:  def,
-		})
-	}
-
-	if funcDecl.Type.Params != nil {
-		for _, field := range funcDecl.Type.Params.List {
-			def, err := tp.parseTypeExpr(field.Type)
-			if err != nil {
-				return err
-			}
-
-			// field.Names is always non-empty if param's datatype is defined
-			for _, name := range field.Names {
-				fmt.Printf("Name: %v\n", name.Name)
-				stack.AddDataType(&gotypes.SymbolDef{
-					Name: name.Name,
-					Def:  def,
-				})
-			}
-		}
-	}
-
-	if funcDecl.Type.Results != nil {
-		for _, field := range funcDecl.Type.Results.List {
-			def, err := tp.parseTypeExpr(field.Type)
-			if err != nil {
-				return err
-			}
-
-			for _, name := range field.Names {
-				fmt.Printf("Name: %v\n", name.Name)
-				stack.AddDataType(&gotypes.SymbolDef{
-					Name: name.Name,
-					Def:  def,
-				})
-			}
-		}
-	}
-
-	stack.Push()
-
-	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
-	for _, statement := range funcDecl.Body.List {
-		fmt.Printf("statement: %#v\n", statement)
-		if err := tp.parseStatement(statement); err != nil {
-			return err
-		}
-	}
-
-	//stack.Print()
-
-	// Here!!! The symbol type analysis is carried here!!! Yes, HERE!!!
-
-	return nil
-}
-
 func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (*gotypes.Identifier, error) {
 	// TODO(jchaloup): store symbol's origin as well (in a case a symbol is imported without qid)
 	// Check if the identifier is in the any of the global symbol tables (in a case a symbol is imported without qid).
@@ -488,6 +304,8 @@ type typesParser struct {
 	symbolTable *symboltable.Table
 	// per file allocatable ST
 	allocatedSymbolsTable *AllocatedSymbolsTable
+	// function parser
+	functionParser *functionParser
 
 	// TODO(jchaloup):
 	// - create a project scoped symbol table in a higher level struct (e.g. ProjectParser)
@@ -496,10 +314,12 @@ type typesParser struct {
 }
 
 func NewParser() *typesParser {
-	return &typesParser{
+	tp := &typesParser{
 		symbolTable:           symboltable.NewTable(),
 		allocatedSymbolsTable: NewAllocatableSymbolsTable(),
 	}
+	tp.functionParser = NewFunctionParser(tp.symbolTable, tp.allocatedSymbolsTable, tp)
+	return tp
 }
 
 func (tp *typesParser) Parse(gofile string) error {
@@ -537,14 +357,14 @@ func (tp *typesParser) Parse(gofile string) error {
 		case *ast.FuncDecl:
 			// process function definitions as the last
 			//fmt.Printf("%+v\n", d)
-			_, err := tp.parseFuncDecl(decl)
+			_, err := tp.functionParser.parseFuncDecl(decl)
 			if err != nil {
 				return err
 			}
 
 			// if an error is returned, put the function's AST into a context list
 			// and continue with other definition
-			tp.parseFuncBody(decl)
+			tp.functionParser.parseFuncBody(decl)
 		}
 	}
 
