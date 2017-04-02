@@ -20,10 +20,13 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 	// Here I get new type's definition.
 	// The new type's id is not stored in the definition.
 	// It is stored separatelly.
+
+	tp.currentDataTypeName = d.Name.Name
 	typeDef, err := tp.parseTypeExpr(d.Type)
 	if err != nil {
 		return nil, err
 	}
+	tp.currentDataTypeName = ""
 
 	tp.symbolTable.AddDataType(&gotypes.SymbolDef{
 		Name:    d.Name.Name,
@@ -35,7 +38,7 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 	return typeDef, nil
 }
 
-func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (*gotypes.Identifier, error) {
+func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error) {
 	// TODO(jchaloup): store symbol's origin as well (in a case a symbol is imported without qid)
 	// Check if the identifier is in the any of the global symbol tables (in a case a symbol is imported without qid).
 	// If it is, the origin is known. If it is not, the origin is the current package.
@@ -44,7 +47,17 @@ func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (*gotypes.Identifie
 	// Every data type definition consists of a set of identifiers.
 	// Whenever an identifier is used in the definition,
 	// it is allocated.
-	tp.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+	if typedExpr.Name == tp.currentDataTypeName {
+		// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
+		tp.allocatedSymbolsTable.AddSymbol(tp.packageName, typedExpr.Name)
+	} else {
+		tp.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+	}
+
+	// TODO(jchaloup): Check if the identifier is a built-in type
+	if isBuiltin(typedExpr.Name) {
+		return &gotypes.Builtin{}, nil
+	}
 
 	return &gotypes.Identifier{
 		Def: typedExpr.Name,
@@ -304,11 +317,13 @@ type typesParser struct {
 	// package name
 	packageName string
 	// per file symbol table
-	symbolTable *symboltable.Table
+	symbolTable *symboltable.Stack
 	// per file allocatable ST
 	allocatedSymbolsTable *AllocatedSymbolsTable
 	// function parser
 	functionParser *functionParser
+	// name of the currently processed data type
+	currentDataTypeName string
 
 	// TODO(jchaloup):
 	// - create a project scoped symbol table in a higher level struct (e.g. ProjectParser)
@@ -319,10 +334,11 @@ type typesParser struct {
 func NewParser(packageName string) *typesParser {
 	tp := &typesParser{
 		packageName:           packageName,
-		symbolTable:           symboltable.NewTable(),
+		symbolTable:           symboltable.NewStack(),
 		allocatedSymbolsTable: NewAllocatableSymbolsTable(),
 	}
 	tp.functionParser = NewFunctionParser(packageName, tp.symbolTable, tp.allocatedSymbolsTable, tp)
+	tp.symbolTable.Push()
 	return tp
 }
 

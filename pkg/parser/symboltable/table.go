@@ -56,15 +56,17 @@ func (t *Table) UnmarshalJSON(b []byte) error {
 	}
 
 	for _, symbolType := range SymbolTypes {
-		var m []*gotypes.SymbolDef
-		if err := json.Unmarshal(*objMap[symbolType], &m); err != nil {
-			return err
-		}
+		if objMap[symbolType] != nil {
+			var m []*gotypes.SymbolDef
+			if err := json.Unmarshal(*objMap[symbolType], &m); err != nil {
+				return err
+			}
 
-		t.Symbols[symbolType] = m
+			t.Symbols[symbolType] = m
 
-		for _, item := range m {
-			t.symbols[symbolType][item.Name] = item
+			for _, item := range m {
+				t.symbols[symbolType][item.Name] = item
+			}
 		}
 	}
 
@@ -124,29 +126,29 @@ func (t *Table) Lookup(key string) (*gotypes.SymbolDef, error) {
 
 // Stack is a multi-level symbol table for parsing blocks of code
 type Stack struct {
-	tables []*Table
-	size   int
+	Tables []*Table `json:"tables"`
+	Size   int      `json:"size"`
 }
 
 // NewStack creates an empty stack with no symbol table
 func NewStack() *Stack {
 	return &Stack{
-		tables: make([]*Table, 0),
-		size:   0,
+		Tables: make([]*Table, 0),
+		Size:   0,
 	}
 }
 
 // Push pushes a new symbol table at the top of the stack
 func (s *Stack) Push() {
-	s.tables = append(s.tables, NewTable())
-	s.size++
+	s.Tables = append(s.Tables, NewTable())
+	s.Size++
 }
 
 // Pop pops the top most symbol table from the stack
 func (s *Stack) Pop() {
-	if s.size > 0 {
-		s.tables = s.tables[:s.size-1]
-		s.size--
+	if s.Size > 0 {
+		s.Tables = s.Tables[:s.Size-1]
+		s.Size--
 	} else {
 		panic("Popping over an empty stack of symbol tables")
 		// If you reached this line you are a magician
@@ -154,22 +156,22 @@ func (s *Stack) Pop() {
 }
 
 func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
-	if s.size > 0 {
-		return s.tables[s.size-1].AddVariable(sym)
+	if s.Size > 0 {
+		return s.Tables[s.Size-1].AddVariable(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
 func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
-	if s.size > 0 {
-		return s.tables[s.size-1].AddDataType(sym)
+	if s.Size > 0 {
+		return s.Tables[s.Size-1].AddDataType(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
 func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
-	if s.size > 0 {
-		return s.tables[s.size-1].AddFunction(sym)
+	if s.Size > 0 {
+		return s.Tables[s.Size-1].AddFunction(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
 }
@@ -177,8 +179,8 @@ func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
 // Lookup looks for the first occurrence of a symbol with the given name
 func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, error) {
 	// The top most item on the stack is the right most item in the simpleSlice
-	for i := s.size - 1; i >= 0; i-- {
-		def, err := s.tables[i].Lookup(name)
+	for i := s.Size - 1; i >= 0; i-- {
+		def, err := s.Tables[i].Lookup(name)
 		if err == nil {
 			fmt.Printf("Table %v: symbol: %#v\n", i, def)
 			return def, nil
@@ -188,7 +190,7 @@ func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, error) {
 }
 
 func (s *Stack) Print() {
-	for i := s.size - 1; i >= 0; i-- {
-		fmt.Printf("Table %v: symbol: %#v\n", i, s.tables[i])
+	for i := s.Size - 1; i >= 0; i-- {
+		fmt.Printf("Table %v: symbol: %#v\n", i, s.Tables[i])
 	}
 }

@@ -1,9 +1,6 @@
 package parser
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // - count a number of each symbol used (to watch how intensively is a given symbol used)
 // - each AS table is per file, AS package is a union of file AS tables
@@ -23,10 +20,14 @@ func NewAllocatableSymbolsTable() *AllocatedSymbolsTable {
 	}
 }
 
+func (ast *AllocatedSymbolsTable) AddDataTypeField(origin, dataType, field string) {
+	ast.AddSymbol(origin, fmt.Sprintf("%v.%v", dataType, field))
+}
+
 func (ast *AllocatedSymbolsTable) AddSymbol(origin, id string) {
 	var key string
 	if origin != "" {
-		key = strings.Join([]string{origin, id}, ".")
+		key = fmt.Sprintf("%v.%v", origin, id)
 	} else {
 		key = id
 	}
