@@ -22,6 +22,9 @@ func (tp *typesParser) parseTypeSpec(d *ast.TypeSpec) (gotypes.DataType, error) 
 	// It is stored separatelly.
 
 	tp.currentDataTypeName = d.Name.Name
+	// TODO(jchaloup): capture the current state of the allocated symbol table
+	// jic the parsing ends with end error. Which can result into re-parsing later on.
+	// Which can result in re-allocation. It should be enough two-level allocated symbol table.
 	typeDef, err := tp.parseTypeExpr(d.Type)
 	if err != nil {
 		return nil, err
@@ -51,12 +54,19 @@ func (tp *typesParser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, 
 		// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
 		tp.allocatedSymbolsTable.AddSymbol(tp.packageName, typedExpr.Name)
 	} else {
-		tp.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
-	}
+		// Check if the identifier is a built-in type
+		if isBuiltin(typedExpr.Name) {
+			tp.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+			return &gotypes.Builtin{}, nil
+		}
 
-	// TODO(jchaloup): Check if the identifier is a built-in type
-	if isBuiltin(typedExpr.Name) {
-		return &gotypes.Builtin{}, nil
+		// Check if the identifier is available in the symbol table
+		def, err := tp.symbolTable.Lookup(typedExpr.Name)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
+		}
+
+		tp.allocatedSymbolsTable.AddSymbol(def.Package, def.Name)
 	}
 
 	return &gotypes.Identifier{

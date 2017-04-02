@@ -28,6 +28,7 @@ func isBinaryOperator(operator token.Token) bool {
 var builtinTypes = []string{
 	// TODO(jchaloup): extend the list with all built-in types
 	"string", "int", "error",
+	"uint64",
 }
 
 func isBuiltin(ident string) bool {
@@ -238,6 +239,21 @@ func (fp *functionParser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataTyp
 	return &gotypes.Builtin{}, nil
 }
 
+func (fp *functionParser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
+	def, err := fp.parseExpr(expr.X)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(def) != 1 {
+		return nil, fmt.Errorf("X of %#v does not return one value", expr)
+	}
+
+	return &gotypes.Pointer{
+		Def: def[0],
+	}, nil
+}
+
 func (fp *functionParser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) {
 	// TODO(jchaloup): check if the type() casting is of ast.CallExpr as well
 	for _, arg := range expr.Args {
@@ -275,7 +291,6 @@ func (fp *functionParser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType,
 		fmt.Printf("Def: %#v\n", def.Def)
 
 		// Store the symbol to the allocated ST
-		// TODO(jchaloup): get the symbol's origin from the higher parser structures
 		fp.allocatedSymbolsTable.AddSymbol(def.Package, exprType.Name)
 		function = def.Def
 	case *ast.SelectorExpr:
@@ -317,16 +332,18 @@ func (fp *functionParser) getDataTypeField(def gotypes.DataType, field string) (
 		fmt.Printf("UsingI: %v.%v\n", def.Package, def.Name)
 		fp.allocatedSymbolsTable.AddSymbol(def.Package, def.Name)
 		structDef = def
-		// case *gotypes.Pointer:
-		// 	iDef, ok := expr.Def.(*gotypes.Identifier)
-		// 	if !ok {
-		// 		return nil, fmt.Errorf("Cannot retrieve field %v from a pointer pointing to non-Identifier", field)
-		// 	}
-		// 	def, err := fp.symbolTable.Lookup(iDef.Def)
-		// 	if err != nil {
-		// 		return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", expr.Def)
-		// 	}
-		// 	structDef = def
+	case *gotypes.Pointer:
+		iDef, ok := expr.Def.(*gotypes.Identifier)
+		if !ok {
+			return nil, fmt.Errorf("Cannot retrieve field %v from a pointer pointing to non-Identifier", field)
+		}
+		def, err := fp.symbolTable.Lookup(iDef.Def)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", expr.Def)
+		}
+		structDef = def
+	default:
+		return nil, fmt.Errorf("Unable to recognize access field expression: %#v", def)
 	}
 
 	fmt.Printf("Struct: %#v\n", structDef)
@@ -360,12 +377,13 @@ func (fp *functionParser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.Dat
 
 	fmt.Printf("X: %#v\n", xDef)
 	// It is either a data type or it is a pointer to a data type
-	xExpr, ok := xDef[0].(*gotypes.Pointer)
-	if ok {
-		return fp.getDataTypeField(xExpr.Def, expr.Sel.Name)
-	} else {
-		return fp.getDataTypeField(xDef[0], expr.Sel.Name)
-	}
+	// xExpr, ok := xDef[0].(*gotypes.Pointer)
+	// if ok {
+	// 	return fp.getDataTypeField(xExpr.Def, expr.Sel.Name)
+	// } else {
+	// 	return fp.getDataTypeField(xDef[0], expr.Sel.Name)
+	// }
+	return fp.getDataTypeField(xDef[0], expr.Sel.Name)
 }
 
 func (fp *functionParser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) {
@@ -376,9 +394,9 @@ func (fp *functionParser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType,
 		return nil, indexErr
 	}
 
-	xDef, indexErr := fp.parseExpr(expr.X)
-	if indexErr != nil {
-		return nil, indexErr
+	xDef, xErr := fp.parseExpr(expr.X)
+	if xErr != nil {
+		return nil, xErr
 	}
 
 	if len(xDef) != 1 {
@@ -396,6 +414,42 @@ func (fp *functionParser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType,
 		return xType.Elmtype, nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDef[0]))
+	}
+}
+
+func (fp *functionParser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (gotypes.DataType, error) {
+	// X.(Type)
+	_, xErr := fp.parseExpr(expr.X)
+	if xErr != nil {
+		return nil, xErr
+	}
+
+	// We should check if the data type really implements all methods of the interface.
+	// Or we can assume it does and just return the Type itself
+	// TODO(jchaloup): check the data type Type really implements interface of X (if it is an interface)
+
+	fmt.Printf("TypeAssert type: %#v\n", expr.Type)
+
+	// Assertion type can be an identifier or a pointer to an identifier.
+	// Here, the symbol definition of the data type is not returned as it is lookup later by the caller
+	switch typeType := expr.Type.(type) {
+	case *ast.Ident:
+		// TODO(jchaloup): check the type is not built-in type. If it is, return the &Builtin{}.
+		return &gotypes.Identifier{
+			Def: typeType.Name,
+		}, nil
+	case *ast.StarExpr:
+		iDef, ok := typeType.X.(*ast.Ident)
+		if !ok {
+			return nil, fmt.Errorf("TypeAssert type %#v is not a pointer to an identifier", expr.Type)
+		}
+		return &gotypes.Pointer{
+			Def: &gotypes.Identifier{
+				Def: iDef.Name,
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("Unsupported TypeAssert type: %#v\n", typeType)
 	}
 }
 
@@ -432,6 +486,10 @@ func (fp *functionParser) parseExpr(expr ast.Expr) ([]gotypes.DataType, error) {
 	case *ast.SelectorExpr:
 		fmt.Printf("SelectorExpr: %#v\n", exprType)
 		def, err := fp.parseSelectorExpr(exprType)
+		return []gotypes.DataType{def}, err
+	case *ast.TypeAssertExpr:
+		fmt.Printf("TypeAssertExpr: %#v\n", exprType)
+		def, err := fp.parseTypeAssertExpr(exprType)
 		return []gotypes.DataType{def}, err
 	default:
 		return nil, fmt.Errorf("Unrecognized expression: %#v\n", expr)

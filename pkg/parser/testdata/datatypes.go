@@ -2,6 +2,10 @@ package testdata
 
 import "net/http"
 
+type Interface interface {
+	JustAnotherFunction(a, b int, list map[string]string) (str string, err error)
+}
+
 type Struct struct {
 	// Simple ID
 	simpleID uint64
@@ -26,6 +30,8 @@ type Struct struct {
 	simpleInterface interface {
 		simpleMethod(arg1, arg2 string) (string, error)
 	}
+	// simple method with interface
+	simpleMethodWithInterface func(a, b string) Interface
 	// Ellipsis
 	simpleMethodWithEllipsis func(arg1 string, ellipsis ...string) (string, error)
 
@@ -49,6 +55,7 @@ func (s *Struct) JustAFunction(a, b int, list map[string]string) (string, error)
 	return "" + reallyAFunction(), nil
 	return "" + s.simpleArray[2]
 	return s.simpleStringMethod(",", ",").simpleSlice2[2].simpleSlice[1]
+	return s.simpleMethodWithInterface("", "").(*Struct).simpleMethodWithInterface("", "").(*Struct)
 }
 
 // func TestMarshalUnmarshal(t *testing.T) {
