@@ -191,6 +191,62 @@ func (fp *functionParser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, er
 	}
 }
 
+func (fp *functionParser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, error) {
+	// https://golang.org/ref/spec#Composite_literals
+	// The LiteralType's underlying type must be a struct, array, slice, or map
+	//  type (the grammar enforces this constraint except when the type is given as a TypeName)
+	//
+	// lit.Type{
+	//   Elts[0],
+	//   Elts[1],
+	//   Elts[2],
+	//}
+	var clTypeSymbolDef *gotypes.SymbolDef
+	// TODO(jchaloup): the typeIdent can be a selector as well (qui.id), check that as well
+	switch clTypeExpr := lit.Type.(type) {
+	case *ast.Ident:
+		// TODO(jchaloup): check the identifier is not a built-in type
+		def, err := fp.symbolTable.Lookup(clTypeExpr.Name)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to find %v symbol in the symbol table", clTypeExpr.Name)
+		}
+		clTypeSymbolDef = def
+	default:
+		return nil, fmt.Errorf("CompositeLiteral.Type %#v not recognized", lit.Type)
+	}
+
+	fp.allocatedSymbolsTable.AddSymbol(clTypeSymbolDef.Package, clTypeSymbolDef.Name)
+
+	for _, element := range lit.Elts {
+		fmt.Printf("ELement: %#v\n", element)
+		switch elmExpr := element.(type) {
+		case *ast.KeyValueExpr:
+			// Process key
+			// TODO(jchaloup): get a list of all possible expressions for the element key
+			switch keyExpr := elmExpr.Key.(type) {
+			case *ast.Ident:
+				// By setting a field of a struct we allocate the field
+				fp.allocatedSymbolsTable.AddDataTypeField(clTypeSymbolDef.Package, clTypeSymbolDef.Name, keyExpr.Name)
+				fmt.Printf("ElementKey: %v.%v\n", clTypeSymbolDef.Name, keyExpr.Name)
+			default:
+				return nil, fmt.Errorf("CompositeLiteral element key %#v not recognized", elmExpr.Key)
+			}
+			// Process value
+			def, err := fp.parseExpr(elmExpr.Value)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("ElmValueDef: %#v\n", def)
+			// TODO(jchaloup): check datatype(value) = datatype(key) or datatype(value) implements interface of datatype(key)
+		default:
+			return nil, fmt.Errorf("CompositeLiteral element %#v not recognized", element)
+		}
+
+	}
+
+	return clTypeSymbolDef.Def, nil
+}
+
 func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	// TODO(jchaloup): put the nil into the allocated symbol table
 	if ident.Name == "nil" {
@@ -212,6 +268,28 @@ func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, e
 	// TODO(jchaloup): put the identifier's type into the allocated symbol table
 	fmt.Printf("Symbol used: %v.%v\n", def.Package, def.Name)
 	return def.Def, nil
+}
+
+func (fp *functionParser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) {
+	def, err := fp.parseExpr(expr.X)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(def) != 1 {
+		return nil, fmt.Errorf("Operand of an unary operator is not a single value")
+	}
+
+	// TODO(jchaloup): check the token is really a unary operator
+	switch expr.Op {
+	// variable address
+	case token.AND:
+		return &gotypes.Pointer{
+			Def: def[0],
+		}, nil
+	default:
+		return nil, fmt.Errorf("Unary operator %#v not recognized", expr.Op)
+	}
 }
 
 func (fp *functionParser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error) {
@@ -466,9 +544,17 @@ func (fp *functionParser) parseExpr(expr ast.Expr) ([]gotypes.DataType, error) {
 		fmt.Printf("BasicLit: %#v\n", exprType)
 		def, err := fp.parseBasicLit(exprType)
 		return []gotypes.DataType{def}, err
+	case *ast.CompositeLit:
+		fmt.Printf("CompositeLit: %#v\n", exprType)
+		def, err := fp.parseCompositeLit(exprType)
+		return []gotypes.DataType{def}, err
 	case *ast.Ident:
 		fmt.Printf("Ident: %#v\n", exprType)
 		def, err := fp.parseIdentifier(exprType)
+		return []gotypes.DataType{def}, err
+	case *ast.UnaryExpr:
+		fmt.Printf("UnaryExpr: %#v\n", exprType)
+		def, err := fp.parseUnaryExpr(exprType)
 		return []gotypes.DataType{def}, err
 	case *ast.BinaryExpr:
 		fmt.Printf("BinaryExpr: %#v\n", exprType)
@@ -496,6 +582,57 @@ func (fp *functionParser) parseExpr(expr ast.Expr) ([]gotypes.DataType, error) {
 	}
 }
 
+func (fp *functionParser) parseAssignment(expr *ast.AssignStmt) (gotypes.DataType, error) {
+	// expr.Lhs = expr.Rhs
+	// left-hand sice expression must be an identifier or a selector
+	exprsSize := len(expr.Lhs)
+	// Some assignments are of a different number of expression on both sides.
+	// E.g. value, ok := somemap[key]
+	// TODO(jchaloup): cover all the cases as well
+	if exprsSize != len(expr.Rhs) {
+		return nil, fmt.Errorf("Number of expression of the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", expr.Lhs, expr.Rhs)
+	}
+
+	// If the assignment token is token.DEFINE a variable gets stored into the symbol table.
+	// If it is already there and has the same type, do not do anything. Error if the type is different.
+	// If it is not there yet, add it into the table
+	// If the token is token.ASSIGN the variable must be in the symbol table.
+	// If it is and has the same type, do not do anything, Error, if the type is different.
+	// If it is not there yet, error.
+	fmt.Printf("Ass token: %v %v %v\n", expr.Tok, token.ASSIGN, token.DEFINE)
+
+	for i := 0; i < exprsSize; i++ {
+		// If the left-hand side id a selector (e.g. struct.field), we alredy know data type of the id.
+		// So, just store the field's data type into the allocated symbol table
+		//switch lhsExpr := expr.
+		fmt.Printf("Lhs: %#v\n", expr.Lhs[i])
+		fmt.Printf("Rhs: %#v\n", expr.Rhs[i])
+
+		def, err := fp.parseExpr(expr.Rhs[i])
+		if err != nil {
+			return nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v", i, expr, err)
+		}
+
+		if len(def) != 1 {
+			return nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, def)
+		}
+
+		fmt.Printf("Ass type: %#v\n", def)
+
+		switch lhsExpr := expr.Lhs[i].(type) {
+		case *ast.Ident:
+			fp.symbolTable.AddVariable(&gotypes.SymbolDef{
+				Name:    lhsExpr.Name,
+				Package: fp.packageName,
+				Def:     def[0],
+			})
+		default:
+			return nil, fmt.Errorf("Lhs of an assignment type %#v is not recognized", expr.Lhs[i])
+		}
+	}
+	return nil, nil
+}
+
 func (fp *functionParser) parseStatement(statement ast.Stmt) error {
 	switch stmtExpr := statement.(type) {
 	case *ast.ReturnStmt:
@@ -507,6 +644,13 @@ func (fp *functionParser) parseStatement(statement ast.Stmt) error {
 				return err
 			}
 			fmt.Printf("====ExprType: %#v\n", exprType)
+		}
+	case *ast.AssignStmt:
+		fmt.Printf("AssignStmt: %#v\n", stmtExpr)
+		_, err := fp.parseAssignment(stmtExpr)
+		if err != nil {
+			panic(err)
+			return err
 		}
 	}
 
