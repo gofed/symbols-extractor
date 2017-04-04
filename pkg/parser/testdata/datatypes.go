@@ -52,12 +52,34 @@ func reallyAFunction() string {
 
 func (s *Struct) JustAFunction(a, b int, list map[string]string) (string, error) {
 	return list["neco"], nil
+}
+
+func (s *Struct) JustAFunction2(a, b int, list map[string]string) (string, error) {
 	return "", nil
+}
+
+func (s *Struct) JustAFunction3(a, b int, list map[string]string) (string, error) {
 	return "" + "", nil
+}
+
+func (s *Struct) JustAFunction4(a, b int, list map[string]string) (string, error) {
 	return JustAnotherFunction(a, b, list)
+}
+
+func (s *Struct) JustAFunction5(a, b int, list map[string]string) (string, error) {
 	return "" + reallyAFunction(), nil
+}
+
+//TODO(pstodulk): move to invalid or make it valid
+func (s *Struct) JustAFunction6(a, b int, list map[string]string) (string, error) {
 	return "" + s.simpleArray[2]
+}
+
+func (s *Struct) JustAFunction7(a, b int, list map[string]string) (string, error) {
 	return s.simpleStringMethod(",", ",").simpleSlice2[2].simpleSlice[1]
+}
+
+func (s *Struct) JustAFunction8(a, b int, list map[string]string) (string, error) {
 	return s.simpleMethodWithInterface("", "").(*Struct).simpleMethodWithInterface("", "").(*Struct)
 }
 
