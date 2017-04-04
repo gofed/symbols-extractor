@@ -89,19 +89,31 @@ func TestMarshalUnmarshal(t *testing.T) {
 	slice := &Slice{
 		Elmtype: channel,
 	}
+
+	tests := []struct {
+		name, dataType string
+		value          DataType
+		empty          DataType
+		ident          map[string]*Identifier
+	}{
+		// Simple identifier
+		{
+			name:  "Identifier",
+			value: id,
+			empty: &Identifier{},
+			ident: map[string]*Identifier{
+				"field1": &Identifier{
+					Def: "Field1",
+				},
+				"field2": &Identifier{
+					Def: "Field2",
+				},
+			},
+		},
+	}
 	//
-	// 	tests := []struct {
-	// 		name     string
-	// 		dataType string
-	// 		value    DataType
-	// 		empty    DataType
-	// 	}{
-	// 		// Simple identifier
-	// 		{
-	// 			name:  "Identifier",
-	// 			value: id,
-	// 			empty: &Identifier{},
-	// 		},
+	// tests2 := [][][]*Identifier{}
+
 	// 		// Simple channel
 	// 		{
 	// 			name:  "Channel",

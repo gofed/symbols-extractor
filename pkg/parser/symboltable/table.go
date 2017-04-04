@@ -112,6 +112,14 @@ func (t *Table) AddFunction(sym *gotypes.SymbolDef) error {
 	return t.addSymbol(FunctionSymbol, sym.Name, sym)
 }
 
+func (t *Table) LookupVariable(key string) (*gotypes.SymbolDef, error) {
+	if sym, ok := t.symbols[VariableSymbol][key]; ok {
+		fmt.Printf("Variable found: %#v\n", sym)
+		return sym, nil
+	}
+	return nil, fmt.Errorf("Variable `%v` not found", key)
+}
+
 func (t *Table) Lookup(key string) (*gotypes.SymbolDef, error) {
 
 	for _, symbolType := range SymbolTypes {
@@ -174,6 +182,18 @@ func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
 		return s.Tables[s.Size-1].AddFunction(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
+}
+
+func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := s.Size - 1; i >= 0; i-- {
+		def, err := s.Tables[i].LookupVariable(name)
+		if err == nil {
+			fmt.Printf("Table %v: symbol: %#v\n", i, def)
+			return def, nil
+		}
+	}
+	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
 // Lookup looks for the first occurrence of a symbol with the given name

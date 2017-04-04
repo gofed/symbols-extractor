@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -197,6 +198,146 @@ func (fp *functionParser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, er
 	}
 }
 
+func (fp *functionParser) parseCompositeLiteralElements(clType *gotypes.SymbolDef, elements []ast.Expr, indent int) (gotypes.DataType, error) {
+	// The CL type can be one of the following:
+	// - identifier:
+	//		 struct identifier, can it be anything else?
+	//	   With the struct I define anonymous data type whose fields ara access later so I need to store its definition as well.
+	// - selectpr:
+	//     qui.identifier (can it be anything else)
+	// - array:
+	//     each item can be processed separatelly, just delegate the valueType further
+	// - map:
+	//		 https://golang.org/ref/spec#Map_types:
+	//		   "the key type must not be a function, map, or slice"
+	//     can I use anything else than a built-in type for the keyType?
+	//     each item of the map can be processed separately
+	//     Given a map does not have fields, there is no need to inspect the keyType for them.
+	//     It can potentially contain user defined identifiers
+	// var elementType gotypes.DataType
+	// switch clTypeExpr := clType.Def.(type) {
+	// case *gotypes.Builtin:
+	// 	// all built-in types are ignored
+	// 	return clTypeExpr, nil
+	// case *gotypes.Slice:
+	// 	// each item of a slice is of the same type => ignore it
+	// 	elementType = clTypeExpr.Elmtype
+	// case *gotypes.Struct:
+	// 	elementType = clTypeExpr
+	// }
+
+	fmt.Printf("======================================Inside parseCompositeLiteralElements: identation: %v\n", indent)
+	fmt.Printf("%vclType: %#v\n", strings.Repeat("\t", indent), clType)
+	fmt.Printf("%vElements: %#v\n", strings.Repeat("\t", indent), elements)
+
+	for _, elem := range elements {
+		fmt.Printf("%vElement: %#v\n", strings.Repeat("\t", indent), elem)
+		switch elemExpr := elem.(type) {
+		case *ast.BasicLit:
+			return &gotypes.Builtin{}, nil
+		case *ast.Ident:
+			// Search for the symbol definition in the symbol table.
+			// If the identifier points to a struct data type, we need to store struct's fields as well.
+			// TODO(jchaloup): find a way how to propagate struct's data type name into the recursive call stack
+			fmt.Printf("%v==ast.Ident %#v\ttype: %#v\n", strings.Repeat("\t", indent), elemExpr, clType)
+			// Here, it is always a variable or a built-in type
+			// TODO(jchaloup): check if the variable is global and count it into the allocatable symbol table
+			return &gotypes.Identifier{Def: elemExpr.Name}, nil
+		case *ast.UnaryExpr:
+			fmt.Printf("%v==ast.UnaryExpr %#v\ttype: %#v\n", strings.Repeat("\t", indent), elemExpr, clType)
+			d, e := fp.parseCompositeLiteralElements(nil, []ast.Expr{elemExpr.X}, indent+1)
+			if e != nil {
+				return d, e
+			}
+		case *ast.KeyValueExpr:
+			// allowed for a struct and map only
+			switch keyValueDef := clType.Def.(type) {
+			case *gotypes.Struct:
+				elemKey, ok := elemExpr.Key.(*ast.Ident)
+				if !ok {
+					return nil, fmt.Errorf("ast.KeyValueExpr key %#v is not an identifier", elemExpr.Key)
+				}
+				var keyDef gotypes.DataType
+				for _, item := range keyValueDef.Fields {
+					//fmt.Printf("\t%vField: %v: %#v\n", strings.Repeat("\t", indent), item.Name, item.Def)
+					if item.Name == elemKey.Name {
+						//fmt.Printf("\t%vField %v found: %#v\n", strings.Repeat("\t", indent), elemKey.Name, item.Def)
+						//fp.allocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, elemKey.Name)
+						keyDef = item.Def
+						break
+					}
+				}
+				if keyDef == nil {
+					return nil, fmt.Errorf("Unable to find a key %v in struct %#v of a CompositeLiteral", elemKey.Name, keyValueDef)
+				}
+				fmt.Printf("%v==ast.KeyValueExpr %v Element:\n%v\ttype: %#v\n%v\tvalue: %#v\n", strings.Repeat("\t", indent), elemKey.Name, strings.Repeat("\t", indent), keyDef, strings.Repeat("\t", indent), elemExpr.Value)
+				// as a value can be of a different type then its key (e.g. interface vs. type implementing the interface), each value type of a struct is re-parsed fron the value type
+				d, e := fp.parseCompositeLiteralElements(nil, []ast.Expr{elemExpr.Value}, indent+1)
+				if e != nil {
+					return d, e
+				}
+			case *gotypes.Map:
+				// the key can be basically anything that is a literal, id or can be evaluated into the literal, resp. id
+				// Given the key is already parsed, we can skip it
+				fmt.Printf("%vMapKeyType: %#v\n", strings.Repeat("\t", indent), keyValueDef.Keytype)
+				// The same holds for the value, we already processed it so all data types are already accounted
+				fmt.Printf("%vMapValueType: %#v\n", strings.Repeat("\t", indent), keyValueDef.Valuetype)
+				fmt.Printf("%velemExpr: %#v\n", strings.Repeat("\t", indent), elemExpr.Value)
+				d, e := fp.parseCompositeLiteralElements(nil, []ast.Expr{elemExpr.Value}, indent+1)
+				if e != nil {
+					return d, e
+				}
+			default:
+				return nil, fmt.Errorf("ast.KeyValueExpr is allowed for a struct and map type only. Instead, %#v type is available", clType)
+			}
+
+		case *ast.CompositeLit:
+			fmt.Printf("%vCL: %#v\n", strings.Repeat("\t", indent), elemExpr)
+			// nil CL types = array/slice items
+			fmt.Printf("%v==ast.CompositeLit Element:\n%v\ttype: %#v\n%v\tvalue: %#v\n", strings.Repeat("\t", indent), strings.Repeat("\t", indent), nil, strings.Repeat("\t", indent), elemExpr)
+			if elemExpr.Type != nil {
+				clElemType, err := fp.typesParser.parseTypeExpr(elemExpr.Type)
+				if err != nil {
+					return nil, err
+				}
+				fmt.Printf("%velemExpr.Type: %#v\t%#v\n", strings.Repeat("\t", indent), elemExpr.Type, clElemType)
+				if clElemTypeIdent, ok := clElemType.(*gotypes.Identifier); ok {
+					def, err := fp.symbolTable.Lookup(clElemTypeIdent.Def)
+					if err != nil {
+						return nil, err
+					}
+					// TODO(jchaloup): add the symbol into the allocated symbol table
+					d, e := fp.parseCompositeLiteralElements(def, elemExpr.Elts, indent+1)
+					if e != nil {
+						return d, e
+					}
+				} else {
+					d, e := fp.parseCompositeLiteralElements(&gotypes.SymbolDef{Def: clElemType}, elemExpr.Elts, indent+1)
+					if e != nil {
+						return d, e
+					}
+				}
+			} else {
+				// slice/array
+				if clType == nil {
+					panic(fmt.Errorf("Expecting slice type for %#v. Got nil.", elemExpr))
+				}
+				slExpr, ok := clType.Def.(*gotypes.Slice)
+				if !ok {
+					panic(fmt.Errorf("Expecting slice, got %#v\n", clType.Def))
+				}
+				d, err := fp.parseCompositeLiteralElements(&gotypes.SymbolDef{Def: slExpr.Elmtype}, elemExpr.Elts, indent+1)
+				if err != nil {
+					return d, err
+				}
+			}
+		default:
+			panic(fmt.Errorf("Unknown element type: %#v", elem))
+		}
+	}
+	return nil, nil
+}
+
 func (fp *functionParser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, error) {
 	// https://golang.org/ref/spec#Composite_literals
 	// The LiteralType's underlying type must be a struct, array, slice, or map
@@ -207,50 +348,34 @@ func (fp *functionParser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.Data
 	//   Elts[1],
 	//   Elts[2],
 	//}
-	var clTypeSymbolDef *gotypes.SymbolDef
+
+	// The CL type can be processed independently of the CL elements
+	fmt.Printf("CL Type: %#v\n", lit.Type)
+	def, err := fp.typesParser.parseTypeExpr(lit.Type)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO(jchaloup): the typeIdent can be a selector as well (qui.id), check that as well
-	switch clTypeExpr := lit.Type.(type) {
-	case *ast.Ident:
-		// TODO(jchaloup): check the identifier is not a built-in type
-		def, err := fp.symbolTable.Lookup(clTypeExpr.Name)
+	if clElemTypeIdent, ok := def.(*gotypes.Identifier); ok {
+		clElemTypeIdentDef, err := fp.symbolTable.Lookup(clElemTypeIdent.Def)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to find %v symbol in the symbol table", clTypeExpr.Name)
+			panic(err)
+			return nil, err
 		}
-		clTypeSymbolDef = def
-	default:
-		return nil, fmt.Errorf("CompositeLiteral.Type %#v not recognized", lit.Type)
+		// TODO(jchaloup): add the symbol into the allocated symbol table
+		_, err = fp.parseCompositeLiteralElements(clElemTypeIdentDef, lit.Elts, 0)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		_, err = fp.parseCompositeLiteralElements(&gotypes.SymbolDef{Def: def}, lit.Elts, 0)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	fp.allocatedSymbolsTable.AddSymbol(clTypeSymbolDef.Package, clTypeSymbolDef.Name)
-
-	for _, element := range lit.Elts {
-		fmt.Printf("ELement: %#v\n", element)
-		switch elmExpr := element.(type) {
-		case *ast.KeyValueExpr:
-			// Process key
-			// TODO(jchaloup): get a list of all possible expressions for the element key
-			switch keyExpr := elmExpr.Key.(type) {
-			case *ast.Ident:
-				// By setting a field of a struct we allocate the field
-				fp.allocatedSymbolsTable.AddDataTypeField(clTypeSymbolDef.Package, clTypeSymbolDef.Name, keyExpr.Name)
-				fmt.Printf("ElementKey: %v.%v\n", clTypeSymbolDef.Name, keyExpr.Name)
-			default:
-				return nil, fmt.Errorf("CompositeLiteral element key %#v not recognized", elmExpr.Key)
-			}
-			// Process value
-			def, err := fp.parseExpr(elmExpr.Value)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Printf("ElmValueDef: %#v\n", def)
-			// TODO(jchaloup): check datatype(value) = datatype(key) or datatype(value) implements interface of datatype(key)
-		default:
-			return nil, fmt.Errorf("CompositeLiteral element %#v not recognized", element)
-		}
-
-	}
-
-	return clTypeSymbolDef.Def, nil
+	return nil, nil
 }
 
 func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
@@ -262,6 +387,14 @@ func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, e
 	// Check if the symbol is in the symbol table.
 	// It is either a local variable or a global variable (as it is used inside an expression).
 	// If the symbol is not found, it means it is not defined and never will be.
+
+	// If it is a variable, return its definition
+	if def, err := fp.symbolTable.LookupVariable(ident.Name); err == nil {
+		fmt.Printf("Variable used: %v.%v %#v\n", def.Package, def.Name, def.Def)
+		return def.Def, nil
+	}
+
+	// Otherwise it is a data type of a function declation -> return just the data type identifier
 	def, err := fp.symbolTable.Lookup(ident.Name)
 	if err != nil {
 		fmt.Printf("Lookup error: %v\n", err)
@@ -272,8 +405,8 @@ func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, e
 	}
 
 	// TODO(jchaloup): put the identifier's type into the allocated symbol table
-	fmt.Printf("Symbol used: %v.%v\n", def.Package, def.Name)
-	return def.Def, nil
+	fmt.Printf("Symbol used: %v.%v %#v\n", def.Package, def.Name, def.Def)
+	return &gotypes.Identifier{Def: def.Name}, nil
 }
 
 func (fp *functionParser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) {
@@ -399,53 +532,15 @@ func (fp *functionParser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType,
 	}
 }
 
-func (fp *functionParser) getDataTypeField(def gotypes.DataType, field string) (gotypes.DataType, error) {
-	// The struct is the only data type from which a field is retriveable
-
-	var structDef *gotypes.SymbolDef
-
-	switch expr := def.(type) {
-	case *gotypes.Builtin:
-		return nil, fmt.Errorf("Cannot retrieve field %v from a built-in type", field)
-	case *gotypes.Identifier:
-		// If the def is an identifier, retrieve struct's definition from the symbol table
-		def, err := fp.symbolTable.Lookup(expr.Def)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", expr.Def)
+func (fp *functionParser) parseStructType(expr *ast.StructType) (gotypes.DataType, error) {
+	for _, field := range expr.Fields.List {
+		for _, name := range field.Names {
+			fmt.Printf("FieldName: %#v\n", name.Name)
 		}
-		fmt.Printf("UsingI: %v.%v\n", def.Package, def.Name)
-		fp.allocatedSymbolsTable.AddSymbol(def.Package, def.Name)
-		structDef = def
-	case *gotypes.Pointer:
-		iDef, ok := expr.Def.(*gotypes.Identifier)
-		if !ok {
-			return nil, fmt.Errorf("Cannot retrieve field %v from a pointer pointing to non-Identifier", field)
-		}
-		def, err := fp.symbolTable.Lookup(iDef.Def)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", expr.Def)
-		}
-		structDef = def
-	default:
-		return nil, fmt.Errorf("Unable to recognize access field expression: %#v", def)
+		fmt.Printf("Field: %#v\n", field.Type)
 	}
 
-	fmt.Printf("Struct: %#v\n", structDef)
-
-	structExpr, ok := structDef.Def.(*gotypes.Struct)
-	if !ok {
-		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", field, structDef.Def)
-	}
-
-	for _, item := range structExpr.Fields {
-		fmt.Printf("\tField: %v: %#v\n", item.Name, item.Def)
-		if item.Name == field {
-			fmt.Printf("Field %v found: %#v\n", field, item.Def)
-			fp.allocatedSymbolsTable.AddDataTypeField(structDef.Package, structDef.Name, field)
-			return item.Def, nil
-		}
-	}
-	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", field, structExpr)
+	panic("Panic")
 }
 
 func (fp *functionParser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, error) {
@@ -459,15 +554,47 @@ func (fp *functionParser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.Dat
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 
-	fmt.Printf("X: %#v\n", xDef)
-	// It is either a data type or it is a pointer to a data type
-	// xExpr, ok := xDef[0].(*gotypes.Pointer)
-	// if ok {
-	// 	return fp.getDataTypeField(xExpr.Def, expr.Sel.Name)
-	// } else {
-	// 	return fp.getDataTypeField(xDef[0], expr.Sel.Name)
-	// }
-	return fp.getDataTypeField(xDef[0], expr.Sel.Name)
+	fmt.Printf("X: %#v\t%#v\n", xDef, expr.X)
+
+	// The struct is the only data type from which a field is retriveable
+	fmt.Printf("structExpr: %#v\n", xDef[0])
+
+	var structIdent *gotypes.Identifier
+	if typePointer, ok := xDef[0].(*gotypes.Pointer); ok {
+		structIdent, ok = typePointer.Def.(*gotypes.Identifier)
+		if !ok {
+			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, typePointer.Def)
+		}
+	} else {
+		structIdent, ok = xDef[0].(*gotypes.Identifier)
+		if !ok {
+			return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", expr.Sel.Name, xDef[0])
+		}
+	}
+
+	fmt.Printf("structIdent: %#v\n", structIdent)
+
+	// Get struct's definition given by its identifier
+	structDefsymbol, err := fp.symbolTable.Lookup(structIdent.Def)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", structIdent.Def)
+	}
+
+	fmt.Printf("structDef: %#v\n", structDefsymbol)
+	structDef, ok := structDefsymbol.Def.(*gotypes.Struct)
+	if !ok {
+		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", expr.Sel.Name, structDefsymbol.Def)
+	}
+
+	for _, item := range structDef.Fields {
+		fmt.Printf("\tField: %v: %#v\n", item.Name, item.Def)
+		if item.Name == expr.Sel.Name {
+			fmt.Printf("Field %v found: %#v\n", expr.Sel.Name, item.Def)
+			fp.allocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, expr.Sel.Name)
+			return item.Def, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", expr.Sel.Name, structDefsymbol)
 }
 
 func (fp *functionParser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) {
@@ -490,6 +617,8 @@ func (fp *functionParser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType,
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
 	switch xType := xDef[0].(type) {
+	case *gotypes.Identifier:
+		return xType, nil
 	case *gotypes.Map:
 		return xType.Valuetype, nil
 	case *gotypes.Array:
@@ -571,6 +700,10 @@ func (fp *functionParser) parseExpr(expr ast.Expr) ([]gotypes.DataType, error) {
 		// If the call expression is the most most expression,
 		// it may have a different number of results
 		return fp.parseCallExpr(exprType)
+	case *ast.StructType:
+		fmt.Printf("StructType: %#v\n", exprType)
+		def, err := fp.parseStructType(exprType)
+		return []gotypes.DataType{def}, err
 	case *ast.IndexExpr:
 		fmt.Printf("IndexExpr: %#v\n", exprType)
 		def, err := fp.parseIndexExpr(exprType)
