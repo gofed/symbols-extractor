@@ -25,19 +25,25 @@ func isBinaryOperator(operator token.Token) bool {
 	return false
 }
 
-var builtinTypes = []string{
-	// TODO(jchaloup): extend the list with all built-in types
-	"string", "int", "error",
-	"uint64",
+var builtinTypes = map[string]struct{}{
+	//TODO(pstodulk):
+	//  - generate the map from: https://golang.org/src/builtin/builtin.go
+	//  - NOTE: there are just documentation types too (like Type1) which
+	//          should not be part of this map
+	//          - append all types except of Doc. only?
+	"uint": {}, "uint8": {}, "uint16": {}, "uint32": {}, "uint64": {},
+	"int": {}, "int8": {}, "int16": {}, "int32": {}, "int64": {},
+	"float32": {}, "float64": {},
+	"complex64": {}, "complex128": {},
+	"string": {}, "byte": {}, "rune": {},
+	"chan": {}, "bool": {},
+	"uintptr": {}, "error": {},
 }
 
 func isBuiltin(ident string) bool {
-	for _, id := range builtinTypes {
-		if id == ident {
-			return true
-		}
-	}
-	return false
+	_, ok := builtinTypes[ident]
+
+	return ok
 }
 
 // functionParser parses declaration and definition of a function/method
