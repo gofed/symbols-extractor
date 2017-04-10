@@ -9,19 +9,17 @@ import (
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
-var binaryOperators = []token.Token{
-	token.ADD, token.SUB, token.MUL, token.QUO, token.REM,
-	token.AND, token.OR, token.XOR, token.SHL, token.SHR, token.AND_NOT,
-	token.LAND, token.LOR, token.EQL, token.LSS, token.GTR, token.NEQ, token.LEQ, token.GEQ,
+var binaryOperators = map[token.Token]struct{}{
+	token.ADD: {}, token.SUB: {}, token.MUL: {}, token.QUO: {}, token.REM: {},
+	token.AND: {}, token.OR: {}, token.XOR: {}, token.SHL: {}, token.SHR: {},
+	token.AND_NOT: {}, token.LAND: {}, token.LOR: {}, token.EQL: {},
+	token.LSS: {}, token.GTR: {}, token.NEQ: {}, token.LEQ: {}, token.GEQ: {},
 }
 
 func isBinaryOperator(operator token.Token) bool {
-	for _, tok := range binaryOperators {
-		if tok == operator {
-			return true
-		}
-	}
-	return false
+	_, ok := binaryOperators[operator]
+
+	return ok
 }
 
 // Parser parses go expressions
