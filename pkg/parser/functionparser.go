@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -198,144 +197,108 @@ func (fp *functionParser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, er
 	}
 }
 
-func (fp *functionParser) parseCompositeLiteralElements(clType *gotypes.SymbolDef, elements []ast.Expr, indent int) (gotypes.DataType, error) {
-	// The CL type can be one of the following:
-	// - identifier:
-	//		 struct identifier, can it be anything else?
-	//	   With the struct I define anonymous data type whose fields ara access later so I need to store its definition as well.
-	// - selectpr:
-	//     qui.identifier (can it be anything else)
-	// - array:
-	//     each item can be processed separatelly, just delegate the valueType further
-	// - map:
-	//		 https://golang.org/ref/spec#Map_types:
-	//		   "the key type must not be a function, map, or slice"
-	//     can I use anything else than a built-in type for the keyType?
-	//     each item of the map can be processed separately
-	//     Given a map does not have fields, there is no need to inspect the keyType for them.
-	//     It can potentially contain user defined identifiers
-	// var elementType gotypes.DataType
-	// switch clTypeExpr := clType.Def.(type) {
-	// case *gotypes.Builtin:
-	// 	// all built-in types are ignored
-	// 	return clTypeExpr, nil
-	// case *gotypes.Slice:
-	// 	// each item of a slice is of the same type => ignore it
-	// 	elementType = clTypeExpr.Elmtype
-	// case *gotypes.Struct:
-	// 	elementType = clTypeExpr
-	// }
+func (fp *functionParser) parseKeyValueLikeExpr(expr ast.Expr, litType ast.Expr) (gotypes.DataType, error) {
+	var valueExpr ast.Expr
+	if kvExpr, ok := expr.(*ast.KeyValueExpr); ok {
+		_, err := fp.parseExpr(kvExpr.Key)
+		if err != nil {
+			return nil, err
+		}
+		valueExpr = kvExpr.Value
+	} else {
+		valueExpr = expr
+	}
 
-	fmt.Printf("======================================Inside parseCompositeLiteralElements: identation: %v\n", indent)
-	fmt.Printf("%vclType: %#v\n", strings.Repeat("\t", indent), clType)
-	fmt.Printf("%vElements: %#v\n", strings.Repeat("\t", indent), elements)
-
-	for _, elem := range elements {
-		fmt.Printf("%vElement: %#v\n", strings.Repeat("\t", indent), elem)
-		switch elemExpr := elem.(type) {
-		case *ast.BasicLit:
-			return &gotypes.Builtin{}, nil
+	fmt.Printf("\tKV Element 1: %#v\n", valueExpr)
+	if _, ok := valueExpr.(*ast.CompositeLit); ok {
+		fmt.Printf("\tCL type: %#v\n", litType)
+		var valueType ast.Expr
+		switch elmExpr := litType.(type) {
+		case *ast.SliceExpr:
+			valueType = elmExpr.X
+		case *ast.ArrayType:
+			valueType = elmExpr.Elt
+		case *ast.MapType:
+			valueType = elmExpr.Value
 		case *ast.Ident:
-			// Search for the symbol definition in the symbol table.
-			// If the identifier points to a struct data type, we need to store struct's fields as well.
-			// TODO(jchaloup): find a way how to propagate struct's data type name into the recursive call stack
-			fmt.Printf("%v==ast.Ident %#v\ttype: %#v\n", strings.Repeat("\t", indent), elemExpr, clType)
-			// Here, it is always a variable or a built-in type
-			// TODO(jchaloup): check if the variable is global and count it into the allocatable symbol table
-			return &gotypes.Identifier{Def: elemExpr.Name}, nil
-		case *ast.UnaryExpr:
-			fmt.Printf("%v==ast.UnaryExpr %#v\ttype: %#v\n", strings.Repeat("\t", indent), elemExpr, clType)
-			d, e := fp.parseCompositeLiteralElements(nil, []ast.Expr{elemExpr.X}, indent+1)
-			if e != nil {
-				return d, e
-			}
-		case *ast.KeyValueExpr:
-			// allowed for a struct and map only
-			switch keyValueDef := clType.Def.(type) {
-			case *gotypes.Struct:
-				elemKey, ok := elemExpr.Key.(*ast.Ident)
-				if !ok {
-					return nil, fmt.Errorf("ast.KeyValueExpr key %#v is not an identifier", elemExpr.Key)
-				}
-				var keyDef gotypes.DataType
-				for _, item := range keyValueDef.Fields {
-					//fmt.Printf("\t%vField: %v: %#v\n", strings.Repeat("\t", indent), item.Name, item.Def)
-					if item.Name == elemKey.Name {
-						//fmt.Printf("\t%vField %v found: %#v\n", strings.Repeat("\t", indent), elemKey.Name, item.Def)
-						//fp.allocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, elemKey.Name)
-						keyDef = item.Def
-						break
-					}
-				}
-				if keyDef == nil {
-					return nil, fmt.Errorf("Unable to find a key %v in struct %#v of a CompositeLiteral", elemKey.Name, keyValueDef)
-				}
-				fmt.Printf("%v==ast.KeyValueExpr %v Element:\n%v\ttype: %#v\n%v\tvalue: %#v\n", strings.Repeat("\t", indent), elemKey.Name, strings.Repeat("\t", indent), keyDef, strings.Repeat("\t", indent), elemExpr.Value)
-				// as a value can be of a different type then its key (e.g. interface vs. type implementing the interface), each value type of a struct is re-parsed fron the value type
-				d, e := fp.parseCompositeLiteralElements(nil, []ast.Expr{elemExpr.Value}, indent+1)
-				if e != nil {
-					return d, e
-				}
-			case *gotypes.Map:
-				// the key can be basically anything that is a literal, id or can be evaluated into the literal, resp. id
-				// Given the key is already parsed, we can skip it
-				fmt.Printf("%vMapKeyType: %#v\n", strings.Repeat("\t", indent), keyValueDef.Keytype)
-				// The same holds for the value, we already processed it so all data types are already accounted
-				fmt.Printf("%vMapValueType: %#v\n", strings.Repeat("\t", indent), keyValueDef.Valuetype)
-				fmt.Printf("%velemExpr: %#v\n", strings.Repeat("\t", indent), elemExpr.Value)
-				d, e := fp.parseCompositeLiteralElements(nil, []ast.Expr{elemExpr.Value}, indent+1)
-				if e != nil {
-					return d, e
-				}
-			default:
-				return nil, fmt.Errorf("ast.KeyValueExpr is allowed for a struct and map type only. Instead, %#v type is available", clType)
-			}
-
-		case *ast.CompositeLit:
-			fmt.Printf("%vCL: %#v\n", strings.Repeat("\t", indent), elemExpr)
-			// nil CL types = array/slice items
-			fmt.Printf("%v==ast.CompositeLit Element:\n%v\ttype: %#v\n%v\tvalue: %#v\n", strings.Repeat("\t", indent), strings.Repeat("\t", indent), nil, strings.Repeat("\t", indent), elemExpr)
-			if elemExpr.Type != nil {
-				clElemType, err := fp.typesParser.parseTypeExpr(elemExpr.Type)
-				if err != nil {
-					return nil, err
-				}
-				fmt.Printf("%velemExpr.Type: %#v\t%#v\n", strings.Repeat("\t", indent), elemExpr.Type, clElemType)
-				if clElemTypeIdent, ok := clElemType.(*gotypes.Identifier); ok {
-					def, err := fp.symbolTable.Lookup(clElemTypeIdent.Def)
-					if err != nil {
-						return nil, err
-					}
-					// TODO(jchaloup): add the symbol into the allocated symbol table
-					d, e := fp.parseCompositeLiteralElements(def, elemExpr.Elts, indent+1)
-					if e != nil {
-						return d, e
-					}
-				} else {
-					d, e := fp.parseCompositeLiteralElements(&gotypes.SymbolDef{Def: clElemType}, elemExpr.Elts, indent+1)
-					if e != nil {
-						return d, e
-					}
-				}
-			} else {
-				// slice/array
-				if clType == nil {
-					panic(fmt.Errorf("Expecting slice type for %#v. Got nil.", elemExpr))
-				}
-				slExpr, ok := clType.Def.(*gotypes.Slice)
-				if !ok {
-					panic(fmt.Errorf("Expecting slice, got %#v\n", clType.Def))
-				}
-				d, err := fp.parseCompositeLiteralElements(&gotypes.SymbolDef{Def: slExpr.Elmtype}, elemExpr.Elts, indent+1)
-				if err != nil {
-					return d, err
-				}
-			}
+			valueType = elmExpr
 		default:
-			panic(fmt.Errorf("Unknown element type: %#v", elem))
+			return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
+		}
+
+		// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
+		if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
+			if clExpr.Type == nil {
+				pointer, ok := valueType.(*ast.StarExpr)
+				if ok {
+					clExpr.Type = pointer.X
+					// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
+				} else {
+					clExpr.Type = valueType
+				}
+			}
+		}
+
+	}
+	fmt.Printf("\tKV Element 2: %#v\n", valueExpr)
+
+	def, err := fp.parseExpr(valueExpr)
+	if err != nil {
+		return nil, err
+	}
+	if len(def) != 1 {
+		return nil, fmt.Errorf("Expected single expression for KV value, got %#v", def)
+	}
+	return def[0], nil
+}
+
+func (fp *functionParser) parseCompositeLitArrayLikeElements(lit *ast.CompositeLit) error {
+	for _, litElement := range lit.Elts {
+		_, err := fp.parseKeyValueLikeExpr(litElement, lit.Type)
+		if err != nil {
+			return err
 		}
 	}
-	return nil, nil
+	return nil
+}
+
+func (fp *functionParser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *gotypes.SymbolDef) error {
+	fieldCounter := 0
+	fieldLen := len(structDef.Fields)
+	for _, litElement := range lit.Elts {
+		var valueExpr ast.Expr
+		// if the struct fields name are omitted, the order matters
+		// TODO(jchaloup): should check if all elements are KeyValueExpr or not (otherwise go compilation fails)
+		if kvExpr, ok := litElement.(*ast.KeyValueExpr); ok {
+			// The field must be an identifier
+			keyDefIdentifier, ok := kvExpr.Key.(*ast.Ident)
+			if !ok {
+				return fmt.Errorf("Struct's field %#v is not an identifier", litElement)
+			}
+			if structSymbol != nil {
+				fp.allocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
+			}
+			valueExpr = kvExpr.Value
+		} else {
+			if fieldCounter >= fieldLen {
+				return fmt.Errorf("Number of fields of the CL is greater than the number of fields of underlying struct %#v", structDef)
+			}
+			if structSymbol != nil {
+				// TODO(jchaloup): Should we count the anonymous field as well? Maybe make a AddDataTypeAnonymousField?
+				fp.allocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
+			}
+			valueExpr = litElement
+		}
+
+		// process the field value
+		_, err := fp.parseExpr(valueExpr)
+		if err != nil {
+			return err
+		}
+		fieldCounter++
+	}
+
+	return nil
 }
 
 func (fp *functionParser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, error) {
@@ -349,33 +312,92 @@ func (fp *functionParser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.Data
 	//   Elts[2],
 	//}
 
+	// Other links:
+	// - https://medium.com/golangspec/composite-literals-in-go-10dc62eec06a
+	// - https://groups.google.com/forum/#!msg/golang-nuts/s4CRRj6f6mw/SNKRAGbDZf0J
+	// - http://grokbase.com/t/gg/golang-nuts/139exrszge/go-nuts-accessing-an-anonymous-struct-or-missing-type-in-composite-literal
+	// - http://www.hnwatcher.com/r/2447374/Stupid-Go-lang-Tricks
+	// - http://stackoverflow.com/a/30716481/4983496
+	//
+	// Experiments:
+	// - Given "type Identifier struct {Def string}" type definition,
+	//   double referrence of "&(&Identifier{"iii"})" ends with "invalid pointer type **Identifier for composite literal"
+	// - The same holds for "&(&struct {field1 string; field2 int}{field1: "", field2: 3})"
+
+	// Based on the Composite Literal grammar, if the CL type is omitted,
+	// it must be reconstructuble from the context. Thus, if the is ommited,
+	// i.e. the CL type expr is set to nil, the type is constructed from the parent CL type
+	// ast.
+	//
+	// If the CL type is a pointer to pointer (and possibly on), the compiler fails
+	// when the CL type is ommited when used in CL parent elements. Thus,
+	// we just need to check the CL type is at most a pointer to a non-pointer type.
+	// If it is not and the CL type is still set to nil, it is a semantic error.
+
 	// The CL type can be processed independently of the CL elements
 	fmt.Printf("CL Type: %#v\n", lit.Type)
-	def, err := fp.typesParser.parseTypeExpr(lit.Type)
+	litTypedef, err := fp.typesParser.parseTypeExpr(lit.Type)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("litTypeDef: %#v\n", litTypedef)
 
-	// TODO(jchaloup): the typeIdent can be a selector as well (qui.id), check that as well
-	if clElemTypeIdent, ok := def.(*gotypes.Identifier); ok {
-		clElemTypeIdentDef, err := fp.symbolTable.Lookup(clElemTypeIdent.Def)
-		if err != nil {
-			panic(err)
+	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
+	switch litTypeExpr := litTypedef.(type) {
+	case *gotypes.Struct:
+		// anonymous structure -> we can ignore field's allocation
+		if err := fp.parseCompositeLitStructElements(lit, litTypeExpr, nil); err != nil {
 			return nil, err
 		}
-		// TODO(jchaloup): add the symbol into the allocated symbol table
-		_, err = fp.parseCompositeLiteralElements(clElemTypeIdentDef, lit.Elts, 0)
-		if err != nil {
-			panic(err)
+	case *gotypes.Array:
+		if err := fp.parseCompositeLitArrayLikeElements(lit); err != nil {
+			return nil, err
 		}
-	} else {
-		_, err = fp.parseCompositeLiteralElements(&gotypes.SymbolDef{Def: def}, lit.Elts, 0)
-		if err != nil {
-			panic(err)
+	case *gotypes.Slice:
+		if err := fp.parseCompositeLitArrayLikeElements(lit); err != nil {
+			return nil, err
 		}
+	case *gotypes.Map:
+		if err := fp.parseCompositeLitArrayLikeElements(lit); err != nil {
+			return nil, err
+		}
+	case *gotypes.Identifier:
+		var ClTypeIdentifierDef *gotypes.SymbolDef
+		// If the LC type is an identifier, determine a type which is defined by the identifier
+		if idDef, ok := litTypedef.(*gotypes.Identifier); ok {
+			def, err := fp.symbolTable.Lookup(idDef.Def)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", idDef)
+			}
+			ClTypeIdentifierDef = def
+			fmt.Printf("SymbolDef: %#v\n", ClTypeIdentifierDef)
+		}
+
+		switch clTypeDataType := ClTypeIdentifierDef.Def.(type) {
+		case *gotypes.Struct:
+			if err := fp.parseCompositeLitStructElements(lit, clTypeDataType, ClTypeIdentifierDef); err != nil {
+				return nil, err
+			}
+		case *gotypes.Array:
+			if err := fp.parseCompositeLitArrayLikeElements(lit); err != nil {
+				return nil, err
+			}
+		case *gotypes.Slice:
+			if err := fp.parseCompositeLitArrayLikeElements(lit); err != nil {
+				return nil, err
+			}
+		case *gotypes.Map:
+			if err := fp.parseCompositeLitArrayLikeElements(lit); err != nil {
+				return nil, err
+			}
+		default:
+			panic(fmt.Errorf("Unsupported ClTypeIdentifierDef: %#v\n", ClTypeIdentifierDef))
+		}
+	default:
+		panic(fmt.Errorf("Unsupported CL type: %#v", litTypedef))
 	}
 
-	return nil, nil
+	return litTypedef, nil
 }
 
 func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
@@ -796,13 +818,7 @@ func (fp *functionParser) parseStatement(statement ast.Stmt) error {
 	return nil
 }
 
-func (fp *functionParser) parseFuncBody(funcDecl *ast.FuncDecl) error {
-	// Function/method signature is already stored in a symbol table.
-	// From function/method's AST get its receiver, parameters and results,
-	// construct a first level of a multi-level symbol table stack..
-	// For each new block (including the body) push another level into the stack.
-	fp.symbolTable.Push()
-
+func (fp *functionParser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 	if funcDecl.Recv != nil {
 		// Receiver has a single parametr
 		// https://golang.org/ref/spec#Receiver
@@ -854,7 +870,18 @@ func (fp *functionParser) parseFuncBody(funcDecl *ast.FuncDecl) error {
 			}
 		}
 	}
+	return nil
+}
 
+func (fp *functionParser) parseFuncBody(funcDecl *ast.FuncDecl) error {
+	// Function/method signature is already stored in a symbol table.
+	// From function/method's AST get its receiver, parameters and results,
+	// construct a first level of a multi-level symbol table stack..
+	// For each new block (including the body) push another level into the stack.
+	fp.symbolTable.Push()
+	if err := fp.parseFuncHeadVariables(funcDecl); err != nil {
+		return nil
+	}
 	fp.symbolTable.Push()
 	byteSlice, err := json.Marshal(fp.symbolTable)
 	fmt.Printf("\nTable: %v\nerr: %v", string(byteSlice), err)

@@ -79,6 +79,16 @@ type Slice struct {
 	Elmtype DataType `json:"elmtype"`
 }
 
+type Function struct {
+	Params []DataType `json:"params"`
+
+	Results []DataType `json:"results"`
+}
+
+type LocalMap map[string]*Identifier
+
+type LocalSlice []*Identifier
+
 func TestMarshalUnmarshal(t *testing.T) {
 
 	id := &Identifier{Def: "Poker"}
@@ -90,7 +100,134 @@ func TestMarshalUnmarshal(t *testing.T) {
 		Elmtype: channel,
 	}
 
-	tests := []struct {
+	_ = struct {
+		name, dataType string
+		value          DataType
+		empty          DataType
+		ident          map[string]*Identifier
+	}{
+		"Identifiser",
+		id,
+		&Identifier{},
+		nil,
+	}
+
+	_ = []struct {
+		name, dataType string
+		value          DataType
+		empty          DataType
+		ident          map[string]*Identifier
+	}{
+		{
+			name: "Identifiser",
+			id,
+			empty: &Identifier{},
+			nil,
+		},
+	}
+
+	_ = []*struct {
+		name, dataType string
+		value          DataType
+		empty          DataType
+		ident          map[string]*Identifier
+	}{
+		{
+			name: "Identifiser",
+			id,
+			empty: &Identifier{},
+			nil,
+		},
+	}
+
+	_ = []Identifier{
+		{
+			Def: "Identifiser",
+		},
+	}
+
+	_ = []Identifier{
+		{
+			"Identifiser",
+		},
+	}
+
+	_ = map[string]int{
+		"":    0,
+		" ":   1,
+		"   ": 2,
+	}
+
+	_ = []Identifier{
+		1: {
+			"Identifiser",
+		},
+	}
+
+	// If you put - or + instead of "_ = ", it is not parsed :D
+	_ = map[string]Identifier{
+		Identifier{
+			Def: "id1",
+		},
+		Identifier{
+			Def: "id2",
+		},
+		Identifier{
+			Def: "id3",
+		},
+	}
+
+	_ = [2]Identifier{
+		1: {
+			"Identifiser",
+		},
+	}
+
+	_ = map[string]Identifier{
+		{
+			Def: "id1",
+		},
+		{
+			Def: "id2",
+		},
+		{
+			Def: "id3",
+		},
+	}
+
+	_ = struct {
+		name, dataType string
+		value          DataType
+		empty          DataType
+		ident          map[string]*Identifier
+	}{
+		"Identifiser",
+		id,
+		&Identifier{},
+		map[string]*Identifier{
+			"field1": &Identifier{
+				Def: "Field1",
+			},
+			"field2": &Identifier{
+				Def: "Field2",
+			},
+		},
+	}
+
+	_ = LocalMap{}
+
+	_ = LocalMap{
+		"neco":  &Identifier{""},
+		"neco2": &Identifier{""},
+	}
+
+	_ = LocalSlice{}
+
+	_ = LocalSlice{
+		{""},
+	}
+
+	_ = []struct {
 		name, dataType string
 		value          DataType
 		empty          DataType
@@ -98,7 +235,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 	}{
 		// Simple identifier
 		{
-			name:  "Identifier",
+			name:  "Identifiser",
 			value: id,
 			empty: &Identifier{},
 			ident: map[string]*Identifier{
@@ -111,32 +248,37 @@ func TestMarshalUnmarshal(t *testing.T) {
 			},
 		},
 	}
-	//
-	// tests2 := [][][]*Identifier{}
 
-	// 		// Simple channel
-	// 		{
-	// 			name:  "Channel",
-	// 			value: channel,
-	// 			empty: &Channel{},
-	// 		},
-	// 		// Slice with structured type
-	// 		{
-	// 			name:  "Slice",
-	// 			value: slice,
-	// 			empty: &Slice{},
-	// 		},
-	// 		// Function
-	// 		{
-	// 			name: "Function",
-	// 			value: &Function{
-	// 				Params:  []DataType{id, slice, channel},
-	// 				Results: []DataType{id, slice, channel},
-	// 			},
-	// 			empty: &Function{},
-	// 		},
-	// 	}
-	//
+	tests2 := [][][]*Identifier{}
+
+	tests := []struct {
+		name  string
+		value DataType
+		empty DataType
+	}{
+		// Simple channel
+		{
+			name:  "Channel",
+			value: channel,
+			empty: &Channel{},
+		},
+		// Slice with structured type
+		{
+			name:  "Slice",
+			value: slice,
+			empty: &Slice{},
+		},
+		// Function
+		{
+			name: "Function",
+			value: &Function{
+				Params:  []DataType{id, slice, channel},
+				Results: []DataType{id, slice, channel},
+			},
+			empty: &Function{},
+		},
+	}
+
 	// 	for _, test := range tests {
 	// 		{
 	// 			newObject := test.empty
