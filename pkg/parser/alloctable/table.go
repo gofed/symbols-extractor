@@ -1,4 +1,4 @@
-package parser
+package alloctable
 
 import "fmt"
 
@@ -6,7 +6,7 @@ import "fmt"
 // - each AS table is per file, AS package is a union of file AS tables
 //
 
-type AllocatedSymbolsTable struct {
+type Table struct {
 	File    string
 	Package string
 	// symbol's name is in a PACKAGE.ID form
@@ -14,17 +14,17 @@ type AllocatedSymbolsTable struct {
 	symbols map[string]int
 }
 
-func NewAllocatableSymbolsTable() *AllocatedSymbolsTable {
-	return &AllocatedSymbolsTable{
+func New() *Table {
+	return &Table{
 		symbols: make(map[string]int),
 	}
 }
 
-func (ast *AllocatedSymbolsTable) AddDataTypeField(origin, dataType, field string) {
+func (ast *Table) AddDataTypeField(origin, dataType, field string) {
 	ast.AddSymbol(origin, fmt.Sprintf("%v.%v", dataType, field))
 }
 
-func (ast *AllocatedSymbolsTable) AddSymbol(origin, id string) {
+func (ast *Table) AddSymbol(origin, id string) {
 	var key string
 	if origin != "" {
 		key = fmt.Sprintf("%v.%v", origin, id)
@@ -40,7 +40,7 @@ func (ast *AllocatedSymbolsTable) AddSymbol(origin, id string) {
 	}
 }
 
-func (ast *AllocatedSymbolsTable) Print() {
+func (ast *Table) Print() {
 	for key := range ast.symbols {
 		fmt.Printf("%v:\t%v\n", key, ast.symbols[key])
 	}
