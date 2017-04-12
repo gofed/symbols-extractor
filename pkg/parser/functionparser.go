@@ -406,6 +406,11 @@ func (fp *functionParser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, e
 		return &gotypes.Nil{}, nil
 	}
 
+	// true/false
+	if ident.Name == "true" || ident.Name == "false" {
+		return &gotypes.BuiltinLiteral{}, nil
+	}
+
 	// Check if the symbol is in the symbol table.
 	// It is either a local variable or a global variable (as it is used inside an expression).
 	// If the symbol is not found, it means it is not defined and never will be.
@@ -565,6 +570,43 @@ func (fp *functionParser) parseStructType(expr *ast.StructType) (gotypes.DataTyp
 	panic("Panic")
 }
 
+func (fp *functionParser) retrieveStructField(structDefsymbol *gotypes.SymbolDef, field string) (gotypes.DataType, error) {
+	fmt.Printf("structDef: %#v\n", structDefsymbol)
+	if structDefsymbol.Def.GetType() != gotypes.StructType {
+		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", field, structDefsymbol.Def)
+	}
+
+	for _, item := range structDefsymbol.Def.(*gotypes.Struct).Fields {
+		fmt.Printf("\tField: %v: %#v\n", item.Name, item.Def)
+		if item.Name == field {
+			fmt.Printf("Field %v found: %#v\n", field, item.Def)
+			if structDefsymbol.Name != "" {
+				fp.allocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, field)
+			}
+			return item.Def, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", field, structDefsymbol)
+}
+
+func (fp *functionParser) retrieveInterfaceMethod(interfaceDefsymbol *gotypes.SymbolDef, method string) (gotypes.DataType, error) {
+	fmt.Printf("interfaceDefsymbol: %#v\n", interfaceDefsymbol)
+	if interfaceDefsymbol.Def.GetType() != gotypes.InterfaceType {
+		return nil, fmt.Errorf("Trying to retrieve a %v method from a non-interface data type: %#v", method, interfaceDefsymbol.Def)
+	}
+
+	for _, item := range interfaceDefsymbol.Def.(*gotypes.Interface).Methods {
+		fmt.Printf("method: %v: %#v\n", item.Name, item.Def)
+		if item.Name == method {
+			if interfaceDefsymbol.Name != "" {
+				fp.allocatedSymbolsTable.AddDataTypeField(interfaceDefsymbol.Package, interfaceDefsymbol.Name, method)
+			}
+			return item.Def, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to find a method %v in interface %#v", method, interfaceDefsymbol)
+}
+
 func (fp *functionParser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, error) {
 	// X.Sel a.k.a Prefix.Item
 	xDef, xErr := fp.parseExpr(expr.X)
@@ -578,45 +620,57 @@ func (fp *functionParser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.Dat
 
 	fmt.Printf("X: %#v\t%#v\n", xDef, expr.X)
 
-	// The struct is the only data type from which a field is retriveable
+	// The struct and an interface are the only data type from which a field/method is retriveable
 	fmt.Printf("structExpr: %#v\n", xDef[0])
 
-	var structIdent *gotypes.Identifier
-	if typePointer, ok := xDef[0].(*gotypes.Pointer); ok {
-		structIdent, ok = typePointer.Def.(*gotypes.Identifier)
+	switch xType := xDef[0].(type) {
+	// If the X expression is a qualified id, the selector is a symbol from a package pointed by the id
+	case *gotypes.PackageQualifier:
+		fmt.Printf("Trying to retrieve a symbol %#v from package %v\n", expr.Sel.Name, xType.Path)
+		// TODO(jchaloup): implement retrieval a symbols from other symbol tables
+		panic("Symbol retrieval from other packages not yet implemented")
+	case *gotypes.Pointer:
+		def, ok := xType.Def.(*gotypes.Identifier)
 		if !ok {
-			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, typePointer.Def)
+			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
-	} else {
-		structIdent, ok = xDef[0].(*gotypes.Identifier)
-		if !ok {
-			return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", expr.Sel.Name, xDef[0])
+		// Get struct's definition given by its identifier
+		structDefsymbol, err := fp.symbolTable.Lookup(def.Def)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", def.Def)
 		}
-	}
-
-	fmt.Printf("structIdent: %#v\n", structIdent)
-
-	// Get struct's definition given by its identifier
-	structDefsymbol, err := fp.symbolTable.Lookup(structIdent.Def)
-	if err != nil {
-		return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", structIdent.Def)
-	}
-
-	fmt.Printf("structDef: %#v\n", structDefsymbol)
-	structDef, ok := structDefsymbol.Def.(*gotypes.Struct)
-	if !ok {
-		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", expr.Sel.Name, structDefsymbol.Def)
-	}
-
-	for _, item := range structDef.Fields {
-		fmt.Printf("\tField: %v: %#v\n", item.Name, item.Def)
-		if item.Name == expr.Sel.Name {
-			fmt.Printf("Field %v found: %#v\n", expr.Sel.Name, item.Def)
-			fp.allocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, expr.Sel.Name)
-			return item.Def, nil
+		return fp.retrieveStructField(structDefsymbol, expr.Sel.Name)
+	case *gotypes.Identifier:
+		// Get struct/interface definition given by its identifier
+		defSymbol, err := fp.symbolTable.Lookup(xType.Def)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", xType.Def)
 		}
+		switch defSymbol.Def.(type) {
+		case *gotypes.Struct:
+			return fp.retrieveStructField(defSymbol, expr.Sel.Name)
+		case *gotypes.Interface:
+			return fp.retrieveInterfaceMethod(defSymbol, expr.Sel.Name)
+		default:
+			return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v", defSymbol)
+		}
+	// anonymous struct
+	case *gotypes.Struct:
+		return fp.retrieveStructField(&gotypes.SymbolDef{
+			Name:    "",
+			Package: "",
+			Def:     xType,
+		}, expr.Sel.Name)
+	case *gotypes.Interface:
+		// TODO(jchaloup): test the case when the interface is anonymous
+		return fp.retrieveInterfaceMethod(&gotypes.SymbolDef{
+			Name:    "",
+			Package: "",
+			Def:     xType,
+		}, expr.Sel.Name)
+	default:
+		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", expr.Sel.Name, xDef[0])
 	}
-	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", expr.Sel.Name, structDefsymbol)
 }
 
 func (fp *functionParser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) {
@@ -782,6 +836,11 @@ func (fp *functionParser) parseAssignment(expr *ast.AssignStmt) (gotypes.DataTyp
 
 		switch lhsExpr := expr.Lhs[i].(type) {
 		case *ast.Ident:
+			// skip the anonymous variables
+			if lhsExpr.Name == "_" {
+				continue
+			}
+
 			fp.symbolTable.AddVariable(&gotypes.SymbolDef{
 				Name:    lhsExpr.Name,
 				Package: fp.packageName,
@@ -792,6 +851,56 @@ func (fp *functionParser) parseAssignment(expr *ast.AssignStmt) (gotypes.DataTyp
 		}
 	}
 	return nil, nil
+}
+
+func (fp *functionParser) parseExprStmt(statement *ast.ExprStmt) error {
+	_, err := fp.parseExpr(statement.X)
+	return err
+}
+
+func (fp *functionParser) parseIfStmt(statement *ast.IfStmt) error {
+	// If Init; Cond { Body } Else
+
+	// The Init part is basically another block
+	fmt.Printf("\nInit: %#v\n", statement.Init)
+	if statement.Init != nil {
+		// The Init part must be an assignment statement
+		if _, ok := statement.Init.(*ast.AssignStmt); !ok {
+			return fmt.Errorf("If Init part must by an assignment statement if set")
+		}
+		fp.symbolTable.Push()
+		defer fp.symbolTable.Pop()
+		_, err := fp.parseAssignment(statement.Init.(*ast.AssignStmt))
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("\nCond: %#v\n", statement.Cond)
+	_, err := fp.parseExpr(statement.Cond)
+	if err != nil {
+		return err
+	}
+
+	// Process the If-body
+	fmt.Printf("\nBody: %#v\n", statement.Body)
+	fp.parseBlockStmt(statement.Body)
+
+	return nil
+}
+
+func (fp *functionParser) parseBlockStmt(statement *ast.BlockStmt) error {
+	fp.symbolTable.Push()
+	defer fp.symbolTable.Pop()
+
+	fmt.Printf("Block statement: %#v\n", statement)
+	for _, blockItem := range statement.List {
+		fmt.Printf("BodyItem: %#v\n", blockItem)
+		if err := fp.parseStatement(blockItem); err != nil {
+			return nil
+		}
+	}
+	return nil
 }
 
 func (fp *functionParser) parseStatement(statement ast.Stmt) error {
@@ -813,6 +922,22 @@ func (fp *functionParser) parseStatement(statement ast.Stmt) error {
 			panic(err)
 			return err
 		}
+	case *ast.IfStmt:
+		fmt.Printf("IfStmt: %#v\n", stmtExpr)
+		err := fp.parseIfStmt(stmtExpr)
+		if err != nil {
+			panic(err)
+			return err
+		}
+	case *ast.ExprStmt:
+		fmt.Printf("ExprStmt: %#v\n", stmtExpr)
+		err := fp.parseExprStmt(stmtExpr)
+		if err != nil {
+			panic(err)
+			return err
+		}
+	default:
+		panic(fmt.Errorf("Unknown statement %#v", statement))
 	}
 
 	return nil

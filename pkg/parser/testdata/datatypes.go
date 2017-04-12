@@ -279,6 +279,18 @@ func TestMarshalUnmarshal(t *testing.T) {
 		},
 	}
 
+	if _ = false; true {
+		_ = tests[1].value.GetType()
+	}
+
+	// if a := false; a == true {
+	// 	fmt.Printf("True")
+	// }
+	//
+	// if a := false; a == true && 2+3 == 4 || 2<<3 == 0 {
+	// 	fmt.Printf("True")
+	// }
+
 	// 	for _, test := range tests {
 	// 		{
 	// 			newObject := test.empty
