@@ -14,6 +14,7 @@ import (
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -30,9 +31,9 @@ type FileParser struct {
 	// per file allocatable ST
 	allocatedSymbolsTable *alloctable.Table
 	// type parser
-	typeParser *typeparser.Parser
+	typeParser types.TypeParser
 	// expr parser
-	exprParser *exprparser.Parser
+	exprParser types.ExpressionParser
 	// stmt parser
 	stmtParser *stmtparser.Parser
 	// name of the currently processed data type
@@ -112,8 +113,29 @@ func (fp *FileParser) Parse(gofile string) error {
 				case *ast.TypeSpec:
 					// process type definitions as second
 					//fmt.Printf("%#v\n", d)
-					_, err := fp.typeParser.Parse(d)
+					// Store a symbol just with a name and origin.
+					// Setting the symbol's definition to nil means the symbol is being parsed (somewhere in the chain)
+					if err := fp.symbolTable.AddDataType(&gotypes.SymbolDef{
+						Name:    d.Name.Name,
+						Package: fp.packageName,
+						Def:     nil,
+					}); err != nil {
+						return err
+					}
+
+					// TODO(jchaloup): capture the current state of the allocated symbol table
+					// JIC the parsing ends with end error. Which can result into re-parsing later on.
+					// Which can result in re-allocation. It should be enough two-level allocated symbol table.
+					typeDef, err := fp.typeParser.Parse(d.Type)
 					if err != nil {
+						return err
+					}
+
+					if err := fp.symbolTable.AddDataType(&gotypes.SymbolDef{
+						Name:    d.Name.Name,
+						Package: fp.packageName,
+						Def:     typeDef,
+					}); err != nil {
 						return err
 					}
 				}

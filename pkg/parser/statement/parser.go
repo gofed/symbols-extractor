@@ -7,9 +7,8 @@ import (
 	"go/token"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
-	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
-	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -22,13 +21,13 @@ type Parser struct {
 	// per file allocatable ST
 	allocatedSymbolsTable *alloctable.Table
 	// types parser
-	typeParser *typeparser.Parser
+	typeParser types.TypeParser
 	// expresesion parser
-	exprParser *exprparser.Parser
+	exprParser types.ExpressionParser
 }
 
 // New creates an instance of a statement parser
-func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typeParser *typeparser.Parser, exprParser *exprparser.Parser) *Parser {
+func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typeParser types.TypeParser, exprParser types.ExpressionParser) *Parser {
 	return &Parser{
 		packageName:           packageName,
 		symbolTable:           symbolTable,
@@ -38,11 +37,63 @@ func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTab
 	}
 }
 
+func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes.DataType, error) {
+	// Receiver's type must be of the form T or *T (possibly using parentheses) where T is a type name.
+	switch typedExpr := receiver.(type) {
+	case *ast.Ident:
+		// search the identifier in the symbol table
+		def, err := ep.symbolTable.Lookup(typedExpr.Name)
+		if err != nil {
+			fmt.Printf("Lookup error: %v\n", err)
+			// Return an error so the function body processing can be postponed
+			// TODO(jchaloup): return more information about the missing symbol so the
+			// body can be re-processed right after the symbol is stored into the symbol table.
+			return nil, err
+		}
+
+		if !skip_allocated {
+			ep.allocatedSymbolsTable.AddSymbol(def.Package, typedExpr.Name)
+		}
+
+		return &gotypes.Identifier{
+			Def: typedExpr.Name,
+		}, nil
+	case *ast.StarExpr:
+		fmt.Printf("Start: %#v\n", typedExpr)
+		switch idExpr := typedExpr.X.(type) {
+		case *ast.Ident:
+			// search the identifier in the symbol table
+			def, err := ep.symbolTable.Lookup(idExpr.Name)
+			if err != nil {
+				fmt.Printf("Lookup error: %v\n", err)
+				// Return an error so the function body processing can be postponed
+				// TODO(jchaloup): return more information about the missing symbol so the
+				// body can be re-processed right after the symbol is stored into the symbol table.
+				return nil, err
+			}
+
+			if !skip_allocated {
+				ep.allocatedSymbolsTable.AddSymbol(def.Package, idExpr.Name)
+			}
+
+			return &gotypes.Pointer{
+				Def: &gotypes.Identifier{
+					Def: idExpr.Name,
+				},
+			}, nil
+		default:
+			return nil, fmt.Errorf("Method receiver %#v is not a pointer to an identifier", idExpr)
+		}
+	default:
+		return nil, fmt.Errorf("Method receiver %#v is not a pointer to an identifier not an identifier", typedExpr)
+	}
+}
+
 func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
 	// parseFunction does not store name of params, resp. results
 	// as the names are not important. Just params, resp. results ordering is.
 	// Thus, this method is used to parse function's signature only.
-	funcDef, err := sp.typeParser.ParseFunction(d.Type)
+	funcDef, err := sp.typeParser.Parse(d.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +116,7 @@ func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
 
 		//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
 
-		recDef, err := sp.exprParser.ParseReceiver((*d.Recv).List[0].Type, false)
+		recDef, err := sp.parseReceiver((*d.Recv).List[0].Type, false)
 		if err != nil {
 			return nil, err
 		}
@@ -98,22 +149,137 @@ func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
 	return funcDef, nil
 }
 
-func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
-	// expr.
-	fmt.Printf("decl: %#v\n", statement.Decl)
-	panic("Decl panic")
+func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) error {
+	fmt.Printf("ValueSpec: %#v\n", spec)
+	fmt.Printf("ValueSpec.Names: %#v\n", spec.Names)
+	fmt.Printf("ValueSpec.Type: %#v\n", spec.Type)
+	fmt.Printf("ValueSpec.Values: %#v\n", spec.Values)
+	nLen := len(spec.Names)
+	vLen := len(spec.Values)
+
+	fmt.Printf("(%v, %v)\n", nLen, vLen)
+
+	if nLen < vLen {
+		return fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
+	}
+
+	var typeDef gotypes.DataType
+	if spec.Type != nil {
+		def, err := sp.typeParser.Parse(spec.Type)
+		if err != nil {
+			return err
+		}
+		typeDef = def
+	}
+
+	fmt.Printf("typeDef: %#v\n", typeDef)
+
+	for i := 0; i < vLen; i++ {
+		if typeDef == nil && spec.Values[i] == nil {
+			return fmt.Errorf("No type nor value in ValueSpec declaration")
+		}
+		// TODO(jchaloup): if the variable type is an interface and the variable value type is a concrete type
+		//                 note somewhere the concrete type must implemented the interface
+		valueExpr, err := sp.exprParser.Parse(spec.Values[i])
+		if err != nil {
+			return err
+		}
+		if len(valueExpr) != 1 {
+			return fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExpr)
+		}
+		fmt.Printf("Name: %#v, Value: %#v, Type: %#v", spec.Names[i].Name, valueExpr[0], typeDef)
+		// Put the variables/consts into the symbol table
+		if spec.Names[i].Name == "_" {
+			continue
+		}
+		if typeDef != nil {
+			sp.symbolTable.AddVariable(&gotypes.SymbolDef{
+				Name:    spec.Names[i].Name,
+				Package: sp.packageName,
+				Def:     typeDef,
+			})
+		} else {
+			sp.symbolTable.AddVariable(&gotypes.SymbolDef{
+				Name:    spec.Names[i].Name,
+				Package: sp.packageName,
+				Def:     valueExpr[0],
+			})
+		}
+	}
+
+	for i := vLen; i < nLen; i++ {
+		if typeDef == nil {
+			return fmt.Errorf("No type in ValueSpec declaration for identifier at pos %v (starting index from 1)", i+1)
+		}
+		if spec.Names[i].Name == "_" {
+			continue
+		}
+		sp.symbolTable.AddVariable(&gotypes.SymbolDef{
+			Name:    spec.Names[i].Name,
+			Package: sp.packageName,
+			Def:     typeDef,
+		})
+	}
+
 	return nil
 }
 
-func (sp *Parser) parseAssignment(expr *ast.AssignStmt) error {
+func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
+	// expr.
+	fmt.Printf("decl: %#v\n", statement.Decl)
+	switch decl := statement.Decl.(type) {
+	case *ast.GenDecl:
+		for _, spec := range decl.Specs {
+			fmt.Printf("gendecl.spec: %#v\n", spec)
+			switch genDeclSpec := spec.(type) {
+			case *ast.ValueSpec:
+				if err := sp.ParseValueSpec(genDeclSpec); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	//panic("Decl panic")
+	return nil
+}
+
+func (sp *Parser) parseLabeledStmt(statement *ast.LabeledStmt) error {
+	// the label is typeless
+	return sp.Parse(statement.Stmt)
+}
+
+func (sp *Parser) parseExprStmt(statement *ast.ExprStmt) error {
+	_, err := sp.exprParser.Parse(statement.X)
+	return err
+}
+
+func (sp *Parser) parseSendStmt(statement *ast.SendStmt) error {
+	if _, err := sp.exprParser.Parse(statement.Chan); err != nil {
+		return err
+	}
+	// TODO(jchaloup): should check the statement.Chan type is really a channel.
+	if _, err := sp.exprParser.Parse(statement.Value); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (sp *Parser) parseIncDecStmt(statement *ast.IncDecStmt) error {
+	// both --,++ has no type information
+	// TODO(jchaloup): check the --/++ can be carried over the statement.X
+	_, err := sp.exprParser.Parse(statement.X)
+	return err
+}
+
+func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	// expr.Lhs = expr.Rhs
 	// left-hand sice expression must be an identifier or a selector
-	exprsSize := len(expr.Lhs)
+	exprsSize := len(statement.Lhs)
 	// Some assignments are of a different number of expression on both sides.
 	// E.g. value, ok := somemap[key]
 	// TODO(jchaloup): cover all the cases as well
-	if exprsSize != len(expr.Rhs) {
-		return fmt.Errorf("Number of expression of the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", expr.Lhs, expr.Rhs)
+	if exprsSize != len(statement.Rhs) {
+		return fmt.Errorf("Number of expression of the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", statement.Lhs, statement.Rhs)
 	}
 
 	// If the assignment token is token.DEFINE a variable gets stored into the symbol table.
@@ -122,18 +288,18 @@ func (sp *Parser) parseAssignment(expr *ast.AssignStmt) error {
 	// If the token is token.ASSIGN the variable must be in the symbol table.
 	// If it is and has the same type, do not do anything, Error, if the type is different.
 	// If it is not there yet, error.
-	fmt.Printf("Ass token: %v %v %v\n", expr.Tok, token.ASSIGN, token.DEFINE)
+	fmt.Printf("Ass token: %v %v %v\n", statement.Tok, token.ASSIGN, token.DEFINE)
 
 	for i := 0; i < exprsSize; i++ {
 		// If the left-hand side id a selector (e.g. struct.field), we alredy know data type of the id.
 		// So, just store the field's data type into the allocated symbol table
 		//switch lhsExpr := expr.
-		fmt.Printf("Lhs: %#v\n", expr.Lhs[i])
-		fmt.Printf("Rhs: %#v\n", expr.Rhs[i])
+		fmt.Printf("Lhs: %#v\n", statement.Lhs[i])
+		fmt.Printf("Rhs: %#v\n", statement.Rhs[i])
 
-		def, err := sp.exprParser.ParseExpr(expr.Rhs[i])
+		def, err := sp.exprParser.Parse(statement.Rhs[i])
 		if err != nil {
-			return fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v", i, expr, err)
+			return fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v", i, statement, err)
 		}
 
 		if len(def) != 1 {
@@ -142,27 +308,29 @@ func (sp *Parser) parseAssignment(expr *ast.AssignStmt) error {
 
 		fmt.Printf("Ass type: %#v\n", def)
 
-		switch lhsExpr := expr.Lhs[i].(type) {
+		switch lhsExpr := statement.Lhs[i].(type) {
 		case *ast.Ident:
 			// skip the anonymous variables
 			if lhsExpr.Name == "_" {
 				continue
 			}
 
+			// TODO(jchaloup): If the statement.Tok is not token.DEFINE, don't add the variable to the symbol table.
+			//                 Instead, check the varible is of the same type (or compatible) as the already stored one.
 			sp.symbolTable.AddVariable(&gotypes.SymbolDef{
 				Name:    lhsExpr.Name,
 				Package: sp.packageName,
 				Def:     def[0],
 			})
 		default:
-			return fmt.Errorf("Lhs of an assignment type %#v is not recognized", expr.Lhs[i])
+			return fmt.Errorf("Lhs of an assignment type %#v is not recognized", statement.Lhs[i])
 		}
 	}
 	return nil
 }
 
-func (sp *Parser) parseExprStmt(statement *ast.ExprStmt) error {
-	_, err := sp.exprParser.ParseExpr(statement.X)
+func (sp *Parser) parseGoStmt(statement *ast.GoStmt) error {
+	_, err := sp.exprParser.Parse(statement.Call)
 	return err
 }
 
@@ -178,13 +346,13 @@ func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
 		}
 		sp.symbolTable.Push()
 		defer sp.symbolTable.Pop()
-		if err := sp.parseAssignment(statement.Init.(*ast.AssignStmt)); err != nil {
+		if err := sp.parseAssignStmt(statement.Init.(*ast.AssignStmt)); err != nil {
 			return err
 		}
 	}
 
 	fmt.Printf("\nCond: %#v\n", statement.Cond)
-	_, err := sp.exprParser.ParseExpr(statement.Cond)
+	_, err := sp.exprParser.Parse(statement.Cond)
 	if err != nil {
 		return err
 	}
@@ -203,8 +371,8 @@ func (sp *Parser) parseBlockStmt(statement *ast.BlockStmt) error {
 	fmt.Printf("Block statement: %#v\n", statement)
 	for _, blockItem := range statement.List {
 		fmt.Printf("BodyItem: %#v\n", blockItem)
-		if err := sp.parseStatement(blockItem); err != nil {
-			return nil
+		if err := sp.Parse(blockItem); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -220,26 +388,38 @@ func (sp *Parser) parseBlockStmt(statement *ast.BlockStmt) error {
 //
 // SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
 
-func (sp *Parser) parseStatement(statement ast.Stmt) error {
+func (sp *Parser) Parse(statement ast.Stmt) error {
 	switch stmtExpr := statement.(type) {
 	case *ast.DeclStmt:
 		fmt.Printf("DeclStmt: %#v\n", stmtExpr)
 		return sp.parseDeclStmt(stmtExpr)
+	case *ast.LabeledStmt:
+		fmt.Printf("LabeledStmt: %#v\n", stmtExpr)
+		return sp.parseLabeledStmt(stmtExpr)
+	case *ast.ExprStmt:
+		fmt.Printf("ExprStmt: %#v\n", stmtExpr)
+		return sp.parseExprStmt(stmtExpr)
+	case *ast.SendStmt:
+		fmt.Printf("SendStmt: %#v\n", stmtExpr)
+		return sp.parseSendStmt(stmtExpr)
+	case *ast.IncDecStmt:
+		fmt.Printf("IncDecStmt: %#v\n", stmtExpr)
+		return sp.parseIncDecStmt(stmtExpr)
+	case *ast.AssignStmt:
+		fmt.Printf("AssignStmt: %#v\n", stmtExpr)
+		return sp.parseAssignStmt(stmtExpr)
+	case *ast.GoStmt:
+		fmt.Printf("GoStmt: %#v\n", stmtExpr)
+		return sp.parseGoStmt(stmtExpr)
 	case *ast.ReturnStmt:
 		fmt.Printf("Return: %#v\n", stmtExpr)
 		for _, result := range stmtExpr.Results {
-			exprType, err := sp.exprParser.ParseExpr(result)
+			exprType, err := sp.exprParser.Parse(result)
 			if err != nil {
 				return err
 			}
 			fmt.Printf("====ExprType: %#v\n", exprType)
 		}
-	case *ast.ExprStmt:
-		fmt.Printf("ExprStmt: %#v\n", stmtExpr)
-		return sp.parseExprStmt(stmtExpr)
-	case *ast.AssignStmt:
-		fmt.Printf("AssignStmt: %#v\n", stmtExpr)
-		return sp.parseAssignment(stmtExpr)
 	case *ast.BlockStmt:
 		fmt.Printf("BlockStmt: %#v\n", stmtExpr)
 		return sp.parseBlockStmt(stmtExpr)
@@ -261,7 +441,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 			return fmt.Errorf("Receiver is not a single parameter")
 		}
 
-		def, err := sp.exprParser.ParseReceiver((*funcDecl.Recv).List[0].Type, true)
+		def, err := sp.parseReceiver((*funcDecl.Recv).List[0].Type, true)
 		if err != nil {
 			return err
 		}
@@ -273,7 +453,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 
 	if funcDecl.Type.Params != nil {
 		for _, field := range funcDecl.Type.Params.List {
-			def, err := sp.typeParser.ParseTypeExpr(field.Type)
+			def, err := sp.typeParser.Parse(field.Type)
 			if err != nil {
 				return err
 			}
@@ -291,7 +471,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 
 	if funcDecl.Type.Results != nil {
 		for _, field := range funcDecl.Type.Results.List {
-			def, err := sp.typeParser.ParseTypeExpr(field.Type)
+			def, err := sp.typeParser.Parse(field.Type)
 			if err != nil {
 				return err
 			}
@@ -324,7 +504,7 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
 	for _, statement := range funcDecl.Body.List {
 		fmt.Printf("\n\nstatement: %#v\n", statement)
-		if err := sp.parseStatement(statement); err != nil {
+		if err := sp.Parse(statement); err != nil {
 			panic(err)
 			return err
 		}

@@ -7,7 +7,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
-	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -35,59 +35,7 @@ type Parser struct {
 	// per file allocatable ST
 	allocatedSymbolsTable *alloctable.Table
 	// types parser
-	typesParser *typeparser.Parser
-}
-
-func (ep *Parser) ParseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes.DataType, error) {
-	// Receiver's type must be of the form T or *T (possibly using parentheses) where T is a type name.
-	switch typedExpr := receiver.(type) {
-	case *ast.Ident:
-		// search the identifier in the symbol table
-		def, err := ep.symbolTable.Lookup(typedExpr.Name)
-		if err != nil {
-			fmt.Printf("Lookup error: %v\n", err)
-			// Return an error so the function body processing can be postponed
-			// TODO(jchaloup): return more information about the missing symbol so the
-			// body can be re-processed right after the symbol is stored into the symbol table.
-			return nil, err
-		}
-
-		if !skip_allocated {
-			ep.allocatedSymbolsTable.AddSymbol(def.Package, typedExpr.Name)
-		}
-
-		return &gotypes.Identifier{
-			Def: typedExpr.Name,
-		}, nil
-	case *ast.StarExpr:
-		fmt.Printf("Start: %#v\n", typedExpr)
-		switch idExpr := typedExpr.X.(type) {
-		case *ast.Ident:
-			// search the identifier in the symbol table
-			def, err := ep.symbolTable.Lookup(idExpr.Name)
-			if err != nil {
-				fmt.Printf("Lookup error: %v\n", err)
-				// Return an error so the function body processing can be postponed
-				// TODO(jchaloup): return more information about the missing symbol so the
-				// body can be re-processed right after the symbol is stored into the symbol table.
-				return nil, err
-			}
-
-			if !skip_allocated {
-				ep.allocatedSymbolsTable.AddSymbol(def.Package, idExpr.Name)
-			}
-
-			return &gotypes.Pointer{
-				Def: &gotypes.Identifier{
-					Def: idExpr.Name,
-				},
-			}, nil
-		default:
-			return nil, fmt.Errorf("Method receiver %#v is not a pointer to an identifier", idExpr)
-		}
-	default:
-		return nil, fmt.Errorf("Method receiver %#v is not a pointer to an identifier not an identifier", typedExpr)
-	}
+	typesParser types.TypeParser
 }
 
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
@@ -110,7 +58,7 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
 func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType ast.Expr) (gotypes.DataType, error) {
 	var valueExpr ast.Expr
 	if kvExpr, ok := expr.(*ast.KeyValueExpr); ok {
-		_, err := ep.ParseExpr(kvExpr.Key)
+		_, err := ep.Parse(kvExpr.Key)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +100,7 @@ func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType ast.Expr) (gotype
 	}
 	fmt.Printf("\tKV Element 2: %#v\n", valueExpr)
 
-	def, err := ep.ParseExpr(valueExpr)
+	def, err := ep.Parse(valueExpr)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +149,7 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 		}
 
 		// process the field value
-		_, err := ep.ParseExpr(valueExpr)
+		_, err := ep.Parse(valueExpr)
 		if err != nil {
 			return err
 		}
@@ -246,7 +194,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 
 	// The CL type can be processed independently of the CL elements
 	fmt.Printf("CL Type: %#v\n", lit.Type)
-	litTypedef, err := ep.typesParser.ParseTypeExpr(lit.Type)
+	litTypedef, err := ep.typesParser.Parse(lit.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +295,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 }
 
 func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) {
-	def, err := ep.ParseExpr(expr.X)
+	def, err := ep.Parse(expr.X)
 	if err != nil {
 		return nil, err
 	}
@@ -380,12 +328,12 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	// user defined type returning built-in type, both operands must be processed.
 
 	// X Op Y
-	_, yErr := ep.ParseExpr(expr.X)
+	_, yErr := ep.Parse(expr.X)
 	if yErr != nil {
 		return nil, yErr
 	}
 
-	_, xErr := ep.ParseExpr(expr.Y)
+	_, xErr := ep.Parse(expr.Y)
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -394,7 +342,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 }
 
 func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
-	def, err := ep.ParseExpr(expr.X)
+	def, err := ep.Parse(expr.X)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +360,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	// TODO(jchaloup): check if the type() casting is of ast.CallExpr as well
 	for _, arg := range expr.Args {
 		// an argument is passed to the function so its data type does not affect the result data type of the call
-		def, err := ep.ParseExpr(arg)
+		def, err := ep.Parse(arg)
 		if err != nil {
 			return nil, err
 		}
@@ -455,6 +403,9 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 		}
 		function = def
 		fmt.Printf("Def: %#v\nerr: %v\n", def, err)
+	case *ast.FuncLit:
+		fmt.Printf("Function literal: %#v\n", exprType)
+		panic("sss")
 	default:
 		return nil, fmt.Errorf("Call expr not recognized: %#v", expr)
 	}
@@ -519,7 +470,7 @@ func (ep *Parser) retrieveInterfaceMethod(interfaceDefsymbol *gotypes.SymbolDef,
 
 func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, error) {
 	// X.Sel a.k.a Prefix.Item
-	xDef, xErr := ep.ParseExpr(expr.X)
+	xDef, xErr := ep.Parse(expr.X)
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -586,12 +537,12 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) {
 	// X[Index]
 	// The Index can be a simple literal or another compound expression
-	_, indexErr := ep.ParseExpr(expr.Index)
+	_, indexErr := ep.Parse(expr.Index)
 	if indexErr != nil {
 		return nil, indexErr
 	}
 
-	xDef, xErr := ep.ParseExpr(expr.X)
+	xDef, xErr := ep.Parse(expr.X)
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -618,7 +569,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 
 func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (gotypes.DataType, error) {
 	// X.(Type)
-	_, xErr := ep.ParseExpr(expr.X)
+	_, xErr := ep.Parse(expr.X)
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -652,7 +603,7 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (gotypes.DataTyp
 	}
 }
 
-func (ep *Parser) ParseExpr(expr ast.Expr) ([]gotypes.DataType, error) {
+func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 	// Given an expression we must always return its final data type
 	// User defined symbols has its corresponding structs under parser/pkg/types.
 	// In order to cover all possible symbol data types, we need to cover
@@ -707,7 +658,7 @@ func (ep *Parser) ParseExpr(expr ast.Expr) ([]gotypes.DataType, error) {
 	}
 }
 
-func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typesParser *typeparser.Parser) *Parser {
+func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typesParser types.TypeParser) types.ExpressionParser {
 	return &Parser{
 		packageName:           packageName,
 		symbolTable:           symbolTable,

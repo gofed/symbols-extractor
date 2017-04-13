@@ -283,6 +283,68 @@ func TestMarshalUnmarshal(t *testing.T) {
 		_ = tests[1].value.GetType()
 	}
 
+	// empty block
+	{
+	}
+
+	// block with a declaration
+	{
+		const c string = ""
+	}
+
+	{
+		const c = ""
+	}
+
+	{
+		var c string
+	}
+
+	{
+		var c = "asd"
+	}
+
+	{
+		var c string = "asd"
+	}
+
+	{
+		var _ string = "asd"
+	}
+
+	{
+		var _ string
+	}
+
+	{
+		var _ = "fff"
+	}
+
+label:
+	{
+	}
+
+	{
+		var c chan string
+		c <- ""
+	}
+
+	{
+		var c int
+		c++
+		c--
+	}
+
+	{
+		c := 1
+		c += 2
+	}
+
+	{
+		c := 1
+		go func() { c++ }()
+	}
+
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }

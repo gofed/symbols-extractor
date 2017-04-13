@@ -89,8 +89,12 @@ func NewTable() *Table {
 }
 
 func (t *Table) addSymbol(symbolType string, name string, sym *gotypes.SymbolDef) error {
-	if _, ko := t.symbols[symbolType][name]; ko {
-		return fmt.Errorf("Symbol '%s' already exists", sym.Name)
+	if def, ko := t.symbols[symbolType][name]; ko {
+		// If the symbol definition is empty, we just allocated a name for the symbol.
+		// Later on, it gets populated with its definition.
+		if def.Def != nil {
+			return fmt.Errorf("Symbol '%s' already exists", sym.Name)
+		}
 	}
 
 	t.symbols[symbolType][name] = sym

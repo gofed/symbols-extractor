@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -47,32 +48,6 @@ type Parser struct {
 	//
 }
 
-// Parse parses a go data type
-func (p *Parser) Parse(d *ast.TypeSpec) (gotypes.DataType, error) {
-	// Here I get new type's definition.
-	// The new type's id is not stored in the definition.
-	// It is stored separatelly.
-
-	p.currentDataTypeName = d.Name.Name
-	// TODO(jchaloup): capture the current state of the allocated symbol table
-	// jic the parsing ends with end error. Which can result into re-parsing later on.
-	// Which can result in re-allocation. It should be enough two-level allocated symbol table.
-	typeDef, err := p.ParseTypeExpr(d.Type)
-	if err != nil {
-		return nil, err
-	}
-	p.currentDataTypeName = ""
-
-	p.symbolTable.AddDataType(&gotypes.SymbolDef{
-		Name:    d.Name.Name,
-		Package: p.packageName,
-		Def:     typeDef,
-	})
-
-	//printDataType(typeDef)
-	return typeDef, nil
-}
-
 func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error) {
 	// TODO(jchaloup): store symbol's origin as well (in a case a symbol is imported without qid)
 	// Check if the identifier is in the any of the global symbol tables (in a case a symbol is imported without qid).
@@ -82,24 +57,21 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	// Every data type definition consists of a set of identifiers.
 	// Whenever an identifier is used in the definition,
 	// it is allocated.
-	if typedExpr.Name == p.currentDataTypeName {
-		// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
-		p.allocatedSymbolsTable.AddSymbol(p.packageName, typedExpr.Name)
-	} else {
-		// Check if the identifier is a built-in type
-		if isBuiltin(typedExpr.Name) {
-			p.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
-			return &gotypes.Builtin{}, nil
-		}
 
-		// Check if the identifier is available in the symbol table
-		def, err := p.symbolTable.Lookup(typedExpr.Name)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
-		}
-
-		p.allocatedSymbolsTable.AddSymbol(def.Package, def.Name)
+	// Check if the identifier is a built-in type
+	if isBuiltin(typedExpr.Name) {
+		p.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+		return &gotypes.Builtin{}, nil
 	}
+
+	// Check if the identifier is available in the symbol table
+	def, err := p.symbolTable.Lookup(typedExpr.Name)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
+	}
+
+	// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
+	p.allocatedSymbolsTable.AddSymbol(def.Package, def.Name)
 
 	return &gotypes.Identifier{
 		Def: typedExpr.Name,
@@ -108,7 +80,7 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 
 func (p *Parser) parseStar(typedExpr *ast.StarExpr) (*gotypes.Pointer, error) {
 	// X.Sel
-	def, err := p.ParseTypeExpr(typedExpr.X)
+	def, err := p.Parse(typedExpr.X)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +90,7 @@ func (p *Parser) parseStar(typedExpr *ast.StarExpr) (*gotypes.Pointer, error) {
 }
 
 func (p *Parser) parseChan(typedExpr *ast.ChanType) (*gotypes.Channel, error) {
-	def, err := p.ParseTypeExpr(typedExpr.Value)
+	def, err := p.Parse(typedExpr.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +113,7 @@ func (p *Parser) parseChan(typedExpr *ast.ChanType) (*gotypes.Channel, error) {
 
 func (p *Parser) parseEllipsis(typedExpr *ast.Ellipsis) (*gotypes.Ellipsis, error) {
 	// X.Sel
-	def, err := p.ParseTypeExpr(typedExpr.Elt)
+	def, err := p.Parse(typedExpr.Elt)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +141,7 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 		}, nil
 	}
 
-	def, err := p.ParseTypeExpr(typedExpr.X)
+	def, err := p.Parse(typedExpr.X)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +162,7 @@ func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error)
 	for _, field := range typedExpr.Fields.List {
 		// anonymous field?
 		if field.Names == nil {
-			def, err := p.ParseTypeExpr(field.Type)
+			def, err := p.Parse(field.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +176,7 @@ func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error)
 			// named fields
 		} else {
 			for _, name := range field.Names {
-				def, err := p.ParseTypeExpr(field.Type)
+				def, err := p.Parse(field.Type)
 				if err != nil {
 					return nil, err
 				}
@@ -221,12 +193,12 @@ func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error)
 }
 
 func (p *Parser) parseMap(typedExpr *ast.MapType) (*gotypes.Map, error) {
-	keyDef, keyErr := p.ParseTypeExpr(typedExpr.Key)
+	keyDef, keyErr := p.Parse(typedExpr.Key)
 	if keyErr != nil {
 		return nil, keyErr
 	}
 
-	valueDef, valueErr := p.ParseTypeExpr(typedExpr.Value)
+	valueDef, valueErr := p.Parse(typedExpr.Value)
 	if valueErr != nil {
 		return nil, valueErr
 	}
@@ -238,7 +210,7 @@ func (p *Parser) parseMap(typedExpr *ast.MapType) (*gotypes.Map, error) {
 }
 
 func (p *Parser) parseArray(typedExpr *ast.ArrayType) (gotypes.DataType, error) {
-	def, err := p.ParseTypeExpr(typedExpr.Elt)
+	def, err := p.Parse(typedExpr.Elt)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +231,7 @@ func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interfac
 	interfaceObj := &gotypes.Interface{}
 	var methods []gotypes.InterfaceMethodsItem
 	for _, m := range typedExpr.Methods.List {
-		def, err := p.ParseTypeExpr(m.Type)
+		def, err := p.Parse(m.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -279,7 +251,7 @@ func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interfac
 	return interfaceObj, nil
 }
 
-func (p *Parser) ParseFunction(typedExpr *ast.FuncType) (*gotypes.Function, error) {
+func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, error) {
 	functionType := &gotypes.Function{}
 
 	var params []gotypes.DataType
@@ -287,7 +259,7 @@ func (p *Parser) ParseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 
 	if typedExpr.Params != nil {
 		for _, field := range typedExpr.Params.List {
-			def, err := p.ParseTypeExpr(field.Type)
+			def, err := p.Parse(field.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -305,7 +277,7 @@ func (p *Parser) ParseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 
 	if typedExpr.Results != nil {
 		for _, field := range typedExpr.Results.List {
-			def, err := p.ParseTypeExpr(field.Type)
+			def, err := p.Parse(field.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -329,7 +301,7 @@ func (p *Parser) ParseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 	return functionType, nil
 }
 
-func (p *Parser) ParseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
+func (p *Parser) Parse(expr ast.Expr) (gotypes.DataType, error) {
 	switch typedExpr := expr.(type) {
 	case *ast.Ident:
 		return p.parseIdentifier(typedExpr)
@@ -350,13 +322,13 @@ func (p *Parser) ParseTypeExpr(expr ast.Expr) (gotypes.DataType, error) {
 	case *ast.InterfaceType:
 		return p.parseInterface(typedExpr)
 	case *ast.FuncType:
-		return p.ParseFunction(typedExpr)
+		return p.parseFunction(typedExpr)
 	}
 	return nil, fmt.Errorf("ast.Expr (%#v) not recognized", expr)
 }
 
 // New creates an instance of the type Parser
-func New(packageName string, symbolTable *symboltable.Stack, allocTable *alloctable.Table) *Parser {
+func New(packageName string, symbolTable *symboltable.Stack, allocTable *alloctable.Table) types.TypeParser {
 	p := &Parser{
 		packageName:           packageName,
 		symbolTable:           symbolTable,
