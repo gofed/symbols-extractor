@@ -35,7 +35,7 @@ type FileParser struct {
 	// expr parser
 	exprParser types.ExpressionParser
 	// stmt parser
-	stmtParser *stmtparser.Parser
+	stmtParser types.StatementParser
 	// name of the currently processed data type
 	currentDataTypeName string
 
@@ -143,8 +143,16 @@ func (fp *FileParser) Parse(gofile string) error {
 		case *ast.FuncDecl:
 			// process function definitions as the last
 			//fmt.Printf("%+v\n", d)
-			_, err := fp.stmtParser.ParseFuncDecl(decl)
+			funcDef, err := fp.stmtParser.ParseFuncDecl(decl)
 			if err != nil {
+				return err
+			}
+
+			if err := fp.symbolTable.AddFunction(&gotypes.SymbolDef{
+				Name:    decl.Name.Name,
+				Package: fp.packageName,
+				Def:     funcDef,
+			}); err != nil {
 				return err
 			}
 

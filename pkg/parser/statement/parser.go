@@ -27,7 +27,7 @@ type Parser struct {
 }
 
 // New creates an instance of a statement parser
-func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typeParser types.TypeParser, exprParser types.ExpressionParser) *Parser {
+func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typeParser types.TypeParser, exprParser types.ExpressionParser) types.StatementParser {
 	return &Parser{
 		packageName:           packageName,
 		symbolTable:           symbolTable,
@@ -107,49 +107,62 @@ func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
 	// multi-level symbol table that is function/method's scoped. Once the body is left,
 	// the multi-level symbol table is dropped.
 
-	if d.Recv != nil {
-		// Receiver has a single parametr
-		// https://golang.org/ref/spec#Receiver
-		if len((*d.Recv).List) != 1 || len((*d.Recv).List[0].Names) != 1 {
-			return nil, fmt.Errorf("Receiver is not a single parameter")
-		}
-
-		//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
-
-		recDef, err := sp.parseReceiver((*d.Recv).List[0].Type, false)
-		if err != nil {
-			return nil, err
-		}
-
-		methodDef := &gotypes.Method{
-			Def:      funcDef,
-			Receiver: recDef,
-		}
-
-		sp.symbolTable.AddFunction(&gotypes.SymbolDef{
-			Name:    d.Name.Name,
-			Package: sp.packageName,
-			Def:     methodDef,
-		})
-
-		//printDataType(methodDef)
-
-		return methodDef, nil
+	if d.Recv == nil {
+		// Empty receiver => Function
+		return funcDef, nil
 	}
 
-	// Empty receiver => Function
-	sp.symbolTable.AddFunction(&gotypes.SymbolDef{
-		Name:    d.Name.Name,
-		Package: sp.packageName,
-		Def:     funcDef,
-	})
+	// Receiver has a single parametr
+	// https://golang.org/ref/spec#Receiver
+	if len((*d.Recv).List) != 1 || len((*d.Recv).List[0].Names) != 1 {
+		return nil, fmt.Errorf("Receiver is not a single parameter")
+	}
 
-	//printDataType(funcDef)
+	//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
 
-	return funcDef, nil
+	recDef, err := sp.parseReceiver((*d.Recv).List[0].Type, false)
+	if err != nil {
+		return nil, err
+	}
+
+	methodDef := &gotypes.Method{
+		Def:      funcDef,
+		Receiver: recDef,
+	}
+
+	return methodDef, nil
 }
 
-func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) error {
+func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
+	// Function/method signature is already stored in a symbol table.
+	// From function/method's AST get its receiver, parameters and results,
+	// construct a first level of a multi-level symbol table stack..
+	// For each new block (including the body) push another level into the stack.
+	sp.symbolTable.Push()
+	if err := sp.parseFuncHeadVariables(funcDecl); err != nil {
+		return nil
+	}
+	sp.symbolTable.Push()
+	byteSlice, err := json.Marshal(sp.symbolTable)
+	fmt.Printf("\nTable: %v\nerr: %v", string(byteSlice), err)
+
+	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
+	for _, statement := range funcDecl.Body.List {
+		fmt.Printf("\n\nstatement: %#v\n", statement)
+		if err := sp.Parse(statement); err != nil {
+			panic(err)
+			return err
+		}
+	}
+
+	//stack.Print()
+	sp.symbolTable.Pop()
+	sp.symbolTable.Pop()
+
+	return nil
+}
+
+func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, error) {
 	fmt.Printf("ValueSpec: %#v\n", spec)
 	fmt.Printf("ValueSpec.Names: %#v\n", spec.Names)
 	fmt.Printf("ValueSpec.Type: %#v\n", spec.Type)
@@ -160,14 +173,14 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) error {
 	fmt.Printf("(%v, %v)\n", nLen, vLen)
 
 	if nLen < vLen {
-		return fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
+		return nil, fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
 	}
 
 	var typeDef gotypes.DataType
 	if spec.Type != nil {
 		def, err := sp.typeParser.Parse(spec.Type)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		typeDef = def
 	}
@@ -176,16 +189,16 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) error {
 
 	for i := 0; i < vLen; i++ {
 		if typeDef == nil && spec.Values[i] == nil {
-			return fmt.Errorf("No type nor value in ValueSpec declaration")
+			return nil, fmt.Errorf("No type nor value in ValueSpec declaration")
 		}
 		// TODO(jchaloup): if the variable type is an interface and the variable value type is a concrete type
 		//                 note somewhere the concrete type must implemented the interface
 		valueExpr, err := sp.exprParser.Parse(spec.Values[i])
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if len(valueExpr) != 1 {
-			return fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExpr)
+			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExpr)
 		}
 		fmt.Printf("Name: %#v, Value: %#v, Type: %#v", spec.Names[i].Name, valueExpr[0], typeDef)
 		// Put the variables/consts into the symbol table
@@ -207,21 +220,24 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) error {
 		}
 	}
 
+	// TODO(jchaloup): return a list of SymbolDefs
+	var symbolsDef = make([]*gotypes.SymbolDef, 0)
+
 	for i := vLen; i < nLen; i++ {
 		if typeDef == nil {
-			return fmt.Errorf("No type in ValueSpec declaration for identifier at pos %v (starting index from 1)", i+1)
+			return nil, fmt.Errorf("No type in ValueSpec declaration for identifier at pos %v (starting index from 1)", i+1)
 		}
 		if spec.Names[i].Name == "_" {
 			continue
 		}
-		sp.symbolTable.AddVariable(&gotypes.SymbolDef{
+		symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
 			Name:    spec.Names[i].Name,
 			Package: sp.packageName,
 			Def:     typeDef,
 		})
 	}
 
-	return nil
+	return symbolsDef, nil
 }
 
 func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
@@ -233,8 +249,16 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 			fmt.Printf("gendecl.spec: %#v\n", spec)
 			switch genDeclSpec := spec.(type) {
 			case *ast.ValueSpec:
-				if err := sp.ParseValueSpec(genDeclSpec); err != nil {
+				defs, err := sp.ParseValueSpec(genDeclSpec)
+				if err != nil {
 					return err
+				}
+				for _, def := range defs {
+					// TPDP(jchaloup): we should store all variables or non.
+					// Given the error is set only if the variable already exists, it should not matter so much.
+					if err := sp.symbolTable.AddVariable(def); err != nil {
+						return nil
+					}
 				}
 			}
 		}
@@ -485,34 +509,5 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 			}
 		}
 	}
-	return nil
-}
-
-func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
-	// Function/method signature is already stored in a symbol table.
-	// From function/method's AST get its receiver, parameters and results,
-	// construct a first level of a multi-level symbol table stack..
-	// For each new block (including the body) push another level into the stack.
-	sp.symbolTable.Push()
-	if err := sp.parseFuncHeadVariables(funcDecl); err != nil {
-		return nil
-	}
-	sp.symbolTable.Push()
-	byteSlice, err := json.Marshal(sp.symbolTable)
-	fmt.Printf("\nTable: %v\nerr: %v", string(byteSlice), err)
-
-	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
-	for _, statement := range funcDecl.Body.List {
-		fmt.Printf("\n\nstatement: %#v\n", statement)
-		if err := sp.Parse(statement); err != nil {
-			panic(err)
-			return err
-		}
-	}
-
-	//stack.Print()
-	sp.symbolTable.Pop()
-	sp.symbolTable.Pop()
-
 	return nil
 }
