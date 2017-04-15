@@ -3,6 +3,8 @@ package types
 import (
 	"go/ast"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -28,4 +30,20 @@ type StatementParser interface {
 	ParseFuncBody(funcDecl *ast.FuncDecl) error
 	// ParseValueSpec parses variable/constant definition/declaration
 	ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, error)
+}
+
+// Config for a parser
+type Config struct {
+	// package name
+	PackageName string
+	// per file symbol table
+	SymbolTable *symboltable.Stack
+	// per file allocatable ST
+	AllocatedSymbolsTable *alloctable.Table
+	// types parser
+	TypeParser TypeParser
+	// expresesion parser
+	ExprParser ExpressionParser
+	// statement parser
+	StmtParser StatementParser
 }

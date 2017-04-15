@@ -5,8 +5,6 @@ import (
 	"go/ast"
 	"go/token"
 
-	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
@@ -28,14 +26,7 @@ func isBinaryOperator(operator token.Token) bool {
 
 // Parser parses go expressions
 type Parser struct {
-	// package name
-	packageName string
-	// per file symbol table
-	symbolTable *symboltable.Stack
-	// per file allocatable ST
-	allocatedSymbolsTable *alloctable.Table
-	// types parser
-	typesParser types.TypeParser
+	*types.Config
 }
 
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
@@ -134,7 +125,7 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 				return fmt.Errorf("Struct's field %#v is not an identifier", litElement)
 			}
 			if structSymbol != nil {
-				ep.allocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
+				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
 			}
 			valueExpr = kvExpr.Value
 		} else {
@@ -143,7 +134,7 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 			}
 			if structSymbol != nil {
 				// TODO(jchaloup): Should we count the anonymous field as well? Maybe make a AddDataTypeAnonymousField?
-				ep.allocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
+				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
 			}
 			valueExpr = litElement
 		}
@@ -194,7 +185,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 
 	// The CL type can be processed independently of the CL elements
 	fmt.Printf("CL Type: %#v\n", lit.Type)
-	litTypedef, err := ep.typesParser.Parse(lit.Type)
+	litTypedef, err := ep.TypeParser.Parse(lit.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +214,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 		var ClTypeIdentifierDef *gotypes.SymbolDef
 		// If the LC type is an identifier, determine a type which is defined by the identifier
 		if idDef, ok := litTypedef.(*gotypes.Identifier); ok {
-			def, err := ep.symbolTable.Lookup(idDef.Def)
+			def, err := ep.SymbolTable.Lookup(idDef.Def)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", idDef)
 			}
@@ -274,13 +265,13 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	// If the symbol is not found, it means it is not defined and never will be.
 
 	// If it is a variable, return its definition
-	if def, err := ep.symbolTable.LookupVariable(ident.Name); err == nil {
+	if def, err := ep.SymbolTable.LookupVariable(ident.Name); err == nil {
 		fmt.Printf("Variable used: %v.%v %#v\n", def.Package, def.Name, def.Def)
 		return def.Def, nil
 	}
 
 	// Otherwise it is a data type of a function declation -> return just the data type identifier
-	def, err := ep.symbolTable.Lookup(ident.Name)
+	def, err := ep.SymbolTable.Lookup(ident.Name)
 	if err != nil {
 		fmt.Printf("Lookup error: %v\n", err)
 		// Return an error so the function body processing can be postponed
@@ -378,7 +369,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	case *ast.Ident:
 		// simple function ID
 		fmt.Printf("Function name: %v\n", exprType.Name)
-		def, err := ep.symbolTable.Lookup(exprType.Name)
+		def, err := ep.SymbolTable.Lookup(exprType.Name)
 		if err != nil {
 			fmt.Printf("Lookup error: %v\n", err)
 			// Return an error so the function body processing can be postponed
@@ -393,7 +384,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 		fmt.Printf("Def: %#v\n", def.Def)
 
 		// Store the symbol to the allocated ST
-		ep.allocatedSymbolsTable.AddSymbol(def.Package, exprType.Name)
+		ep.AllocatedSymbolsTable.AddSymbol(def.Package, exprType.Name)
 		function = def.Def
 	case *ast.SelectorExpr:
 		fmt.Printf("S Function name: %#v\n", exprType)
@@ -442,7 +433,7 @@ func (ep *Parser) retrieveStructField(structDefsymbol *gotypes.SymbolDef, field 
 		if item.Name == field {
 			fmt.Printf("Field %v found: %#v\n", field, item.Def)
 			if structDefsymbol.Name != "" {
-				ep.allocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, field)
+				ep.AllocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, field)
 			}
 			return item.Def, nil
 		}
@@ -460,7 +451,7 @@ func (ep *Parser) retrieveInterfaceMethod(interfaceDefsymbol *gotypes.SymbolDef,
 		fmt.Printf("method: %v: %#v\n", item.Name, item.Def)
 		if item.Name == method {
 			if interfaceDefsymbol.Name != "" {
-				ep.allocatedSymbolsTable.AddDataTypeField(interfaceDefsymbol.Package, interfaceDefsymbol.Name, method)
+				ep.AllocatedSymbolsTable.AddDataTypeField(interfaceDefsymbol.Package, interfaceDefsymbol.Name, method)
 			}
 			return item.Def, nil
 		}
@@ -496,14 +487,14 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
 		// Get struct's definition given by its identifier
-		structDefsymbol, err := ep.symbolTable.Lookup(def.Def)
+		structDefsymbol, err := ep.SymbolTable.Lookup(def.Def)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", def.Def)
 		}
 		return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 	case *gotypes.Identifier:
 		// Get struct/interface definition given by its identifier
-		defSymbol, err := ep.symbolTable.Lookup(xType.Def)
+		defSymbol, err := ep.SymbolTable.Lookup(xType.Def)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", xType.Def)
 		}
@@ -658,11 +649,8 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 	}
 }
 
-func New(packageName string, symbolTable *symboltable.Stack, allocatedSymbolsTable *alloctable.Table, typesParser types.TypeParser) types.ExpressionParser {
+func New(c *types.Config) types.ExpressionParser {
 	return &Parser{
-		packageName:           packageName,
-		symbolTable:           symbolTable,
-		allocatedSymbolsTable: allocatedSymbolsTable,
-		typesParser:           typesParser,
+		Config: c,
 	}
 }

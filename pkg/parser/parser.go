@@ -24,21 +24,7 @@ func printDataType(dataType gotypes.DataType) {
 }
 
 type FileParser struct {
-	// package name
-	packageName string
-	// per file symbol table
-	symbolTable *symboltable.Stack
-	// per file allocatable ST
-	allocatedSymbolsTable *alloctable.Table
-	// type parser
-	typeParser types.TypeParser
-	// expr parser
-	exprParser types.ExpressionParser
-	// stmt parser
-	stmtParser types.StatementParser
-	// name of the currently processed data type
-	currentDataTypeName string
-
+	*types.Config
 	// TODO(jchaloup):
 	// - create a project scoped symbol table in a higher level struct (e.g. ProjectParser)
 	// - merge all per file symbol tables continuously in the higher level struct (each time a new symbol definition is process)
@@ -46,17 +32,19 @@ type FileParser struct {
 }
 
 func NewParser(packageName string) *FileParser {
-	fp := &FileParser{
-		packageName:           packageName,
-		symbolTable:           symboltable.NewStack(),
-		allocatedSymbolsTable: alloctable.New(),
+	c := &types.Config{
+		PackageName:           packageName,
+		SymbolTable:           symboltable.NewStack(),
+		AllocatedSymbolsTable: alloctable.New(),
 	}
-	fp.typeParser = typeparser.New(packageName, fp.symbolTable, fp.allocatedSymbolsTable)
-	fp.exprParser = exprparser.New(packageName, fp.symbolTable, fp.allocatedSymbolsTable, fp.typeParser)
-	fp.stmtParser = stmtparser.New(packageName, fp.symbolTable, fp.allocatedSymbolsTable, fp.typeParser, fp.exprParser)
 
-	fp.symbolTable.Push()
-	return fp
+	c.SymbolTable.Push()
+
+	c.TypeParser = typeparser.New(c)
+	c.ExprParser = exprparser.New(c)
+	c.StmtParser = stmtparser.New(c)
+
+	return &FileParser{c}
 }
 
 func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
@@ -75,7 +63,7 @@ func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
 
 	// TODO(jchaloup): store non-qualified imports as well
 	if q.Name != "." {
-		fp.symbolTable.AddVariable(&gotypes.SymbolDef{Name: q.Name, Def: q})
+		fp.SymbolTable.AddVariable(&gotypes.SymbolDef{Name: q.Name, Def: q})
 		fmt.Printf("PQ added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
 	}
 
@@ -115,9 +103,9 @@ func (fp *FileParser) Parse(gofile string) error {
 					//fmt.Printf("%#v\n", d)
 					// Store a symbol just with a name and origin.
 					// Setting the symbol's definition to nil means the symbol is being parsed (somewhere in the chain)
-					if err := fp.symbolTable.AddDataType(&gotypes.SymbolDef{
+					if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
 						Name:    d.Name.Name,
-						Package: fp.packageName,
+						Package: fp.PackageName,
 						Def:     nil,
 					}); err != nil {
 						return err
@@ -126,14 +114,14 @@ func (fp *FileParser) Parse(gofile string) error {
 					// TODO(jchaloup): capture the current state of the allocated symbol table
 					// JIC the parsing ends with end error. Which can result into re-parsing later on.
 					// Which can result in re-allocation. It should be enough two-level allocated symbol table.
-					typeDef, err := fp.typeParser.Parse(d.Type)
+					typeDef, err := fp.TypeParser.Parse(d.Type)
 					if err != nil {
 						return err
 					}
 
-					if err := fp.symbolTable.AddDataType(&gotypes.SymbolDef{
+					if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
 						Name:    d.Name.Name,
-						Package: fp.packageName,
+						Package: fp.PackageName,
 						Def:     typeDef,
 					}); err != nil {
 						return err
@@ -143,14 +131,14 @@ func (fp *FileParser) Parse(gofile string) error {
 		case *ast.FuncDecl:
 			// process function definitions as the last
 			//fmt.Printf("%+v\n", d)
-			funcDef, err := fp.stmtParser.ParseFuncDecl(decl)
+			funcDef, err := fp.StmtParser.ParseFuncDecl(decl)
 			if err != nil {
 				return err
 			}
 
-			if err := fp.symbolTable.AddFunction(&gotypes.SymbolDef{
+			if err := fp.SymbolTable.AddFunction(&gotypes.SymbolDef{
 				Name:    decl.Name.Name,
-				Package: fp.packageName,
+				Package: fp.PackageName,
 				Def:     funcDef,
 			}); err != nil {
 				return err
@@ -158,14 +146,14 @@ func (fp *FileParser) Parse(gofile string) error {
 
 			// if an error is returned, put the function's AST into a context list
 			// and continue with other definition
-			fp.stmtParser.ParseFuncBody(decl)
+			fp.StmtParser.ParseFuncBody(decl)
 		}
 	}
 
 	fmt.Printf("\n\n")
-	fp.allocatedSymbolsTable.Print()
+	fp.AllocatedSymbolsTable.Print()
 
-	// byteSlice, _ := json.Marshal(fp.symbolTable)
+	// byteSlice, _ := json.Marshal(fp.SymbolTable)
 	// fmt.Printf("\nSymbol table: %v\n", string(byteSlice))
 	//
 	// newObject := &symboltable.Table{}

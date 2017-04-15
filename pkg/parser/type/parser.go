@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 
-	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
@@ -33,19 +31,7 @@ func isBuiltin(ident string) bool {
 
 // Parser parsing Go types
 type Parser struct {
-	// package name
-	packageName string
-	// per file symbol table
-	symbolTable *symboltable.Stack
-	// per file allocatable ST
-	allocatedSymbolsTable *alloctable.Table
-	// name of the currently processed data type
-	currentDataTypeName string
-
-	// TODO(jchaloup):
-	// - create a project scoped symbol table in a higher level struct (e.g. ProjectParser)
-	// - merge all per file symbol tables continuously in the higher level struct (each time a new symbol definition is process)
-	//
+	*types.Config
 }
 
 func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error) {
@@ -60,18 +46,18 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 
 	// Check if the identifier is a built-in type
 	if isBuiltin(typedExpr.Name) {
-		p.allocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+		p.AllocatedSymbolsTable.AddSymbol("", typedExpr.Name)
 		return &gotypes.Builtin{}, nil
 	}
 
 	// Check if the identifier is available in the symbol table
-	def, err := p.symbolTable.Lookup(typedExpr.Name)
+	def, err := p.SymbolTable.Lookup(typedExpr.Name)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
 	}
 
 	// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
-	p.allocatedSymbolsTable.AddSymbol(def.Package, def.Name)
+	p.AllocatedSymbolsTable.AddSymbol(def.Package, def.Name)
 
 	return &gotypes.Identifier{
 		Def: typedExpr.Name,
@@ -132,7 +118,7 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 	if ok {
 		// TODO(jchaloup): replace the id.Name with full package path
 		// E.g. instead of (qid, identifier) use (github.com/coreos/etcd/pkg/wait, Wait)
-		p.allocatedSymbolsTable.AddSymbol(id.Name, typedExpr.Sel.Name)
+		p.AllocatedSymbolsTable.AddSymbol(id.Name, typedExpr.Sel.Name)
 		return &gotypes.Selector{
 			Item: typedExpr.Sel.Name,
 			Prefix: &gotypes.Identifier{
@@ -328,12 +314,10 @@ func (p *Parser) Parse(expr ast.Expr) (gotypes.DataType, error) {
 }
 
 // New creates an instance of the type Parser
-func New(packageName string, symbolTable *symboltable.Stack, allocTable *alloctable.Table) types.TypeParser {
+func New(c *types.Config) types.TypeParser {
 	p := &Parser{
-		packageName:           packageName,
-		symbolTable:           symbolTable,
-		allocatedSymbolsTable: allocTable,
+		Config: c,
 	}
-	p.symbolTable.Push()
+	p.SymbolTable.Push()
 	return p
 }
