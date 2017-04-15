@@ -396,7 +396,20 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 		fmt.Printf("Def: %#v\nerr: %v\n", def, err)
 	case *ast.FuncLit:
 		fmt.Printf("Function literal: %#v\n", exprType)
-		panic("sss")
+
+		if err := ep.StmtParser.ParseFuncBody(&ast.FuncDecl{
+			Type: exprType.Type,
+			Body: exprType.Body,
+		}); err != nil {
+			return nil, err
+		}
+
+		def, err := ep.TypeParser.Parse(exprType.Type)
+		if err != nil {
+			return nil, err
+		}
+
+		function = def
 	default:
 		return nil, fmt.Errorf("Call expr not recognized: %#v", expr)
 	}
