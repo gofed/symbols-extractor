@@ -345,6 +345,91 @@ label:
 		go func() { c++ }()
 	}
 
+	{
+		goto label
+	}
+
+	{
+		a := ""
+		switch a {
+		}
+	}
+
+	{
+		a := ""
+		switch c := a; {
+		}
+	}
+
+	{
+		a := ""
+		switch c := a; c {
+		}
+	}
+
+	{
+		a := ""
+		switch c := a; c {
+		case "":
+		}
+	}
+
+	{
+		a := ""
+		switch a {
+		case "":
+			a := ""
+		}
+	}
+
+	{
+		a := ""
+		switch a {
+		case "":
+			a := ""
+		case ".":
+			a := "."
+		default:
+			a := "default"
+		}
+	}
+
+	{
+		var s Struct
+		switch s.simpleInterface.(type) {
+
+		}
+	}
+
+	{
+		a := ""
+		switch a.(type) {
+
+		}
+	}
+
+	{
+		a := ""
+		switch b := a.(type) {
+
+		}
+	}
+
+	{
+		a := ""
+		switch b := a.(type) {
+		case int:
+			a = "This is int type"
+			b
+		case string:
+			a = "This is string type"
+			b
+		default:
+			a = "This is default type"
+			b
+		}
+	}
+
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }

@@ -273,7 +273,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	// Otherwise it is a data type of a function declation -> return just the data type identifier
 	def, err := ep.SymbolTable.Lookup(ident.Name)
 	if err != nil {
-		fmt.Printf("Lookup error: %v\n", err)
+		fmt.Printf("Lookup error expr: %v\n", err)
 		// Return an error so the function body processing can be postponed
 		// TODO(jchaloup): return more information about the missing symbol so the
 		// body can be re-processed right after the symbol is stored into the symbol table.

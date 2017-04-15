@@ -343,6 +343,180 @@ func (sp *Parser) parseGoStmt(statement *ast.GoStmt) error {
 	return err
 }
 
+func (sp *Parser) parseBranchStmt(statement *ast.BranchStmt) error {
+	return nil
+}
+
+func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
+	// ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] "{" { ExprCaseClause } "}" .
+	// ExprCaseClause = ExprSwitchCase ":" StatementList .
+	// ExprSwitchCase = "case" ExpressionList | "default" .
+	fmt.Printf("Init: %#v\n", statement.Init)
+	if statement.Init != nil {
+		sp.SymbolTable.Push()
+		defer sp.SymbolTable.Pop()
+
+		if err := sp.StmtParser.Parse(statement.Init); err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("Tag: %#v\n", statement.Tag)
+	if statement.Tag != nil {
+		_, err := sp.ExprParser.Parse(statement.Tag)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("body: %#v\n", statement.Body.List)
+
+	for _, stmt := range statement.Body.List {
+		caseStmt, ok := stmt.(*ast.CaseClause)
+		if !ok {
+			return fmt.Errorf("Expected *ast.CaseClause in switch's body. Got %#v\n", stmt)
+		}
+		for _, caseExpr := range caseStmt.List {
+			fmt.Printf("caseExpr: %#v\n", caseExpr)
+			if _, err := sp.ExprParser.Parse(caseExpr); err != nil {
+				return nil
+			}
+		}
+
+		fmt.Printf("caseStmt.Body: %#v\n", caseStmt.Body)
+		if caseStmt.Body != nil {
+			if err := sp.Parse(&ast.BlockStmt{
+				List: caseStmt.Body,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
+	fmt.Printf("Init: %#v\n", statement.Init)
+	if statement.Init != nil {
+		sp.SymbolTable.Push()
+		defer sp.SymbolTable.Pop()
+
+		if err := sp.StmtParser.Parse(statement.Init); err != nil {
+			return err
+		}
+	}
+
+	sp.SymbolTable.Push()
+	defer sp.SymbolTable.Pop()
+
+	var rhsIdentifier *gotypes.Identifier
+
+	switch assignStmt := statement.Assign.(type) {
+	case *ast.AssignStmt:
+		sp.SymbolTable.Push()
+		defer sp.SymbolTable.Pop()
+
+		if len(assignStmt.Lhs) != 1 {
+			return fmt.Errorf("LHS of the type assert assignment must be a 'single' assignable expression")
+		}
+
+		if len(assignStmt.Rhs) != 1 {
+			return fmt.Errorf("RHS of the type assert assignment must be a 'single' expression")
+		}
+
+		typeAssert, ok := assignStmt.Rhs[0].(*ast.TypeAssertExpr)
+		if !ok {
+			return fmt.Errorf("Expecting type assert in type switch assignemnt statement")
+		}
+		if typeAssert.Type != nil {
+			fmt.Printf("type assert type is not set to literal 'type'. It is %#v instead\n", typeAssert.Type)
+		}
+		if _, err := sp.ExprParser.Parse(typeAssert.X); err != nil {
+			return nil
+		}
+
+		ident, ok := assignStmt.Lhs[0].(*ast.Ident)
+		if !ok {
+			return fmt.Errorf("Expecting identifier on the RHS of the type switch assigment. Got %#v instead", assignStmt.Lhs[0])
+		}
+
+		if ident.Name != "_" {
+			rhsIdentifier = &gotypes.Identifier{
+				Def: ident.Name,
+			}
+		}
+	case *ast.ExprStmt:
+		typeAssert, ok := assignStmt.X.(*ast.TypeAssertExpr)
+		if !ok {
+			return fmt.Errorf("Expecting type assert in type switch")
+		}
+		if typeAssert.Type != nil {
+			fmt.Printf("type assert type is not set to literal 'type'. It is %#v instead\n", typeAssert.Type)
+		}
+		if _, err := sp.ExprParser.Parse(typeAssert.X); err != nil {
+			return nil
+		}
+	default:
+		return fmt.Errorf("Unsupported statement in type switch")
+	}
+
+	fmt.Printf("statement.Assign: %#v\n", statement.Assign)
+	fmt.Printf("RHSIdent: %#v\n", rhsIdentifier)
+
+	fmt.Printf("body: %#v\n", statement.Body.List)
+
+	for _, stmt := range statement.Body.List {
+		caseStmt, ok := stmt.(*ast.CaseClause)
+		if !ok {
+			return fmt.Errorf("Expected *ast.CaseClause in switch's body. Got %#v\n", stmt)
+		}
+		if err := func() error {
+			sp.SymbolTable.Push()
+			defer sp.SymbolTable.Pop()
+			// in case there are at least two data types (or none = default case), the type is interface{}
+			if len(caseStmt.List) != 1 {
+				for _, caseExpr := range caseStmt.List {
+					if _, err := sp.TypeParser.Parse(caseExpr); err != nil {
+						return err
+					}
+				}
+				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					Name:    rhsIdentifier.Def,
+					Package: "",
+					Def:     &gotypes.Interface{},
+				})
+			} else {
+				rhsType, err := sp.TypeParser.Parse(caseStmt.List[0])
+				if err != nil {
+					return err
+				}
+
+				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					Name:    rhsIdentifier.Def,
+					Package: "",
+					Def:     rhsType,
+				})
+			}
+
+			fmt.Printf("caseStmt.Body: %#v\n", caseStmt.Body)
+			if caseStmt.Body != nil {
+				if err := sp.Parse(&ast.BlockStmt{
+					List: caseStmt.Body,
+				}); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}(); err != nil {
+			return nil
+		}
+	}
+
+	return nil
+}
+
 func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
 	// If Init; Cond { Body } Else
 
@@ -429,12 +603,21 @@ func (sp *Parser) Parse(statement ast.Stmt) error {
 			}
 			fmt.Printf("====ExprType: %#v\n", exprType)
 		}
+	case *ast.BranchStmt:
+		fmt.Printf("BranchStmt: %#v\n", stmtExpr)
+		return sp.parseBranchStmt(stmtExpr)
 	case *ast.BlockStmt:
 		fmt.Printf("BlockStmt: %#v\n", stmtExpr)
 		return sp.parseBlockStmt(stmtExpr)
 	case *ast.IfStmt:
 		fmt.Printf("IfStmt: %#v\n", stmtExpr)
 		return sp.parseIfStmt(stmtExpr)
+	case *ast.SwitchStmt:
+		fmt.Printf("SwitchStmt: %#v\n", stmtExpr)
+		return sp.parseSwitchStmt(stmtExpr)
+	case *ast.TypeSwitchStmt:
+		fmt.Printf("TypeSwitchStmt: %#v\n", stmtExpr)
+		return sp.parseTypeSwitchStmt(stmtExpr)
 	default:
 		panic(fmt.Errorf("Unknown statement %#v", statement))
 	}
