@@ -430,6 +430,55 @@ label:
 		}
 	}
 
+	{
+		var a chan int
+		b := 33
+		select {
+		case a <- b:
+		}
+	}
+
+	{
+		var a chan int
+		b := 33
+		select {
+		case a <- b:
+			"Ahoj"
+			"Jak se vede?"
+		}
+	}
+
+	{
+		var a chan int
+		c := 33
+		select {
+		case c, ok := <-a:
+		}
+	}
+
+	{
+		var a chan int
+		c := 33
+		select {
+		case c := <-a:
+		}
+	}
+
+	{
+		var a chan int
+		c := 33
+		select {
+		case c, ok = <-a:
+		}
+	}
+
+	{
+		var a chan int
+		c := 33
+		select {
+		case c = <-a:
+		}
+	}
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }

@@ -517,6 +517,140 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 	return nil
 }
 
+// SelectStmt = "select" "{" { CommClause } "}" .
+// CommClause = CommCase ":" StatementList .
+// CommCase   = "case" ( SendStmt | RecvStmt ) | "default" .
+// RecvStmt   = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
+// RecvExpr   = Expression .
+func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
+	for _, stmt := range statement.Body.List {
+		if err := func() error {
+			sp.SymbolTable.Push()
+			defer sp.SymbolTable.Pop()
+
+			fmt.Printf("stmt: %#v\n", stmt)
+			commClause, ok := stmt.(*ast.CommClause)
+			if !ok {
+				return fmt.Errorf("Select must be a list of commClause statements")
+			}
+			fmt.Printf("\ncommClause.Comm: %#v\n", commClause.Comm)
+			switch clause := commClause.Comm.(type) {
+			case *ast.ExprStmt:
+				if _, err := sp.ExprParser.Parse(clause.X); err != nil {
+					return err
+				}
+			case *ast.SendStmt:
+				fmt.Printf("ast.SendStmt: %#v\n", clause)
+				if _, err := sp.ExprParser.Parse(clause.Chan); err != nil {
+					return err
+				}
+				if _, err := sp.ExprParser.Parse(clause.Value); err != nil {
+					return err
+				}
+			case *ast.AssignStmt:
+				fmt.Printf("ast.AssignStmt: %#v\n", clause)
+				fmt.Printf("ast.AssignStmt.LHS: %#v\n", clause.Lhs)
+				fmt.Printf("ast.AssignStmt.RHS: %#v\n", clause.Rhs)
+
+				if len(clause.Rhs) != 1 {
+					return fmt.Errorf("Expecting a single expression on the RHS of a clause assigment")
+				}
+
+				chExpr, ok := clause.Rhs[0].(*ast.UnaryExpr)
+				if !ok {
+					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", clause.Rhs[0])
+				}
+
+				if chExpr.Op != token.ARROW {
+					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", chExpr)
+				}
+
+				fmt.Printf("ClauseExpr: %#v\n", chExpr)
+				rhsExpr, err := sp.ExprParser.Parse(chExpr.X)
+				if err != nil {
+					return err
+				}
+
+				if len(rhsExpr) != 1 {
+					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr)
+				}
+
+				rhsChannel, ok := rhsExpr[0].(*gotypes.Channel)
+				if !ok {
+					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr[0])
+				}
+
+				switch lhsLen := len(clause.Lhs); lhsLen {
+				case 0:
+					return fmt.Errorf("Expecting at least one expression on the LHS of a clause assigment")
+				case 1:
+					fmt.Printf("RHS: %#v\n", rhsChannel)
+					if clause.Tok == token.DEFINE {
+						// All LHS expressions must be identifiers
+						// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
+						ident, ok := clause.Lhs[0].(*ast.Ident)
+						if !ok {
+							return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
+						}
+						sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+							Name:    ident.Name,
+							Package: "",
+							Def:     rhsChannel,
+						})
+					}
+				case 2:
+					fmt.Printf("RHS: %#v + bool, token: %v, %v\n", rhsChannel, clause.Tok, token.DEFINE)
+					// Given a case is an implicit block, there is no need to check if any of to-be-declared variables is already declared
+					// See http://www.tapirgames.com/blog/golang-block-and-scope
+					// If an ordinary assignment (with = symbol) is used, all variables/selectors(and other assignable expression) must be already defined,
+					// so they are not included as new variables.
+					if clause.Tok == token.DEFINE {
+						// All LHS expressions must be identifiers
+						// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
+						ident1, ok := clause.Lhs[0].(*ast.Ident)
+						if !ok {
+							return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
+						}
+						ident2, ok := clause.Lhs[1].(*ast.Ident)
+						if !ok {
+							return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
+						}
+
+						sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+							Name:    ident1.Name,
+							Package: "",
+							Def:     rhsChannel,
+						})
+
+						sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+							Name:    ident2.Name,
+							Package: "",
+							Def:     &gotypes.Builtin{},
+						})
+					}
+				default:
+					return fmt.Errorf("Expecting at most two expression on the LHS of a clause assigment")
+				}
+			default:
+				return fmt.Errorf("Unable to recognize selector CommClause CommCase. Got %#v\n", commClause.Comm)
+			}
+
+			fmt.Printf("commClause.Body: %#v\n", commClause.Body)
+			if commClause.Body != nil {
+				if err := sp.Parse(&ast.BlockStmt{
+					List: commClause.Body,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
 	// If Init; Cond { Body } Else
 
@@ -618,6 +752,9 @@ func (sp *Parser) Parse(statement ast.Stmt) error {
 	case *ast.TypeSwitchStmt:
 		fmt.Printf("TypeSwitchStmt: %#v\n", stmtExpr)
 		return sp.parseTypeSwitchStmt(stmtExpr)
+	case *ast.SelectStmt:
+		fmt.Printf("SelectStmt: %#v\n", stmtExpr)
+		return sp.parseSelectStmt(stmtExpr)
 	default:
 		panic(fmt.Errorf("Unknown statement %#v", statement))
 	}
