@@ -550,6 +550,17 @@ label:
 		}
 	}
 
+	{
+		a := 1
+		defer func() { a++ }()
+	}
+
+	{
+		var a chan int
+		a <- 2
+		<-a
+	}
+
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }

@@ -1,7 +1,6 @@
 package statement
 
 import (
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -128,8 +127,8 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 		return nil
 	}
 	sp.SymbolTable.Push()
-	byteSlice, err := json.Marshal(sp.SymbolTable)
-	fmt.Printf("\nTable: %v\nerr: %v", string(byteSlice), err)
+	// byteSlice, err := json.Marshal(sp.SymbolTable)
+	// fmt.Printf("\nTable: %v\nerr: %v", string(byteSlice), err)
 
 	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
 	for _, statement := range funcDecl.Body.List {
@@ -784,6 +783,11 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 	return sp.Parse(statement.Body)
 }
 
+func (sp *Parser) parseDeferStmt(statement *ast.DeferStmt) error {
+	_, err := sp.ExprParser.Parse(statement.Call)
+	return err
+}
+
 func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
 	// If Init; Cond { Body } Else
 
@@ -894,6 +898,9 @@ func (sp *Parser) Parse(statement ast.Stmt) error {
 	case *ast.RangeStmt:
 		fmt.Printf("RangeStmt: %#v\n", stmtExpr)
 		return sp.parseRangeStmt(stmtExpr)
+	case *ast.DeferStmt:
+		fmt.Printf("DeferStmt: %#v\n", stmtExpr)
+		return sp.parseDeferStmt(stmtExpr)
 	default:
 		panic(fmt.Errorf("Unknown statement %#v", statement))
 	}

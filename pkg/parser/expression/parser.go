@@ -296,12 +296,18 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 	}
 
 	// TODO(jchaloup): check the token is really a unary operator
+	// TODO(jchaloup): add the missing unary operator tokens
 	switch expr.Op {
 	// variable address
 	case token.AND:
 		return &gotypes.Pointer{
 			Def: def[0],
 		}, nil
+	case token.ARROW:
+		if def[0].GetType() != gotypes.ChannelType {
+			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead", def[0].GetType())
+		}
+		return def[0].(*gotypes.Channel).Value, nil
 	default:
 		return nil, fmt.Errorf("Unary operator %#v not recognized", expr.Op)
 	}
