@@ -479,6 +479,62 @@ label:
 		case c = <-a:
 		}
 	}
+
+	{
+		var a, b = 2, 20
+		for a = 1; a < b; {
+			a *= 2
+		}
+	}
+
+	{
+		var l map[string]string
+		for a, b := range l {
+		}
+	}
+
+	{
+		var l []LocalMap
+		for a, b := range l {
+		}
+	}
+
+	{
+		var l [4]LocalMap
+		for a, b := range l {
+		}
+	}
+
+	{
+		var l string
+		for a, b := range l {
+		}
+	}
+
+	{
+		var l chan int
+		for b := range l {
+		}
+	}
+
+	{
+		var l []int
+		for _, b := range l {
+		}
+	}
+
+	{
+		var l []int
+		for a, _ := range l {
+		}
+	}
+
+	{
+		var l []int
+		for _, _ := range l {
+		}
+	}
+
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }

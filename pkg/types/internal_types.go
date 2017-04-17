@@ -2,7 +2,9 @@ package types
 
 const BuiltinType = "builtin"
 
-type Builtin struct{}
+type Builtin struct {
+	Def string
+}
 
 func (b *Builtin) GetType() string {
 	return BuiltinType

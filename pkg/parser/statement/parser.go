@@ -651,6 +651,117 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 	return nil
 }
 
+// ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
+// Condition = Expression .
+func (sp *Parser) parseForStmt(statement *ast.ForStmt) error {
+	fmt.Printf("ForCond %#v\n", statement.Cond)
+	fmt.Printf("ForInit %#v\n", statement.Init)
+	fmt.Printf("ForPost %#v\n", statement.Post)
+	return nil
+}
+
+// RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
+func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
+	// If the assignment is = all expression on the LHS are already defined.
+	// If the assignment is := all expression on the LHS are identifiers
+	xExpr, err := sp.ExprParser.Parse(statement.X)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("ForKey %#v\n", statement.Key)
+	fmt.Printf("ForValue %#v\n", statement.Value)
+	fmt.Printf("ForX %#v\n", statement.X)
+	fmt.Printf("ForExpr[0] %#v\n", xExpr[0])
+
+	sp.SymbolTable.Push()
+	defer sp.SymbolTable.Pop()
+
+	if statement.Tok == token.DEFINE {
+
+		var key, value gotypes.DataType
+		// From https://golang.org/ref/spec#For_range
+		//
+		// Range expression                          1st value          2nd value
+		//
+		// array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
+		// string          s  string type            index    i  int    see below  rune
+		// map             m  map[K]V                key      k  K      m[k]       V
+		// channel         c  chan E, <-chan E       element  e  E
+		switch xExprType := xExpr[0].(type) {
+		case *gotypes.Array:
+			fmt.Printf("Array: %#v\n", xExprType)
+			key = &gotypes.Builtin{Def: "int"}
+			value = xExprType.Elmtype
+		case *gotypes.Slice:
+			fmt.Printf("Slice: %#v\n", xExprType)
+			key = &gotypes.Builtin{Def: "int"}
+			value = xExprType.Elmtype
+		case *gotypes.Builtin:
+			fmt.Printf("Builtin: %#v\n", xExprType)
+			if xExprType.Def != "string" {
+				fmt.Errorf("Expecting string in range expression. Got %#v instead.", xExpr[0])
+			}
+			key = &gotypes.Builtin{Def: "int"}
+			value = &gotypes.Builtin{Def: "rune"}
+		case *gotypes.Map:
+			fmt.Printf("Map: %#v\n", xExprType)
+			key = xExprType.Keytype
+			value = xExprType.Valuetype
+		case *gotypes.Channel:
+			fmt.Printf("Channel: %#v\n", xExprType)
+			key = xExprType.Value
+		default:
+			panic(fmt.Errorf("Unknown type of range expression: %#v", xExpr[0]))
+		}
+
+		fmt.Printf("Key: %#v\nValue: %#v\n", key, value)
+
+		if statement.Key != nil {
+			keyIdent, ok := statement.Key.(*ast.Ident)
+			if !ok {
+				return fmt.Errorf("Expected key as an identifier in the for range statement. Got %#v instead.", statement.Key)
+			}
+
+			if keyIdent.Name != "_" {
+				if err := sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					Name:    keyIdent.Name,
+					Package: "",
+					Def:     key,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+
+		if statement.Value != nil {
+			valueIdent, ok := statement.Value.(*ast.Ident)
+			if !ok {
+				return fmt.Errorf("Expected value as an identifier in the for range statement. Got %#v instead.", statement.Value)
+			}
+
+			if valueIdent.Name != "_" && value != nil {
+				if err := sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					Name:    valueIdent.Name,
+					Package: "",
+					Def:     value,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		if _, err := sp.ExprParser.Parse(statement.Key); err != nil {
+			return nil
+		}
+		if _, err := sp.ExprParser.Parse(statement.Value); err != nil {
+			return nil
+		}
+	}
+
+	return sp.Parse(statement.Body)
+}
+
 func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
 	// If Init; Cond { Body } Else
 
@@ -755,6 +866,12 @@ func (sp *Parser) Parse(statement ast.Stmt) error {
 	case *ast.SelectStmt:
 		fmt.Printf("SelectStmt: %#v\n", stmtExpr)
 		return sp.parseSelectStmt(stmtExpr)
+	case *ast.ForStmt:
+		fmt.Printf("SelectStmt: %#v\n", stmtExpr)
+		return sp.parseForStmt(stmtExpr)
+	case *ast.RangeStmt:
+		fmt.Printf("RangeStmt: %#v\n", stmtExpr)
+		return sp.parseRangeStmt(stmtExpr)
 	default:
 		panic(fmt.Errorf("Unknown statement %#v", statement))
 	}
