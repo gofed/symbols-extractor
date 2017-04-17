@@ -535,6 +535,21 @@ label:
 		}
 	}
 
+	{
+		for i := 1; i < 5; i++ {
+
+		}
+	}
+
+	{
+		for i := 1; i < 5; i++ {
+			a := 2
+			a *= 2
+			break
+			continue
+		}
+	}
+
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }

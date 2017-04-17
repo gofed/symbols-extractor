@@ -326,11 +326,13 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 
 			// TODO(jchaloup): If the statement.Tok is not token.DEFINE, don't add the variable to the symbol table.
 			//                 Instead, check the varible is of the same type (or compatible) as the already stored one.
-			sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-				Name:    lhsExpr.Name,
-				Package: sp.PackageName,
-				Def:     def[0],
-			})
+			if statement.Tok == token.DEFINE {
+				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					Name:    lhsExpr.Name,
+					Package: sp.PackageName,
+					Def:     def[0],
+				})
+			}
 		default:
 			return fmt.Errorf("Lhs of an assignment type %#v is not recognized", statement.Lhs[i])
 		}
@@ -654,10 +656,30 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 // ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
 // Condition = Expression .
 func (sp *Parser) parseForStmt(statement *ast.ForStmt) error {
-	fmt.Printf("ForCond %#v\n", statement.Cond)
+	sp.SymbolTable.Push()
+	defer sp.SymbolTable.Pop()
+
 	fmt.Printf("ForInit %#v\n", statement.Init)
+	fmt.Printf("ForCond %#v\n", statement.Cond)
 	fmt.Printf("ForPost %#v\n", statement.Post)
-	return nil
+
+	if statement.Init != nil {
+		sp.StmtParser.Parse(statement.Init)
+		sp.SymbolTable.PrintTop()
+	}
+
+	if statement.Cond != nil {
+		if _, err := sp.ExprParser.Parse(statement.Cond); err != nil {
+			return err
+		}
+	}
+
+	if statement.Post != nil {
+		sp.StmtParser.Parse(statement.Post)
+		sp.SymbolTable.PrintTop()
+	}
+
+	return sp.Parse(statement.Body)
 }
 
 // RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .

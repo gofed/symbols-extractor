@@ -171,7 +171,7 @@ func (s *Stack) Pop() {
 
 func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
 	if s.Size > 0 {
-		fmt.Printf("====Assing %v variable at level %v\n", sym.Name, s.Size-1)
+		fmt.Printf("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
 		return s.Tables[s.Size-1].AddVariable(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
@@ -220,4 +220,8 @@ func (s *Stack) Print() {
 	for i := s.Size - 1; i >= 0; i-- {
 		fmt.Printf("Table %v: symbol: %#v\n", i, s.Tables[i])
 	}
+}
+
+func (s *Stack) PrintTop() {
+	fmt.Printf("TableSymbols: %#v\n", s.Tables[s.Size-1])
 }
