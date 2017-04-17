@@ -171,6 +171,8 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 
 	fmt.Printf("typeDef: %#v\n", typeDef)
 
+	var symbolsDef = make([]*gotypes.SymbolDef, 0)
+
 	for i := 0; i < vLen; i++ {
 		if typeDef == nil && spec.Values[i] == nil {
 			return nil, fmt.Errorf("No type nor value in ValueSpec declaration")
@@ -184,28 +186,25 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		if len(valueExpr) != 1 {
 			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExpr)
 		}
-		fmt.Printf("Name: %#v, Value: %#v, Type: %#v", spec.Names[i].Name, valueExpr[0], typeDef)
+		fmt.Printf("Name: %#v, Value: %#v, Type: %#v\n", spec.Names[i].Name, valueExpr[0], typeDef)
 		// Put the variables/consts into the symbol table
 		if spec.Names[i].Name == "_" {
 			continue
 		}
 		if typeDef != nil {
-			sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+			symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     typeDef,
 			})
 		} else {
-			sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+			symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     valueExpr[0],
 			})
 		}
 	}
-
-	// TODO(jchaloup): return a list of SymbolDefs
-	var symbolsDef = make([]*gotypes.SymbolDef, 0)
 
 	for i := vLen; i < nLen; i++ {
 		if typeDef == nil {
@@ -244,8 +243,40 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 						return nil
 					}
 				}
+			case *ast.TypeSpec:
+				fmt.Printf("TypeSpec: %#v\n", genDeclSpec)
+
+				if err := sp.SymbolTable.AddDataType(&gotypes.SymbolDef{
+					Name:    genDeclSpec.Name.Name,
+					Package: "",
+					Def:     nil,
+				}); err != nil {
+					return err
+				}
+
+				// TODO(jchaloup): capture the current state of the allocated symbol table
+				// JIC the parsing ends with end error. Which can result into re-parsing later on.
+				// Which can result in re-allocation. It should be enough two-level allocated symbol table.
+				typeDef, err := sp.TypeParser.Parse(genDeclSpec.Type)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("TypeDef: %#v\n", typeDef)
+
+				if err := sp.SymbolTable.AddDataType(&gotypes.SymbolDef{
+					Name:    genDeclSpec.Name.Name,
+					Package: "",
+					Def:     typeDef,
+				}); err != nil {
+					return err
+				}
+
+			default:
+				panic(fmt.Errorf("Unrecognized Gen declaration: %#v", decl))
 			}
 		}
+	default:
+		panic(fmt.Errorf("Unrecognized declaration: %#v", statement.Decl))
 	}
 	//panic("Decl panic")
 	return nil

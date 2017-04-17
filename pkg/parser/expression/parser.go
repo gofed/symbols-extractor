@@ -430,6 +430,18 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	}
 }
 
+func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (gotypes.DataType, error) {
+	fmt.Printf("Function literal: %#v\n", expr)
+	if err := ep.StmtParser.ParseFuncBody(&ast.FuncDecl{
+		Type: expr.Type,
+		Body: expr.Body,
+	}); err != nil {
+		return nil, err
+	}
+
+	return ep.TypeParser.Parse(expr.Type)
+}
+
 func (ep *Parser) parseStructType(expr *ast.StructType) (gotypes.DataType, error) {
 	for _, field := range expr.Fields.List {
 		for _, name := range field.Names {
@@ -662,6 +674,10 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 	case *ast.TypeAssertExpr:
 		fmt.Printf("TypeAssertExpr: %#v\n", exprType)
 		def, err := ep.parseTypeAssertExpr(exprType)
+		return []gotypes.DataType{def}, err
+	case *ast.FuncLit:
+		fmt.Printf("FuncLit: %#v\n", exprType)
+		def, err := ep.parseFuncLit(exprType)
 		return []gotypes.DataType{def}, err
 	default:
 		return nil, fmt.Errorf("Unrecognized expression: %#v\n", expr)

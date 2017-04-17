@@ -561,6 +561,14 @@ label:
 		<-a
 	}
 
+	{
+		type My string
+
+		func(a My) error {
+			a
+		}
+	}
+
 	// if a := false; a == true {
 	// 	fmt.Printf("True")
 	// }
@@ -614,3 +622,6 @@ label:
 	// 		}
 	// 	}
 }
+
+var a, b = "nic", "d"
+var c, d string

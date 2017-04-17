@@ -98,6 +98,17 @@ func (fp *FileParser) Parse(gofile string) error {
 				case *ast.ValueSpec:
 					// process value and constants as third
 					//fmt.Printf("%+v\n", d)
+					defs, err := fp.StmtParser.ParseValueSpec(d)
+					if err != nil {
+						return err
+					}
+					for _, def := range defs {
+						// TPDP(jchaloup): we should store all variables or non.
+						// Given the error is set only if the variable already exists, it should not matter so much.
+						if err := fp.SymbolTable.AddVariable(def); err != nil {
+							return nil
+						}
+					}
 				case *ast.TypeSpec:
 					// process type definitions as second
 					//fmt.Printf("%#v\n", d)

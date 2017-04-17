@@ -179,6 +179,7 @@ func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
 
 func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
 	if s.Size > 0 {
+		fmt.Printf("====Adding %#v datatype at level %v\n", sym, s.Size-1)
 		return s.Tables[s.Size-1].AddDataType(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
