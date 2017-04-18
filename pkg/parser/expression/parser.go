@@ -214,7 +214,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 		var ClTypeIdentifierDef *gotypes.SymbolDef
 		// If the LC type is an identifier, determine a type which is defined by the identifier
 		if idDef, ok := litTypedef.(*gotypes.Identifier); ok {
-			def, err := ep.SymbolTable.Lookup(idDef.Def)
+			def, _, err := ep.SymbolTable.Lookup(idDef.Def)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", idDef)
 			}
@@ -271,7 +271,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	}
 
 	// Otherwise it is a data type of a function declation -> return just the data type identifier
-	def, err := ep.SymbolTable.Lookup(ident.Name)
+	def, _, err := ep.SymbolTable.Lookup(ident.Name)
 	if err != nil {
 		fmt.Printf("Lookup error expr: %v\n", err)
 		// Return an error so the function body processing can be postponed
@@ -325,17 +325,36 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	// user defined type returning built-in type, both operands must be processed.
 
 	// X Op Y
-	_, yErr := ep.Parse(expr.X)
+	x, yErr := ep.Parse(expr.X)
 	if yErr != nil {
 		return nil, yErr
 	}
 
-	_, xErr := ep.Parse(expr.Y)
+	y, xErr := ep.Parse(expr.Y)
 	if xErr != nil {
 		return nil, xErr
 	}
 
-	return &gotypes.Builtin{}, nil
+	// If both types are built-in, just return built-in
+	if x[0].GetType() == y[0].GetType() && x[0].GetType() == gotypes.BuiltinType {
+		return &gotypes.Builtin{}, nil
+	}
+
+	// At least one of the type is an identifier
+	xIdent, xOk := x[0].(*gotypes.Identifier)
+	yIdent, yOk := y[0].(*gotypes.Identifier)
+
+	if !xOk && !yOk {
+		return nil, fmt.Errorf("Both operands of a binary operator must be identifiers")
+	}
+
+	// TODO(jchaloup): logical and/or over any two operands is always a bool
+
+	if xOk {
+		return xIdent, nil
+	} else {
+		return yIdent, nil
+	}
 }
 
 func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
@@ -354,7 +373,9 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 }
 
 func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) {
-	// TODO(jchaloup): check if the type() casting is of ast.CallExpr as well
+	fmt.Printf("\nCallExpr.Args: %#v\n", expr.Args)
+	fmt.Printf("CallExpr.Fun: %#v\n", expr.Fun)
+
 	for _, arg := range expr.Args {
 		// an argument is passed to the function so its data type does not affect the result data type of the call
 		def, err := ep.Parse(arg)
@@ -375,13 +396,28 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	case *ast.Ident:
 		// simple function ID
 		fmt.Printf("Function name: %v\n", exprType.Name)
-		def, err := ep.SymbolTable.Lookup(exprType.Name)
+		// check if the function name is a variable or a type
+
+		// not a user defined type
+		if def, err := ep.TypeParser.Parse(exprType); err == nil {
+			if def.GetType() == gotypes.BuiltinType {
+				return []gotypes.DataType{def}, nil
+			}
+		}
+
+		def, symbolType, err := ep.SymbolTable.Lookup(exprType.Name)
+		fmt.Printf("def: %#v, symbolType: %#v\n", def, symbolType)
 		if err != nil {
 			fmt.Printf("Lookup error: %v\n", err)
 			// Return an error so the function body processing can be postponed
 			// TODO(jchaloup): return more information about the missing symbol so the
 			// body can be re-processed right after the symbol is stored into the symbol table.
 			return nil, err
+		}
+		if symbolType.IsDataType() {
+			return []gotypes.DataType{
+				&gotypes.Identifier{Def: exprType.Name},
+			}, nil
 		}
 
 		// Get function's definition from the symbol table (if it exists)
@@ -426,7 +462,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	case *gotypes.Method:
 		return funcType.Def.(*gotypes.Function).Results, nil
 	default:
-		return nil, fmt.Errorf("Symbol to be called is not a function")
+		return nil, fmt.Errorf("Symbol %#v to be called is not a function", function)
 	}
 }
 
@@ -518,14 +554,14 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
 		// Get struct's definition given by its identifier
-		structDefsymbol, err := ep.SymbolTable.Lookup(def.Def)
+		structDefsymbol, _, err := ep.SymbolTable.Lookup(def.Def)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", def.Def)
 		}
 		return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 	case *gotypes.Identifier:
 		// Get struct/interface definition given by its identifier
-		defSymbol, err := ep.SymbolTable.Lookup(xType.Def)
+		defSymbol, _, err := ep.SymbolTable.Lookup(xType.Def)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", xType.Def)
 		}
@@ -653,6 +689,7 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 	case *ast.BinaryExpr:
 		fmt.Printf("BinaryExpr: %#v\n", exprType)
 		def, err := ep.parseBinaryExpr(exprType)
+		fmt.Printf("BinaryExprResult: %#v\n", def)
 		return []gotypes.DataType{def}, err
 	case *ast.CallExpr:
 		fmt.Printf("CallExpr: %#v\n", exprType)

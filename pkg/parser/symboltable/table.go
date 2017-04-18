@@ -13,11 +13,21 @@ import (
 // - allocated symbol table (global per package)
 //   - RFE: store file:line:column as well (possible generate a link to symbol's location)
 
+type SymbolType string
+
 const (
 	VariableSymbol = "variables"
 	FunctionSymbol = "functions"
 	DataTypeSymbol = "datatypes"
 )
+
+func (s SymbolType) IsVariable() bool {
+	return s == VariableSymbol
+}
+
+func (s SymbolType) IsDataType() bool {
+	return s == DataTypeSymbol
+}
 
 var (
 	SymbolTypes = []string{VariableSymbol, FunctionSymbol, DataTypeSymbol}
@@ -126,16 +136,16 @@ func (t *Table) LookupVariable(key string) (*gotypes.SymbolDef, error) {
 	return nil, fmt.Errorf("Variable `%v` not found", key)
 }
 
-func (t *Table) Lookup(key string) (*gotypes.SymbolDef, error) {
+func (t *Table) Lookup(key string) (*gotypes.SymbolDef, SymbolType, error) {
 
 	for _, symbolType := range SymbolTypes {
 		if sym, ok := t.symbols[symbolType][key]; ok {
 			fmt.Printf("Symbol found: %#v\n", sym)
-			return sym, nil
+			return sym, SymbolType(symbolType), nil
 		}
 	}
 
-	return nil, fmt.Errorf("Symbol `%v` not found", key)
+	return nil, SymbolType(""), fmt.Errorf("Symbol `%v` not found", key)
 }
 
 // Stack is a multi-level symbol table for parsing blocks of code
@@ -205,16 +215,16 @@ func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
 }
 
 // Lookup looks for the first occurrence of a symbol with the given name
-func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, error) {
+func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, SymbolType, error) {
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
-		def, err := s.Tables[i].Lookup(name)
+		def, st, err := s.Tables[i].Lookup(name)
 		if err == nil {
 			fmt.Printf("Table %v: symbol: %#v\n", i, def)
-			return def, nil
+			return def, st, nil
 		}
 	}
-	return nil, fmt.Errorf("Symbol %v not found", name)
+	return nil, SymbolType(""), fmt.Errorf("Symbol %v not found", name)
 }
 
 func (s *Stack) Print() {

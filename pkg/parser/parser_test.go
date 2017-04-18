@@ -1,12 +1,10 @@
 package parser
 
 import (
+	"os"
 	"path"
 	"testing"
-
 )
-
-/**** TEST FUNCTIONS ****/
 
 func TestDataTypes(t *testing.T) {
 	gopkg := "github.com/gofed/symbols-extractor/pkg/parser/testdata"
@@ -16,4 +14,3 @@ func TestDataTypes(t *testing.T) {
 		t.Errorf("Unable to parse %v: %v", gofile, err)
 	}
 }
-

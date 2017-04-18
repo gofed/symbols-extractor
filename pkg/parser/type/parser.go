@@ -51,7 +51,7 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	}
 
 	// Check if the identifier is available in the symbol table
-	def, err := p.SymbolTable.Lookup(typedExpr.Name)
+	def, _, err := p.SymbolTable.Lookup(typedExpr.Name)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
 	}

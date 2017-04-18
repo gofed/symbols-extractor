@@ -15,19 +15,25 @@ import (
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
 /**** HELP FUNCTIONS ****/
 
-func prepareParser(pkgName string) *Parser {
-	symtab := symboltable.NewStack()
-	allocSymtab := alloctable.New()
-	tp := typeparser.New(pkgName, symtab, allocSymtab)
-	exp := exprparser.New(pkgName, symtab, allocSymtab, tp)
+func prepareParser(pkgName string) *types.Config {
+	c := &types.Config{
+		PackageName:           pkgName,
+		SymbolTable:           symboltable.NewStack(),
+		AllocatedSymbolsTable: alloctable.New(),
+	}
 
-	symtab.Push()
-	return New(pkgName, symtab, allocSymtab, tp, exp)
+	c.SymbolTable.Push()
+	c.TypeParser = typeparser.New(c)
+	c.ExprParser = exprparser.New(c)
+	c.StmtParser = New(c)
+
+	return c
 }
 
 func getAst(gopkg, filename string, gocode interface{}) (*ast.File, *token.FileSet, error) {
@@ -41,7 +47,7 @@ func getAst(gopkg, filename string, gocode interface{}) (*ast.File, *token.FileS
 	return f, fset, nil
 }
 
-func parseNonFunc(tp *typeparser.Parser, astF *ast.File) error {
+func parseNonFunc(config *types.Config, astF *ast.File) error {
 	//TODO: later parsing of values will be required
 	for _, d := range astF.Decls {
 		switch decl := d.(type) {
@@ -50,12 +56,38 @@ func parseNonFunc(tp *typeparser.Parser, astF *ast.File) error {
 				//fmt.Printf("=== %#v", spec)
 				switch d := spec.(type) {
 				case *ast.TypeSpec:
-					if _, err := tp.Parse(d); err != nil {
+					if err := config.SymbolTable.AddDataType(&gotypes.SymbolDef{
+						Name:    d.Name.Name,
+						Package: config.PackageName,
+						Def:     nil,
+					}); err != nil {
 						return err
 					}
-					//case *ast.ValueSpec:
-					//  	_, err := tp.parseTypeSpec(d)
-					//      return err
+
+					typeDef, err := config.TypeParser.Parse(d.Type)
+					if err != nil {
+						return err
+					}
+
+					if err := config.SymbolTable.AddDataType(&gotypes.SymbolDef{
+						Name:    d.Name.Name,
+						Package: config.PackageName,
+						Def:     typeDef,
+					}); err != nil {
+						return err
+					}
+					// case *ast.ValueSpec:
+					// 	_, err := config.TypeParser.Parse(d.Type)
+					// 	if err != nil {
+					// 		return err
+					// 	}
+					// 	config.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					// 		Name:    d.Names[0].Name,
+					// 		Package: config.PackageName,
+					// 		Def: &gotypes.Identifier{
+					// 			Def: d.Names[0].Name,
+					// 		},
+					// 	})
 				}
 			}
 		default:
@@ -66,19 +98,16 @@ func parseNonFunc(tp *typeparser.Parser, astF *ast.File) error {
 	return nil
 }
 
-func iterFunc(astF *ast.File) <-chan *ast.FuncDecl {
-	// iterate over AST and returns function declarations
-	fchan := make(chan *ast.FuncDecl)
-	go func() {
-		for _, decl := range astF.Decls {
-			if fdecl, ok := decl.(*ast.FuncDecl); ok {
-				fchan <- fdecl
-			}
-		}
-		close(fchan)
-	}()
+func iterFunc(astF *ast.File) []*ast.FuncDecl {
+	var decls []*ast.FuncDecl
 
-	return fchan
+	for _, decl := range astF.Decls {
+		if fdecl, ok := decl.(*ast.FuncDecl); ok {
+			decls = append(decls, fdecl)
+		}
+	}
+
+	return decls
 }
 
 /**** TEST FUNCTIONS ****/
@@ -238,35 +267,32 @@ TEST_LOOP:
 		//ast.Print(f, astF)
 
 		// complete pre-test data (add Function type)
-		sp := prepareParser(gopkg)
-		err = parseNonFunc(sp.typeParser, astF)
+		config := prepareParser(gopkg)
+		err = parseNonFunc(config, astF)
 		if err != nil {
 			t.Errorf("Can't parse types outside of body: %#v", err)
 			continue
 		}
 
-		i := 0
-		for fdecl := range iterFunc(astF) {
+		for i, fdecl := range iterFunc(astF) {
 			if tfdecl.expectRes[i] == nil {
 				continue
 			}
 
-			if funcDef, err := sp.typeParser.ParseFunction(fdecl.Type); err == nil {
+			if funcDef, err := config.TypeParser.Parse(fdecl.Type); err == nil {
 				if tfdecl.expectRes[i].Def.GetType() == gotypes.MethodType {
 					tfdecl.expectRes[i].Def.(*gotypes.Method).Def = funcDef
 				} else {
 					tfdecl.expectRes[i].Def = funcDef
 				}
 			}
-			i++
 		}
 
 		// TEST
-		i = 0
-		for fdecl := range iterFunc(astF) {
+		for i, fdecl := range iterFunc(astF) {
 
 			// test that function returns expected values
-			if ret, err := sp.ParseFuncDecl(fdecl); err != nil {
+			if ret, err := config.StmtParser.ParseFuncDecl(fdecl); err != nil {
 				if tfdecl.expectRes[i] != nil {
 					msgf := "Found error instead of expected result: %v" +
 						"\n==== GOCODE ====\n%s\n==== END ===="

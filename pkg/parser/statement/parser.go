@@ -26,7 +26,7 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 	switch typedExpr := receiver.(type) {
 	case *ast.Ident:
 		// search the identifier in the symbol table
-		def, err := ep.SymbolTable.Lookup(typedExpr.Name)
+		def, _, err := ep.SymbolTable.Lookup(typedExpr.Name)
 		if err != nil {
 			fmt.Printf("Lookup error: %v\n", err)
 			// Return an error so the function body processing can be postponed
@@ -47,7 +47,7 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 		switch idExpr := typedExpr.X.(type) {
 		case *ast.Ident:
 			// search the identifier in the symbol table
-			def, err := ep.SymbolTable.Lookup(idExpr.Name)
+			def, _, err := ep.SymbolTable.Lookup(idExpr.Name)
 			if err != nil {
 				fmt.Printf("Lookup error: %v\n", err)
 				// Return an error so the function body processing can be postponed

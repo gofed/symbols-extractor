@@ -1,6 +1,7 @@
 package expression
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -11,18 +12,24 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
 /**** HELP FUNCTIONS ****/
 
-func prepareParser(pkgName string) *Parser {
-	symtab := symboltable.NewStack()
-	allocSymtab := alloctable.New()
-	tp := typeparser.New(pkgName, symtab, allocSymtab)
+func prepareParser(pkgName string) *types.Config {
+	c := &types.Config{
+		PackageName:           pkgName,
+		SymbolTable:           symboltable.NewStack(),
+		AllocatedSymbolsTable: alloctable.New(),
+	}
 
-	symtab.Push()
-	return New(pkgName, symtab, allocSymtab, tp)
+	c.SymbolTable.Push()
+	c.TypeParser = typeparser.New(c)
+	c.ExprParser = New(c)
+
+	return c
 }
 
 func getAst(gopkg, filename string, gocode interface{}) (*ast.File, *token.FileSet, error) {
@@ -36,9 +43,8 @@ func getAst(gopkg, filename string, gocode interface{}) (*ast.File, *token.FileS
 	return f, fset, nil
 }
 
-func parseNonFunc(parser *Parser, astF *ast.File) error {
+func parseNonFunc(config *types.Config, astF *ast.File) error {
 	//TODO: later parsing of values will be required
-	tp := parser.typesParser
 	for _, d := range astF.Decls {
 		switch decl := d.(type) {
 		case *ast.GenDecl:
@@ -46,7 +52,24 @@ func parseNonFunc(parser *Parser, astF *ast.File) error {
 				//fmt.Printf("=== %#v", spec)
 				switch d := spec.(type) {
 				case *ast.TypeSpec:
-					if _, err := tp.Parse(d); err != nil {
+					if err := config.SymbolTable.AddDataType(&gotypes.SymbolDef{
+						Name:    d.Name.Name,
+						Package: config.PackageName,
+						Def:     nil,
+					}); err != nil {
+						return err
+					}
+
+					typeDef, err := config.TypeParser.Parse(d.Type)
+					if err != nil {
+						return err
+					}
+
+					if err := config.SymbolTable.AddDataType(&gotypes.SymbolDef{
+						Name:    d.Name.Name,
+						Package: config.PackageName,
+						Def:     typeDef,
+					}); err != nil {
 						return err
 					}
 				case *ast.ValueSpec:
@@ -55,13 +78,13 @@ func parseNonFunc(parser *Parser, astF *ast.File) error {
 					//    by typeparser into the symtab. Watch..
 					//  - store type into the variable - now it is not possible
 					//    varType, err := tp.ParseTypeExpr(d.Type)
-					_, err := tp.ParseTypeExpr(d.Type)
+					_, err := config.TypeParser.Parse(d.Type)
 					if err != nil {
 						return err
 					}
-					parser.symbolTable.AddVariable(&gotypes.SymbolDef{
+					config.SymbolTable.AddVariable(&gotypes.SymbolDef{
 						Name:    d.Names[0].Name,
-						Package: parser.packageName,
+						Package: config.PackageName,
 						Def: &gotypes.Identifier{
 							Def: d.Names[0].Name,
 						},
@@ -76,36 +99,22 @@ func parseNonFunc(parser *Parser, astF *ast.File) error {
 	return nil
 }
 
-func iterFunc(astF *ast.File) <-chan *ast.FuncDecl {
-	// iterate over AST and returns function declarations
-	fchan := make(chan *ast.FuncDecl)
-	go func() {
-		for _, decl := range astF.Decls {
-			if fdecl, ok := decl.(*ast.FuncDecl); ok {
-				fchan <- fdecl
-			}
+func iterVar(astF *ast.File) []*ast.ValueSpec {
+	var specs []*ast.ValueSpec
+	for _, decl := range astF.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
 		}
-		close(fchan)
-	}()
-
-	return fchan
-}
-
-func iterVar(astF *ast.File) <-chan *ast.ValueSpec {
-	// iterate over AST and returns function declarations
-	fchan := make(chan *ast.ValueSpec)
-	go func() {
-		for _, decl := range astF.Decls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				if genDecl.Tok == token.VAR {
-					fchan <- genDecl.Specs[0].(*ast.ValueSpec)
-				}
+		for _, valSpec := range genDecl.Specs {
+			varDecl, ok := valSpec.(*ast.ValueSpec)
+			if !ok {
+				continue
 			}
+			specs = append(specs, varDecl)
 		}
-		close(fchan)
-	}()
-
-	return fchan
+	}
+	return specs
 }
 
 /**** TEST FUNCTIONS ****/
@@ -114,21 +123,21 @@ func iterVar(astF *ast.File) <-chan *ast.ValueSpec {
 //                   if outside or inside function body
 func TestBinaryExpr(t *testing.T) {
 	// prepare test
-	var builtType string = gotypes.BuiltinType
-	var userType string = "FInt"
+	var userType = "FInt"
 
 	gopkg := "github.com/gofed/symbols-extractor/pkg/parser/testdata/valid"
 	gocode := "package exprtest\ntype FInt int\n"
 	testExpr := []struct {
-		expRes *string
-		expr   string
+		expRes        gotypes.DataType
+		expr          string
+		expectedError error
 	}{
-		{&builtType, "var FooB1 int     = 1 + 4"},
-		{&builtType, "var FooB2 float32 = 1.2 + 4"},
-		{&userType, "var FooU3 FInt    = FInt(12) + FInt(4)"},
-		{&userType, "var FooU4 FInt    = FooU3 * FooU3"},
-		{&builtType, "var FooB5 uint32  = uint32(FooU3) + uint32(FooU4)"},
-		//{nil,        "var FooB5 uint32  = uint16(FooU3) + int(FooU4)"},
+		{&gotypes.Builtin{}, "var FooB1 int     = 1 + 4", nil},
+		{&gotypes.Builtin{}, "var FooB2 float32 = 1.2 + 4", nil},
+		{&gotypes.Identifier{Def: userType}, "var FooU3 FInt    = FInt(12) + FInt(4)", nil},
+		{&gotypes.Identifier{Def: userType}, "var FooU4 FInt    = FooU3 * FooU3", nil},
+		{&gotypes.Builtin{}, "var FooB5 uint32  = uint32(FooU3) + uint32(FooU4)", nil},
+		{&gotypes.Builtin{}, "var FooB5 uint32  = uint16(FooU3) + int(FooU4)", nil},
 	}
 
 	// complete source code
@@ -136,50 +145,39 @@ func TestBinaryExpr(t *testing.T) {
 		gocode += test.expr + "\n"
 	}
 
-	astF, _, err := getAst(gopkg, "exprtest.go", gocode)
+	astF, _, err := getAst(gopkg, "", gocode)
 	if err != nil {
 		t.Errorf("Wrong input data: %v", err)
 		return
 	}
 
 	// create functionParser & parse general declarations
-	parser := prepareParser(gopkg)
-	parseNonFunc(parser, astF) // parse things autside of func (data types, vars)
-	//ast.Print(f, astF)
+	config := prepareParser(gopkg)
+	parseNonFunc(config, astF) // parse things outside of func (data types, vars)
 
-	// test itself
 	failed := false
-	i := 0
-	for valSpec := range iterVar(astF) {
-		binExpr := valSpec.Values[0].(*ast.BinaryExpr)
-		res, err := parser.parseBinaryExpr(binExpr)
 
+	for i, valSpec := range iterVar(astF) {
+		binExpr := valSpec.Values[0].(*ast.BinaryExpr)
+		res, err := config.ExprParser.(*Parser).parseBinaryExpr(binExpr)
+		fmt.Printf("BinaryExprResult: %#v\n", res)
 		// check that error is returned when is is expected
-		if err != nil {
-			if testExpr[i].expRes != nil {
-				t.Errorf("error on line: '%s': %v\n", testExpr[i].expr, err)
-				failed = true
-				i++
-				continue
-			}
-		} else {
-			if testExpr[i].expRes == nil {
-				// expected error instead of value
-				msgf := "Returned the '%v' value instead of error. Line: '%s'"
-				t.Errorf(msgf, res, testExpr[i].expr)
-				failed = true
-				i++
-				continue
-			}
+
+		if testExpr[i].expectedError != err {
+			t.Errorf("Unexpected error for '%s': %v\n", testExpr[i].expr, err)
+			failed = true
+			continue
 		}
 
 		// compare returned and expected value
-		if *testExpr[i].expRes != res.GetType() {
-			msgf := "Expected the %s type instead of %s. Line: '%s'"
-			t.Errorf(msgf, *testExpr[i].expRes, res.GetType(), testExpr[i].expr)
+		if testExpr[i].expRes.GetType() != res.GetType() {
+			t.Errorf("Expected '%s' type, got '%s' instead. Line: '%s'",
+				testExpr[i].expRes.GetType(),
+				res.GetType(),
+				testExpr[i].expr,
+			)
 			failed = true
 		}
-		i++
 	}
 
 	if failed {
