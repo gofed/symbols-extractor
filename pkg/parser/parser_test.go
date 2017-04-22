@@ -1,16 +1,18 @@
 package parser
 
-import (
-	"os"
-	"path"
-	"testing"
-)
+import "testing"
 
-func TestDataTypes(t *testing.T) {
+// func TestDataTypes(t *testing.T) {
+// 	gopkg := "github.com/gofed/symbols-extractor/pkg/parser/testdata"
+// 	gofile := path.Join(os.Getenv("GOPATH"), "src", gopkg, "unordered.go")
+// 	err := NewParser(gopkg).Parse(gofile)
+// 	if err != nil {
+// 		t.Errorf("Unable to parse %v: %v", gofile, err)
+// 	}
+// }
+
+func TestProjectParser(t *testing.T) {
 	gopkg := "github.com/gofed/symbols-extractor/pkg/parser/testdata"
-	gofile := path.Join(os.Getenv("GOPATH"), "src", gopkg, "datatypes.go")
-	err := NewParser(gopkg).Parse(gofile)
-	if err != nil {
-		t.Errorf("Unable to parse %v: %v", gofile, err)
-	}
+	pp := New(gopkg)
+	pp.Parse()
 }

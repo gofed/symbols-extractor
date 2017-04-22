@@ -318,6 +318,5 @@ func New(c *types.Config) types.TypeParser {
 	p := &Parser{
 		Config: c,
 	}
-	p.SymbolTable.Push()
 	return p
 }

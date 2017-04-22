@@ -105,6 +105,8 @@ func (t *Table) addSymbol(symbolType string, name string, sym *gotypes.SymbolDef
 		if def.Def != nil {
 			return fmt.Errorf("Symbol '%s' already exists", sym.Name)
 		}
+		def.Def = sym.Def
+		return nil
 	}
 
 	t.symbols[symbolType][name] = sym
@@ -166,6 +168,7 @@ func NewStack() *Stack {
 func (s *Stack) Push() {
 	s.Tables = append(s.Tables, NewTable())
 	s.Size++
+	fmt.Printf("Push: %v\n", s.Size)
 }
 
 // Pop pops the top most symbol table from the stack
@@ -225,6 +228,30 @@ func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, SymbolType, error) {
 		}
 	}
 	return nil, SymbolType(""), fmt.Errorf("Symbol %v not found", name)
+}
+
+func (s *Stack) Reset(level int) error {
+	fmt.Printf("level: %v, size: %v, a: %v, b: %v\n", level, s.Size, level < 0, (s.Size-1) < level)
+	if level < 0 || (s.Size-1) < level {
+		return fmt.Errorf("Level %v out of range", level)
+	}
+	if level == 0 {
+		s.Tables = s.Tables[:1]
+		s.Size = 1
+	} else {
+		s.Tables = s.Tables[:level+1]
+		s.Size = level + 1
+	}
+	return nil
+}
+
+// Table gets a symbol table at given level
+// Level 0 corresponds to the file level symbol table (the top most block)
+func (s *Stack) Table(level int) (*Table, error) {
+	if level < 0 || s.Size-1 < level {
+		return nil, fmt.Errorf("No symbol table found for level %v", level)
+	}
+	return s.Tables[level], nil
 }
 
 func (s *Stack) Print() {
