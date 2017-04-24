@@ -4,6 +4,7 @@ import (
 	"go/ast"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
@@ -38,6 +39,8 @@ type Config struct {
 	PackageName string
 	// per file symbol table
 	SymbolTable *stack.Stack
+	// per subset of packages symbol table
+	GlobalSymbolTable *global.Table
 	// per file allocatable ST
 	AllocatedSymbolsTable *alloctable.Table
 	// types parser

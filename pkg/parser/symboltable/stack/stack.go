@@ -9,15 +9,19 @@ import (
 
 // Stack is a multi-level symbol table for parsing blocks of code
 type Stack struct {
-	Tables []*symboltable.Table `json:"tables"`
-	Size   int                  `json:"size"`
+	Tables  []*symboltable.Table          `json:"tables"`
+	Size    int                           `json:"size"`
+	Imports map[string]*gotypes.SymbolDef `json:"imports"`
 }
 
 // NewStack creates an empty stack with no symbol table
 func New() *Stack {
 	return &Stack{
-		Tables: make([]*symboltable.Table, 0),
-		Size:   0,
+		Tables: []*symboltable.Table{
+			symboltable.NewTable(),
+		},
+		Size:    0,
+		Imports: make(map[string]*gotypes.SymbolDef, 0),
 	}
 }
 
@@ -37,6 +41,11 @@ func (s *Stack) Pop() {
 		panic("Popping over an empty stack of symbol tables")
 		// If you reached this line you are a magician
 	}
+}
+
+func (s *Stack) AddImport(sym *gotypes.SymbolDef) error {
+	s.Imports[sym.Name] = sym
+	return nil
 }
 
 func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
@@ -71,6 +80,10 @@ func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
 			return def, nil
 		}
 	}
+	// if the variable is not found, check the qids
+	if def, ok := s.Imports[name]; ok {
+		return def, nil
+	}
 	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
@@ -87,18 +100,10 @@ func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, symboltable.SymbolType,
 	return nil, symboltable.SymbolType(""), fmt.Errorf("Symbol %v not found", name)
 }
 
-func (s *Stack) Reset(level int) error {
-	fmt.Printf("level: %v, size: %v, a: %v, b: %v\n", level, s.Size, level < 0, (s.Size-1) < level)
-	if level < 0 || (s.Size-1) < level {
-		return fmt.Errorf("Level %v out of range", level)
-	}
-	if level == 0 {
-		s.Tables = s.Tables[:1]
-		s.Size = 1
-	} else {
-		s.Tables = s.Tables[:level+1]
-		s.Size = level + 1
-	}
+func (s *Stack) Reset() error {
+	s.Tables = s.Tables[:1]
+	s.Size = 1
+
 	return nil
 }
 

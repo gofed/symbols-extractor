@@ -115,10 +115,20 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 	// if the prefix is identifier only, the selector is in a form qui.identifier,
 	// i.e. fully qualified identifier
 	// TODO(jchaloup): check id.function(), is that selector as well or not?
+	//                 most-likely not as this construction is not allowed inside a data type definition
 	if ok {
-		// TODO(jchaloup): replace the id.Name with full package path
-		// E.g. instead of (qid, identifier) use (github.com/coreos/etcd/pkg/wait, Wait)
-		p.AllocatedSymbolsTable.AddSymbol(id.Name, typedExpr.Sel.Name)
+		// Get package path
+		fmt.Printf("Getting package path for %v\n", id.Name)
+		def, err := p.SymbolTable.LookupVariable(id.Name)
+		if err != nil {
+			return nil, fmt.Errorf("Qualified id %q not found in the symbol table", id.Name)
+		}
+		qid, ok := def.Def.(*gotypes.PackageQualifier)
+		if !ok {
+			return nil, fmt.Errorf("Qualified id %q does not correspond to an import path", id.Name)
+		}
+		fmt.Printf("Def: %#v,\t%v\n", def, err)
+		p.AllocatedSymbolsTable.AddSymbol(qid.Path, typedExpr.Sel.Name)
 		return &gotypes.Selector{
 			Item: typedExpr.Sel.Name,
 			Prefix: &gotypes.Identifier{
