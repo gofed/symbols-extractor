@@ -15,6 +15,7 @@ import (
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -58,7 +59,7 @@ type PackageContext struct {
 	// package name
 	PackageName string
 	// per file symbol table
-	SymbolTable *symboltable.Stack
+	SymbolTable *stack.Stack
 	// per file allocatable ST
 	AllocatedSymbolsTable *alloctable.Table
 
@@ -165,7 +166,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 	c := &PackageContext{
 		PackagePath:           packagePath,
 		FileIndex:             0,
-		SymbolTable:           symboltable.NewStack(),
+		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 	}
 
