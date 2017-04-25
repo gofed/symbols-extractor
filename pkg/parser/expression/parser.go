@@ -148,6 +148,56 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 	return nil
 }
 
+func (ep *Parser) retrieveQualifiedIdentifier(qid, symbolName string) (*gotypes.SymbolDef, error) {
+	qidDef, defErr := ep.SymbolTable.LookupVariable(qid)
+	if defErr != nil {
+		return nil, fmt.Errorf("Unable to retrieve qid %q from the local symbol table: %v", qid, defErr)
+	}
+
+	qidPQ, ok := qidDef.Def.(*gotypes.PackageQualifier)
+	if !ok {
+		return nil, fmt.Errorf("Local variable %q is not a QID, it is %#v instead", qid, qidDef.Def)
+	}
+	st, err := ep.GlobalSymbolTable.Lookup(qidPQ.Path)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid, err)
+	}
+	fmt.Printf("ST: %#v\n", st)
+	packageIdent, packageIdentType, piErr := st.Lookup(symbolName)
+	if piErr != nil {
+		return nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", symbolName, qid, piErr)
+	}
+	fmt.Printf("packageIdent: %#v\tpackageIdentType: %#v\n", packageIdent, packageIdentType)
+
+	ep.AllocatedSymbolsTable.AddSymbol(qidPQ.Path, symbolName)
+
+	return packageIdent, nil
+}
+
+func (ep *Parser) parseCompositeLitElements(lit *ast.CompositeLit, symbolDef *gotypes.SymbolDef) error {
+	switch clTypeDataType := symbolDef.Def.(type) {
+	case *gotypes.Struct:
+		if err := ep.parseCompositeLitStructElements(lit, clTypeDataType, symbolDef); err != nil {
+			return err
+		}
+	case *gotypes.Array:
+		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
+			return err
+		}
+	case *gotypes.Slice:
+		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
+			return err
+		}
+	case *gotypes.Map:
+		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("Unsupported 2 ClTypeIdentifierDef: %#v\n", symbolDef)
+	}
+	return nil
+}
+
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, error) {
 	// https://golang.org/ref/spec#Composite_literals
 	// The LiteralType's underlying type must be a struct, array, slice, or map
@@ -208,37 +258,33 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
 			return nil, err
 		}
-	case *gotypes.Identifier:
-		var ClTypeIdentifierDef *gotypes.SymbolDef
-		// If the LC type is an identifier, determine a type which is defined by the identifier
-		if idDef, ok := litTypedef.(*gotypes.Identifier); ok {
-			def, _, err := ep.SymbolTable.Lookup(idDef.Def)
-			if err != nil {
-				return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", idDef)
-			}
-			ClTypeIdentifierDef = def
-			fmt.Printf("SymbolDef: %#v\n", ClTypeIdentifierDef)
+	case *gotypes.Selector:
+		// If it is a selector, it must be qui.id (as the litTypeExpr is a type)
+		fmt.Printf("Selector: %#v,\t%#v\n", litTypeExpr.Prefix, litTypeExpr.Item)
+		qid, ok := litTypeExpr.Prefix.(*gotypes.Identifier)
+		if !ok {
+			return nil, fmt.Errorf("Expecting identifier in CL selector: %#v", litTypeExpr)
 		}
 
-		switch clTypeDataType := ClTypeIdentifierDef.Def.(type) {
-		case *gotypes.Struct:
-			if err := ep.parseCompositeLitStructElements(lit, clTypeDataType, ClTypeIdentifierDef); err != nil {
-				return nil, err
-			}
-		case *gotypes.Array:
-			if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-				return nil, err
-			}
-		case *gotypes.Slice:
-			if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-				return nil, err
-			}
-		case *gotypes.Map:
-			if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-				return nil, err
-			}
-		default:
-			panic(fmt.Errorf("Unsupported ClTypeIdentifierDef: %#v\n", ClTypeIdentifierDef))
+		symbolDef, err := ep.retrieveQualifiedIdentifier(qid.Def, litTypeExpr.Item)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("packageIdent: %#v\n", symbolDef)
+		if err := ep.parseCompositeLitElements(lit, symbolDef); err != nil {
+			return nil, err
+		}
+	case *gotypes.Identifier:
+		// If the LC type is an identifier, determine a type which is defined by the identifier
+		ClTypeIdentifierDef, _, err := ep.SymbolTable.Lookup(litTypeExpr.Def)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", litTypeExpr)
+		}
+		fmt.Printf("SymbolDef: %#v\n", ClTypeIdentifierDef)
+
+		if err := ep.parseCompositeLitElements(lit, ClTypeIdentifierDef); err != nil {
+			return nil, err
 		}
 	default:
 		panic(fmt.Errorf("Unsupported CL type: %#v", litTypedef))

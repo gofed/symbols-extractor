@@ -387,6 +387,15 @@ PACKAGE_STACK:
 		byteSlice, _ := json.Marshal(p.SymbolTable)
 		fmt.Printf("\nSymbol table: %v\n\n", string(byteSlice))
 
+		table, err := p.SymbolTable.Table(0)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Global storing %q\n", p.PackagePath)
+		if err := pp.globalSymbolTable.Add(p.PackagePath, table); err != nil {
+			panic(err)
+		}
+
 		// Pop the package from the package stack
 		pp.packageStack = pp.packageStack[1:]
 	}

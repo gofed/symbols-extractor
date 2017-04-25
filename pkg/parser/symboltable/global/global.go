@@ -18,6 +18,15 @@ func (t *Table) Lookup(pkg string) (*symboltable.Table, error) {
 	return table, nil
 }
 
+func (t *Table) Add(pkg string, st *symboltable.Table) error {
+	if _, ok := t.tables[pkg]; ok {
+		return fmt.Errorf("Symbol table for %q already exist in the global symbol table", pkg)
+	}
+
+	t.tables[pkg] = st
+	return nil
+}
+
 func New() *Table {
 	return &Table{
 		tables: make(map[string]*symboltable.Table, 0),
