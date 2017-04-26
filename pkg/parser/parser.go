@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
+	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
@@ -65,14 +66,6 @@ type PackageContext struct {
 	Functions []*ast.FuncDecl
 }
 
-// Payload stores symbols for parsing/processing
-type Payload struct {
-	DataTypes []*ast.TypeSpec
-	Variables []*ast.ValueSpec
-	Functions []*ast.FuncDecl
-	Imports   []*ast.ImportSpec
-}
-
 // Idea:
 // - process the input package
 // - retrieve all input package files
@@ -105,24 +98,9 @@ func New(packagePath string) *ProjectParser {
 	}
 }
 
-func processImportSpec(spec *ast.ImportSpec) *gotypes.PackageQualifier {
-	q := &gotypes.PackageQualifier{
-		Path: strings.Replace(spec.Path.Value, "\"", "", -1),
-	}
-
-	if spec.Name == nil {
-		// TODO(jchaloup): get the q.Name from the spec.Path's package symbol table
-		q.Name = path.Base(q.Path)
-	} else {
-		q.Name = spec.Name.Name
-	}
-
-	return q
-}
-
 func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImports []*gotypes.PackageQualifier) {
 	for _, spec := range imports {
-		q := processImportSpec(spec)
+		q := fileparser.MakePackageQualifier(spec)
 		// Check if the imported package is already processed
 		_, err := pp.globalSymbolTable.Lookup(q.Path)
 		if err != nil {
@@ -201,44 +179,19 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 	return c, nil
 }
 
-func (pp *ProjectParser) makePayload(f *ast.File) *Payload {
-	payload := &Payload{}
-
-	for _, spec := range f.Imports {
-		payload.Imports = append(payload.Imports, spec)
-	}
-
-	for _, d := range f.Decls {
-		switch decl := d.(type) {
-		case *ast.GenDecl:
-			for _, spec := range decl.Specs {
-				switch d := spec.(type) {
-				case *ast.TypeSpec:
-					payload.DataTypes = append(payload.DataTypes, d)
-				case *ast.ValueSpec:
-					payload.Variables = append(payload.Variables, d)
-				}
-			}
-		case *ast.FuncDecl:
-			payload.Functions = append(payload.Functions, decl)
-		}
-	}
-	return payload
-}
-
 func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
 		if fileContext.DataTypes != nil {
-			payload := &Payload{
+			payload := &fileparser.Payload{
 				DataTypes: fileContext.DataTypes,
 			}
 			fmt.Printf("Types: %#v\n", payload.DataTypes)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
-			if err := NewParser(p.Config).Parse(payload); err != nil {
+			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
 			fmt.Printf("Types: %#v\n", payload.DataTypes)
@@ -255,14 +208,14 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
 		if fileContext.Variables != nil {
-			payload := &Payload{
+			payload := &fileparser.Payload{
 				Variables: fileContext.Variables,
 			}
 			fmt.Printf("Vars: %#v\n", payload.Variables)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
-			if err := NewParser(p.Config).Parse(payload); err != nil {
+			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
 			fmt.Printf("Vars: %#v\n", payload.Variables)
@@ -279,14 +232,14 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
 		if fileContext.Functions != nil {
-			payload := &Payload{
+			payload := &fileparser.Payload{
 				Functions: fileContext.Functions,
 			}
 			fmt.Printf("Funcs: %#v\n", payload.Functions)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
-			if err := NewParser(p.Config).Parse(payload); err != nil {
+			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
 			fmt.Printf("Funcs: %#v\n", payload.Functions)
@@ -356,8 +309,8 @@ PACKAGE_STACK:
 			if err := p.Config.SymbolTable.Reset(); err != nil {
 				panic(err)
 			}
-			payload := pp.makePayload(fileContext.FileAST)
-			if err := NewParser(p.Config).Parse(payload); err != nil {
+			payload := fileparser.MakePayload(fileContext.FileAST)
+			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
 			fmt.Printf("Types: %#v\n", payload.DataTypes)
@@ -409,196 +362,4 @@ func (pp *ProjectParser) GlobalSymbolTable() *global.Table {
 func printDataType(dataType gotypes.DataType) {
 	byteSlice, _ := json.Marshal(dataType)
 	fmt.Printf("\n%v\n", string(byteSlice))
-}
-
-type FileParser struct {
-	*types.Config
-	// TODO(jchaloup):
-	// - create a project scoped symbol table in a higher level struct (e.g. ProjectParser)
-	// - merge all per file symbol tables continuously in the higher level struct (each time a new symbol definition is process)
-	//
-}
-
-func NewParser(config *types.Config) *FileParser {
-	return &FileParser{
-		Config: config,
-	}
-}
-
-func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
-	q := processImportSpec(spec)
-
-	// TODO(jchaloup): store non-qualified imports as well
-	if q.Name == "." {
-		return nil
-	}
-
-	err := fp.SymbolTable.AddImport(&gotypes.SymbolDef{Name: q.Name, Def: q})
-	fmt.Printf("PQ added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
-	fmt.Printf("PQ: %#v\n", q)
-	return err
-}
-
-func (fp *FileParser) parseImportedPackages(specs []*ast.ImportSpec) error {
-	for _, spec := range specs {
-		err := fp.parseImportSpec(spec)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, error) {
-	var postponed []*ast.TypeSpec
-	for _, spec := range specs {
-		// Store a symbol just with a name and origin.
-		// Setting the symbol's definition to nil means the symbol is being parsed (somewhere in the chain)
-		if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
-			Name:    spec.Name.Name,
-			Package: fp.PackageName,
-			Def:     nil,
-		}); err != nil {
-			return nil, err
-		}
-
-		// TODO(jchaloup): capture the current state of the allocated symbol table
-		// JIC the parsing ends with end error. Which can result into re-parsing later on.
-		// Which can result in re-allocation. It should be enough two-level allocated symbol table.
-		typeDef, err := fp.TypeParser.Parse(spec.Type)
-		if err != nil {
-			postponed = append(postponed, spec)
-			continue
-		}
-
-		if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
-			Name:    spec.Name.Name,
-			Package: fp.PackageName,
-			Def:     typeDef,
-		}); err != nil {
-			return nil, err
-		}
-	}
-	return postponed, nil
-}
-
-func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec) ([]*ast.ValueSpec, error) {
-	var postponed []*ast.ValueSpec
-	for _, spec := range specs {
-
-		defs, err := fp.StmtParser.ParseValueSpec(spec)
-		if err != nil {
-			postponed = append(postponed, spec)
-			continue
-		}
-		for _, def := range defs {
-			// TPDP(jchaloup): we should store all variables or non.
-			// Given the error is set only if the variable already exists, it should not matter so much.
-			if err := fp.SymbolTable.AddVariable(def); err != nil {
-				return nil, nil
-			}
-		}
-	}
-
-	return postponed, nil
-}
-
-func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error) {
-	var postponed []*ast.FuncDecl
-	for _, spec := range specs {
-
-		// process function definitions as the last
-		//fmt.Printf("%+v\n", d)
-		funcDef, err := fp.StmtParser.ParseFuncDecl(spec)
-		if err != nil {
-			// TODO(jchaloup): this should not error (ever)
-			// It can happen an identifier is unknown. Given all imported packages
-			// are already processed, the identifier comes from the same package, just
-			// from a different file. So the type parser should assume that and choose
-			// symbol's origin accordingaly.
-			postponed = append(postponed, spec)
-			continue
-		}
-
-		if err := fp.SymbolTable.AddFunction(&gotypes.SymbolDef{
-			Name:    spec.Name.Name,
-			Package: fp.PackageName,
-			Def:     funcDef,
-		}); err != nil {
-			return nil, err
-		}
-
-		// if an error is returned, put the function's AST into a context list
-		// and continue with other definition
-		if err := fp.StmtParser.ParseFuncBody(spec); err != nil {
-			postponed = append(postponed, spec)
-			continue
-		}
-	}
-
-	return postponed, nil
-}
-
-func (fp *FileParser) Parse(p *Payload) error {
-
-	// Given:
-	// type My1 My2
-	// type My2 My3
-	// ...
-	// type Myn Myn-1
-	//
-	// We can not re-process a symbol processing (due to unknown symbol) until we know
-	// we process the unknown symbol before it is needed.
-	// Given a type name is stored into the symbol table before its definition is parsed
-	// all data type names are known in the second round of the postponed type definition processing
-
-	// Imported packages first
-	{
-		err := fp.parseImportedPackages(p.Imports)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Data definitions as second
-	{
-		postponed, err := fp.parseTypeSpecs(p.DataTypes)
-		if err != nil {
-			return err
-		}
-		p.DataTypes = postponed
-	}
-
-	// // Vars/constants
-	{
-		postponed, err := fp.parseValueSpecs(p.Variables)
-		if err != nil {
-			return err
-		}
-		p.Variables = postponed
-	}
-
-	// // Funcs
-	{
-		postponed, err := fp.parseFuncs(p.Functions)
-		if err != nil {
-			return err
-		}
-		p.Functions = postponed
-	}
-
-	fmt.Printf("\n\n")
-	fp.AllocatedSymbolsTable.Print()
-
-	// byteSlice, _ := json.Marshal(fp.SymbolTable)
-	// fmt.Printf("\nSymbol table: %v\n", string(byteSlice))
-	//
-	// newObject := &symboltable.Table{}
-	// if err := json.Unmarshal(byteSlice, newObject); err != nil {
-	// 	fmt.Printf("Error: %v", err)
-	// }
-	//
-	// fmt.Printf("\nAfter: %#v", newObject)
-
-	return nil
 }
