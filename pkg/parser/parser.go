@@ -402,6 +402,10 @@ PACKAGE_STACK:
 	return nil
 }
 
+func (pp *ProjectParser) GlobalSymbolTable() *global.Table {
+	return pp.globalSymbolTable
+}
+
 func printDataType(dataType gotypes.DataType) {
 	byteSlice, _ := json.Marshal(dataType)
 	fmt.Printf("\n%v\n", string(byteSlice))

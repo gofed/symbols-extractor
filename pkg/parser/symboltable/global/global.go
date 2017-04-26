@@ -27,6 +27,14 @@ func (t *Table) Add(pkg string, st *symboltable.Table) error {
 	return nil
 }
 
+func (t *Table) Packages() []string {
+	var keys []string
+	for key, _ := range t.tables {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func New() *Table {
 	return &Table{
 		tables: make(map[string]*symboltable.Table, 0),
