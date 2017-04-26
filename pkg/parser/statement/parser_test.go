@@ -13,7 +13,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -24,7 +24,7 @@ import (
 func prepareParser(pkgName string) *types.Config {
 	c := &types.Config{
 		PackageName:           pkgName,
-		SymbolTable:           symboltable.NewStack(),
+		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 	}
 
