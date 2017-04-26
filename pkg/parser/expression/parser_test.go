@@ -8,6 +8,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
+	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	"github.com/gofed/symbols-extractor/pkg/testing/utils"
@@ -27,6 +28,7 @@ func prepareParser(pkgName string) *types.Config {
 	c.SymbolTable.Push()
 	c.TypeParser = typeparser.New(c)
 	c.ExprParser = New(c)
+	c.StmtParser = stmtparser.New(c)
 
 	return c
 }

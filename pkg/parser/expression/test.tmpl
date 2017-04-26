@@ -1,0 +1,123 @@
+package expression
+
+import (
+    "fmt"
+    "go/ast"
+    "go/parser"
+    "testing"
+    "reflect"
+
+//    "github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+//    "github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+    "github.com/gofed/symbols-extractor/pkg/parser/types"
+
+//    typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+      gotypes    "github.com/gofed/symbols-extractor/pkg/types"
+)
+
+const gopkg string = "github.com/gofed/symbols-extractor/pkg/parser/testdata/valid"
+const gocode string = `
+package exprtest
+{{range .SymTab}}
+  {{.}}
+{{end}}
+`
+
+{{define "nlspace"}}
+
+{{end}}
+
+{{/*
+# The skeleton for each target:
+#  {{if eq $target "<set-target-you-want-to-use-here>"}}
+#    {{range $i, $elem := .Tests}}func Test{{tittle $target}}{{$i}} (t *testing.T) {
+#      // PUT YOUR CODE HERE
+#   }{{template "nlspace"}}{{end}}{{end}}
+*/}}
+
+func initST() (*types.Config, error) {
+   config := prepareParser(gopkg)
+   astF, _, err := getAst(gopkg, "", gocode)
+   if err != nil {
+     return nil,  fmt.Errorf("Broken test! Fix test suite: %v", err)
+   }
+   if err = parseNonFunc(config, astF); err != nil {
+     return nil, err
+   }
+
+   if err = parseFuncDecls(config, astF); err != nil {
+     return nil, fmt.Errorf("parseFuncDecls: %v", err)
+   }
+
+   return config, nil
+}
+
+func initExprTest(expr_str string) (*types.Config, ast.Expr, error) {
+        config, errT := initST()
+        if errT != nil {
+          return nil, nil, errT
+        }
+
+        expr, errE := parser.ParseExpr(expr_str)
+        if errE != nil {
+          return nil, nil, fmt.Errorf("Broken test! Fix test suite: %v", errE)
+        }
+
+        return config, expr, nil
+}
+
+{{range .Targets}}
+  {{$target := .Target}}
+
+  {{if eq $target "parseBinaryExpr"}}{{range $i, $elem := .Tests}}
+    func Test{{tittle $target}}{{$i}} (t *testing.T) {
+        expr_str := "{{.Code}}"
+        expected_type := &gotypes.{{BuiltinOrIdent .Expected}}{{"{"}}
+            Def:"{{.Expected}}",
+            {{if not (isBuiltin .Expected)}}Package: gopkg,{{end}}
+        {{"}"}}
+        config, expr, errE := initExprTest(expr_str)
+        if errE != nil {
+          t.Error(errE)
+          return
+        }
+
+        current_type, err := config.ExprParser.(*Parser).parseBinaryExpr(expr.(*ast.BinaryExpr))
+        if err != nil {
+          t.Errorf("Unexpected error for expr '%s': %v\n", expr_str, err)
+          return
+        }
+
+        if !reflect.DeepEqual(current_type, expected_type) {
+          msgf := "Expected type '%#v', received '%#v'. Expr: '%s' "
+          t.Errorf(msgf, expected_type, current_type, expr_str)
+        }
+  }{{template "nlspace"}}{{end}}{{end}}
+
+
+  {{/* =========================================================== */}}
+
+  {{if eq $target "parseCallExprii"}}{{range $i, $elem := .Tests}}
+    func Test{{tittle $target}}{{$i}} (t *testing.T) {
+        expr_str := "{{.Code}}"
+        config, expr, errE := initExprTest(expr_str)
+        if errE != nil {
+          t.Errorf("%v", errE)
+          return
+        }
+
+        res, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
+        if err != nil {
+          msgf := "Unexpected error for expr '%s': %v\n"
+          t.Errorf(msgf, expr_str, err)
+          return
+        }
+
+        fmt.Printf("%#v\n", res)
+        //if res.GetType() != "{{.Expected}}" {
+        //  msgf := "Expected type '%s', received '%s' instead for expr: '%s' "
+        //  t.Errorf(msgf, "{{.Expected}}", res.GetType(), expr_str)
+        //}
+  }{{template "nlspace"}}{{end}}{{end}}
+{{end}}
+

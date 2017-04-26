@@ -1,0 +1,101 @@
+---
+symboltable:
+  - "type MyInt int"
+  - "var FooMyInt MyInt"
+  - "type MyStruct struct { Foo int }"
+  - "func MyFunc(MyInt) MyInt"
+  - "func MyFuncStr(MyInt) string"
+targets:
+  -
+    target: parseBinaryExpr
+    tests:
+      -
+        code: "2 + 4"
+        expected: int
+      -
+        code: "8 * 3.1"
+        expected: float64
+      -
+        code: "3 * 4 * 5"
+        expected: int
+      -
+        code: "float32(4) - float32(3)"
+        expected: float32
+      -
+        code: "MyInt(2) + 3"
+        expected: MyInt
+      -
+        code: "MyFunc(2) + 3"
+        expected: MyInt
+      -
+        code: "2 + MyFunc(3)"
+        expected: MyInt
+      -
+        code: "FooMyInt + 5"
+        expected: MyInt
+      -
+        code: "MyFunc(MyInt(3)) + MyFunc(MyInt(3))"
+        expected: MyInt
+      -
+        code: "MyInt(MyFunc(MyInt(3))) + MyFunc(MyInt(3))"
+        expected: MyInt
+      -
+        code: '\"Hello\" + \" Johnny!\"'
+        expected: string
+      - 
+        code: "2 + int(MyFunc(3))"
+        expected: int
+      -
+        code: "2 - 4"
+        expected: int
+      -
+        code: "2 / 4"
+        expected: int
+      -
+        code: "2 % 4"
+        expected: int
+      -
+        code: "false || true"
+        expected: bool
+      -
+        code: "false && true"
+        expected: bool
+      -
+        code: "!bool(false) && bool(true)"
+        expected: bool
+      -
+        code: "5 > 1"
+        expected: bool
+      -
+        code: "5 < 1"
+        expected: bool
+      -
+        code: "5 <= 1"
+        expected: bool
+      -
+        code: "5 >= 1"
+        expected: bool
+      -
+        code: "MyFunc(15) == 15 "
+        expected: bool
+      -
+        code: "5 != 1"
+        expected: bool
+      -
+        code: "!bool(true) ==  (1 != 5)"
+        expected: bool
+      -
+        code: "true || ((5+1) * (MyFunc(11) / MyInt(14))) > 0"
+        expected: bool
+  #-
+  #  target: parseCallExpr
+  #  tests:
+  #    -
+  #      code: "MyFunc(MyInt(3))"
+  #      expected:
+  #      - int
+  #      - int
+  #    -
+  #      code: "MyFuncStr(MyInt(2))"
+  #      expected: string
+...
