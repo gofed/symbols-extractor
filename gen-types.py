@@ -206,9 +206,10 @@ def printSymbolDefinition(dataTypes):
         template_str = """
 
 type SymbolDef struct {
-       Pos  string   `json:"pos"`
-       Name string   `json:"name"`
-       Def  DataType `json:"def"`
+       Pos     string   `json:"pos"`
+       Name    string   `json:"name"`
+       Package string   `json:"package"`
+       Def     DataType `json:"def"`
 }
 
 func (o *SymbolDef) UnmarshalJSON(b []byte) error {
@@ -265,7 +266,7 @@ type DataType interface {
 	GetType() string
 }"""
 
-    dataTypes = ["identifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
+    dataTypes = ["identifier", "builtin", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
 
     for definition in data["definitions"]:
         if definition not in dataTypes:

@@ -45,6 +45,7 @@
 								"def": {
 									"oneOf": [
 										{ "$ref": "#/definitions/identifier" },
+										{ "$ref": "#/definitions/builtin" },
 										{ "$ref": "#/definitions/selector" },
 										{ "$ref": "#/definitions/channel" },
 										{ "$ref": "#/definitions/slice" },
@@ -100,6 +101,7 @@
 								"def": {
 									"oneOf": [
 										{ "$ref": "#/definitions/identifier" },
+										{ "$ref": "#/definitions/builtin" },
 										{ "$ref": "#/definitions/selector" },
 										{ "$ref": "#/definitions/channel" },
 										{ "$ref": "#/definitions/slice" },
@@ -131,6 +133,7 @@
 								"def": {
 									"oneOf": [
 										{ "$ref": "#/definitions/identifier" },
+										{ "$ref": "#/definitions/builtin" },
 										{ "$ref": "#/definitions/selector" },
 										{ "$ref": "#/definitions/channel" },
 										{ "$ref": "#/definitions/slice" },
@@ -168,6 +171,25 @@
 				"def": {
 					"type": "string",
 					"description": "Primitive type or ID",
+					"minLength": 1
+				}
+			},
+			"required": ["type", "def"]
+		},
+		"builtin": {
+			"type": "object",
+			"description": "Built-in type definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Built-in type identifier",
+					"oneOf": [
+						{"enum": ["builtin"]}
+					]
+				},
+				"def": {
+					"type": "string",
+					"description": "Primitive type",
 					"minLength": 1
 				}
 			},
@@ -222,6 +244,7 @@
 					"description": "Value definition",
 					"oneOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -253,6 +276,7 @@
 					"description": "Element type definition",
 					"oneOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -284,6 +308,7 @@
 					"description": "element type definition",
 					"anyOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -315,6 +340,7 @@
 					"description": "Key type definition",
 					"anyOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -332,6 +358,7 @@
 					"description": "Key type definition",
 					"anyOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -364,6 +391,7 @@
 					"description": "Pointed type definition",
 					"anyOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -381,7 +409,7 @@
 		},
 		"ellipsis": {
 			"type": "object",
-			"description": "Pointer definition",
+			"description": "Ellipsis definition",
 			"properties": {
 				"type": {
 					"type": "string",
@@ -395,6 +423,7 @@
 					"description": "Ellipses type definition",
 					"anyOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/channel" },
 						{ "$ref": "#/definitions/slice" },
@@ -429,6 +458,7 @@
 						"description": "Parameter type definition",
 						"anyOf": [
 							{ "$ref": "#/definitions/identifier" },
+							{ "$ref": "#/definitions/builtin" },
 							{ "$ref": "#/definitions/selector" },
 							{ "$ref": "#/definitions/channel" },
 							{ "$ref": "#/definitions/slice" },
@@ -452,6 +482,7 @@
 						"description": "Results type definition",
 						"anyOf": [
 							{ "$ref": "#/definitions/identifier" },
+							{ "$ref": "#/definitions/builtin" },
 							{ "$ref": "#/definitions/selector" },
 							{ "$ref": "#/definitions/channel" },
 							{ "$ref": "#/definitions/slice" },
@@ -486,6 +517,7 @@
 					"description": "Receiver type definition",
 					"anyOf": [
 						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/builtin" },
 						{ "$ref": "#/definitions/selector" },
 						{ "$ref": "#/definitions/pointer" }
 					]
@@ -528,7 +560,7 @@
 								"description": "Function type definition",
 								"oneOf": [
 									{ "$ref": "#/definitions/function" }
-								]	
+								]
 							}
 						},
 						"required": ["name", "def"]
@@ -565,6 +597,7 @@
 								"description": "Type definition",
 								"anyOf": [
 									{ "$ref": "#/definitions/identifier" },
+									{ "$ref": "#/definitions/builtin" },
 									{ "$ref": "#/definitions/selector" },
 									{ "$ref": "#/definitions/channel" },
 									{ "$ref": "#/definitions/slice" },

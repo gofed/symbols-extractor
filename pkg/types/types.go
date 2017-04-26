@@ -61,6 +61,13 @@ func (o *Function) UnmarshalJSON(b []byte) error {
 					}
 					o.Params = append(o.Params, r)
 
+				case BuiltinType:
+					r := &Builtin{}
+					if err := json.Unmarshal(*item, &r); err != nil {
+						return err
+					}
+					o.Params = append(o.Params, r)
+
 				case SelectorType:
 					r := &Selector{}
 					if err := json.Unmarshal(*item, &r); err != nil {
@@ -162,6 +169,13 @@ func (o *Function) UnmarshalJSON(b []byte) error {
 
 				case IdentifierType:
 					r := &Identifier{}
+					if err := json.Unmarshal(*item, &r); err != nil {
+						return err
+					}
+					o.Results = append(o.Results, r)
+
+				case BuiltinType:
+					r := &Builtin{}
 					if err := json.Unmarshal(*item, &r); err != nil {
 						return err
 					}
@@ -292,6 +306,13 @@ func (o *Map) UnmarshalJSON(b []byte) error {
 				}
 				o.Keytype = r
 
+			case BuiltinType:
+				r := &Builtin{}
+				if err := json.Unmarshal(*objMap["keytype"], &r); err != nil {
+					return err
+				}
+				o.Keytype = r
+
 			case SelectorType:
 				r := &Selector{}
 				if err := json.Unmarshal(*objMap["keytype"], &r); err != nil {
@@ -378,6 +399,13 @@ func (o *Map) UnmarshalJSON(b []byte) error {
 
 			case IdentifierType:
 				r := &Identifier{}
+				if err := json.Unmarshal(*objMap["valuetype"], &r); err != nil {
+					return err
+				}
+				o.Valuetype = r
+
+			case BuiltinType:
+				r := &Builtin{}
 				if err := json.Unmarshal(*objMap["valuetype"], &r); err != nil {
 					return err
 				}
@@ -500,6 +528,13 @@ func (o *Slice) UnmarshalJSON(b []byte) error {
 
 			case IdentifierType:
 				r := &Identifier{}
+				if err := json.Unmarshal(*objMap["elmtype"], &r); err != nil {
+					return err
+				}
+				o.Elmtype = r
+
+			case BuiltinType:
+				r := &Builtin{}
 				if err := json.Unmarshal(*objMap["elmtype"], &r); err != nil {
 					return err
 				}
@@ -629,6 +664,13 @@ func (o *StructFieldsItem) UnmarshalJSON(b []byte) error {
 
 			case IdentifierType:
 				r := &Identifier{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
+			case BuiltinType:
+				r := &Builtin{}
 				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
 					return err
 				}
@@ -823,6 +865,42 @@ func (o *Selector) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+const BuiltinType = "builtin"
+
+type Builtin struct {
+	Def string `json:"def"`
+}
+
+func (o *Builtin) GetType() string {
+	return BuiltinType
+}
+
+func (o *Builtin) MarshalJSON() (b []byte, e error) {
+	type Copy Builtin
+	return json.Marshal(&struct {
+		Type string `json:"type"`
+		*Copy
+	}{
+		Type: BuiltinType,
+		Copy: (*Copy)(o),
+	})
+}
+
+func (o *Builtin) UnmarshalJSON(b []byte) error {
+	var objMap map[string]*json.RawMessage
+
+	if err := json.Unmarshal(b, &objMap); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["def"] actually exists
+	if err := json.Unmarshal(*objMap["def"], &o.Def); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 const InterfaceMethodsItemType = "interfacemethodsitem"
 
 type InterfaceMethodsItem struct {
@@ -980,6 +1058,13 @@ func (o *Ellipsis) UnmarshalJSON(b []byte) error {
 				}
 				o.Def = r
 
+			case BuiltinType:
+				r := &Builtin{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
 			case SelectorType:
 				r := &Selector{}
 				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
@@ -1097,6 +1182,13 @@ func (o *Array) UnmarshalJSON(b []byte) error {
 
 			case IdentifierType:
 				r := &Identifier{}
+				if err := json.Unmarshal(*objMap["elmtype"], &r); err != nil {
+					return err
+				}
+				o.Elmtype = r
+
+			case BuiltinType:
+				r := &Builtin{}
 				if err := json.Unmarshal(*objMap["elmtype"], &r); err != nil {
 					return err
 				}
@@ -1260,6 +1352,13 @@ func (o *Pointer) UnmarshalJSON(b []byte) error {
 				}
 				o.Def = r
 
+			case BuiltinType:
+				r := &Builtin{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
 			case SelectorType:
 				r := &Selector{}
 				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
@@ -1405,6 +1504,13 @@ func (o *Method) UnmarshalJSON(b []byte) error {
 				}
 				o.Receiver = r
 
+			case BuiltinType:
+				r := &Builtin{}
+				if err := json.Unmarshal(*objMap["receiver"], &r); err != nil {
+					return err
+				}
+				o.Receiver = r
+
 			case SelectorType:
 				r := &Selector{}
 				if err := json.Unmarshal(*objMap["receiver"], &r); err != nil {
@@ -1473,6 +1579,13 @@ func (o *Channel) UnmarshalJSON(b []byte) error {
 
 			case IdentifierType:
 				r := &Identifier{}
+				if err := json.Unmarshal(*objMap["value"], &r); err != nil {
+					return err
+				}
+				o.Value = r
+
+			case BuiltinType:
+				r := &Builtin{}
 				if err := json.Unmarshal(*objMap["value"], &r); err != nil {
 					return err
 				}
@@ -1586,6 +1699,13 @@ func (o *SymbolDef) UnmarshalJSON(b []byte) error {
 
 	case IdentifierType:
 		r := &Identifier{}
+		if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+			return err
+		}
+		o.Def = r
+
+	case BuiltinType:
+		r := &Builtin{}
 		if err := json.Unmarshal(*objMap["def"], &r); err != nil {
 			return err
 		}
