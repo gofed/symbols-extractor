@@ -1,13 +1,13 @@
 package file
 
 import (
-	"fmt"
 	"go/ast"
 	"path"
 	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 // Payload stores symbols for parsing/processing
@@ -77,8 +77,7 @@ func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
 	}
 
 	err := fp.SymbolTable.AddImport(&gotypes.SymbolDef{Name: q.Name, Def: q})
-	fmt.Printf("PQ added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
-	fmt.Printf("PQ: %#v\n", q)
+	glog.Infof("PackageQualifier added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
 	return err
 }
 
@@ -151,7 +150,6 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 	for _, spec := range specs {
 
 		// process function definitions as the last
-		//fmt.Printf("%+v\n", d)
 		funcDef, err := fp.StmtParser.ParseFuncDecl(spec)
 		if err != nil {
 			// TODO(jchaloup): this should not error (ever)
@@ -230,8 +228,7 @@ func (fp *FileParser) Parse(p *Payload) error {
 		p.Functions = postponed
 	}
 
-	fmt.Printf("\n\n")
-	fp.AllocatedSymbolsTable.Print()
+	//fp.AllocatedSymbolsTable.Print()
 
 	return nil
 }

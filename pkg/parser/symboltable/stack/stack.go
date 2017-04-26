@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 // Stack is a multi-level symbol table for parsing blocks of code
@@ -29,7 +30,7 @@ func New() *Stack {
 func (s *Stack) Push() {
 	s.Tables = append(s.Tables, symboltable.NewTable())
 	s.Size++
-	fmt.Printf("Push: %v\n", s.Size)
+	glog.Infof("Pushing to symbol table stack %v\n", s.Size)
 }
 
 // Pop pops the top most symbol table from the stack
@@ -50,7 +51,7 @@ func (s *Stack) AddImport(sym *gotypes.SymbolDef) error {
 
 func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
 	if s.Size > 0 {
-		fmt.Printf("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
+		glog.Infof("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
 		return s.Tables[s.Size-1].AddVariable(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
@@ -58,7 +59,7 @@ func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
 
 func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
 	if s.Size > 0 {
-		fmt.Printf("====Adding %#v datatype at level %v\n", sym, s.Size-1)
+		glog.Infof("====Adding %#v datatype at level %v\n", sym, s.Size-1)
 		return s.Tables[s.Size-1].AddDataType(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
@@ -76,7 +77,6 @@ func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupVariable(name)
 		if err == nil {
-			fmt.Printf("Table %v: symbol: %#v\n", i, def)
 			return def, nil
 		}
 	}
@@ -93,7 +93,6 @@ func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, symboltable.SymbolType,
 	for i := s.Size - 1; i >= 0; i-- {
 		def, st, err := s.Tables[i].Lookup(name)
 		if err == nil {
-			fmt.Printf("Table %v: symbol: %#v\n", i, def)
 			return def, st, nil
 		}
 	}
