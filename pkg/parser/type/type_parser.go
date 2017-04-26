@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 
+	"github.com/golang/glog"
+
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
@@ -35,6 +37,7 @@ type Parser struct {
 }
 
 func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error) {
+	glog.Infof("Processing identifier: %#v\n", typedExpr)
 	// TODO(jchaloup): store symbol's origin as well (in a case a symbol is imported without qid)
 	// Check if the identifier is in the any of the global symbol tables (in a case a symbol is imported without qid).
 	// If it is, the origin is known. If it is not, the origin is the current package.
@@ -65,6 +68,7 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 }
 
 func (p *Parser) parseStar(typedExpr *ast.StarExpr) (*gotypes.Pointer, error) {
+	glog.Infof("Processing StarExpr: %#v\n", typedExpr)
 	// X.Sel
 	def, err := p.Parse(typedExpr.X)
 	if err != nil {
@@ -76,6 +80,7 @@ func (p *Parser) parseStar(typedExpr *ast.StarExpr) (*gotypes.Pointer, error) {
 }
 
 func (p *Parser) parseChan(typedExpr *ast.ChanType) (*gotypes.Channel, error) {
+	glog.Infof("Processing ChanType: %#v\n", typedExpr)
 	def, err := p.Parse(typedExpr.Value)
 	if err != nil {
 		return nil, err
@@ -98,6 +103,7 @@ func (p *Parser) parseChan(typedExpr *ast.ChanType) (*gotypes.Channel, error) {
 }
 
 func (p *Parser) parseEllipsis(typedExpr *ast.Ellipsis) (*gotypes.Ellipsis, error) {
+	glog.Infof("Processing Ellipsis: %#v\n", typedExpr)
 	// X.Sel
 	def, err := p.Parse(typedExpr.Elt)
 	if err != nil {
@@ -109,6 +115,7 @@ func (p *Parser) parseEllipsis(typedExpr *ast.Ellipsis) (*gotypes.Ellipsis, erro
 }
 
 func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, error) {
+	glog.Infof("Processing SelectorExpr: %#v\n", typedExpr)
 	// X.Sel a.k.a Prefix.Item
 
 	id, ok := typedExpr.X.(*ast.Ident)
@@ -118,7 +125,6 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 	//                 most-likely not as this construction is not allowed inside a data type definition
 	if ok {
 		// Get package path
-		fmt.Printf("Getting package path for %v\n", id.Name)
 		def, err := p.SymbolTable.LookupVariable(id.Name)
 		if err != nil {
 			return nil, fmt.Errorf("Qualified id %q not found in the symbol table", id.Name)
@@ -127,7 +133,6 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 		if !ok {
 			return nil, fmt.Errorf("Qualified id %q does not correspond to an import path", id.Name)
 		}
-		fmt.Printf("Def: %#v,\t%v\n", def, err)
 		p.AllocatedSymbolsTable.AddSymbol(qid.Path, typedExpr.Sel.Name)
 		return &gotypes.Selector{
 			Item: typedExpr.Sel.Name,
@@ -148,6 +153,7 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 }
 
 func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error) {
+	glog.Infof("Processing StructType: %#v\n", typedExpr)
 	structType := &gotypes.Struct{}
 	structType.Fields = make([]gotypes.StructFieldsItem, 0)
 
@@ -189,6 +195,7 @@ func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error)
 }
 
 func (p *Parser) parseMap(typedExpr *ast.MapType) (*gotypes.Map, error) {
+	glog.Infof("Processing MapType: %#v\n", typedExpr)
 	keyDef, keyErr := p.Parse(typedExpr.Key)
 	if keyErr != nil {
 		return nil, keyErr
@@ -206,6 +213,7 @@ func (p *Parser) parseMap(typedExpr *ast.MapType) (*gotypes.Map, error) {
 }
 
 func (p *Parser) parseArray(typedExpr *ast.ArrayType) (gotypes.DataType, error) {
+	glog.Infof("Processing ArrayType: %#v\n", typedExpr)
 	def, err := p.Parse(typedExpr.Elt)
 	if err != nil {
 		return nil, err
@@ -223,6 +231,7 @@ func (p *Parser) parseArray(typedExpr *ast.ArrayType) (gotypes.DataType, error) 
 }
 
 func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interface, error) {
+	glog.Infof("Processing InterfaceType: %#v\n", typedExpr)
 	// TODO(jchaloup): extend the interface definition with embedded interfaces
 	interfaceObj := &gotypes.Interface{}
 	var methods []gotypes.InterfaceMethodsItem
@@ -248,6 +257,7 @@ func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interfac
 }
 
 func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, error) {
+	glog.Infof("Processing FuncType: %#v\n", typedExpr)
 	functionType := &gotypes.Function{}
 
 	var params []gotypes.DataType

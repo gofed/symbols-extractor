@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 // Parser parses go statements, e.g. block, declaration and definition of a function/method
@@ -22,13 +23,13 @@ func New(config *types.Config) types.StatementParser {
 }
 
 func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes.DataType, error) {
+	glog.Infof("Processing Receiver: %#v\n", receiver)
 	// Receiver's type must be of the form T or *T (possibly using parentheses) where T is a type name.
 	switch typedExpr := receiver.(type) {
 	case *ast.Ident:
 		// search the identifier in the symbol table
 		def, _, err := ep.SymbolTable.Lookup(typedExpr.Name)
 		if err != nil {
-			fmt.Printf("Lookup error: %v\n", err)
 			// Return an error so the function body processing can be postponed
 			// TODO(jchaloup): return more information about the missing symbol so the
 			// body can be re-processed right after the symbol is stored into the symbol table.
@@ -43,13 +44,11 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 			Def: typedExpr.Name,
 		}, nil
 	case *ast.StarExpr:
-		fmt.Printf("Start: %#v\n", typedExpr)
 		switch idExpr := typedExpr.X.(type) {
 		case *ast.Ident:
 			// search the identifier in the symbol table
 			def, _, err := ep.SymbolTable.Lookup(idExpr.Name)
 			if err != nil {
-				fmt.Printf("Lookup error: %v\n", err)
 				// Return an error so the function body processing can be postponed
 				// TODO(jchaloup): return more information about the missing symbol so the
 				// body can be re-processed right after the symbol is stored into the symbol table.
@@ -74,6 +73,7 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 }
 
 func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
+	glog.Infof("Processing function declaration: %#v\n", d)
 	// parseFunction does not store name of params, resp. results
 	// as the names are not important. Just params, resp. results ordering is.
 	// Thus, this method is used to parse function's signature only.
@@ -118,6 +118,7 @@ func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
 }
 
 func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
+	glog.Infof("Processing function body: %#v\n", funcDecl)
 	// Function/method signature is already stored in a symbol table.
 	// From function/method's AST get its receiver, parameters and results,
 	// construct a first level of a multi-level symbol table stack..
@@ -132,9 +133,7 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 
 	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
 	for _, statement := range funcDecl.Body.List {
-		fmt.Printf("\n\nstatement: %#v\n", statement)
 		if err := sp.Parse(statement); err != nil {
-			panic(err)
 			return err
 		}
 	}
@@ -147,14 +146,10 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 }
 
 func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, error) {
-	fmt.Printf("ValueSpec: %#v\n", spec)
-	fmt.Printf("ValueSpec.Names: %#v\n", spec.Names)
-	fmt.Printf("ValueSpec.Type: %#v\n", spec.Type)
-	fmt.Printf("ValueSpec.Values: %#v\n", spec.Values)
+	glog.Infof("Processing value spec: %#v\n", spec)
+
 	nLen := len(spec.Names)
 	vLen := len(spec.Values)
-
-	fmt.Printf("(%v, %v)\n", nLen, vLen)
 
 	if nLen < vLen {
 		return nil, fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
@@ -168,8 +163,6 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		}
 		typeDef = def
 	}
-
-	fmt.Printf("typeDef: %#v\n", typeDef)
 
 	var symbolsDef = make([]*gotypes.SymbolDef, 0)
 
@@ -186,7 +179,6 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		if len(valueExpr) != 1 {
 			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExpr)
 		}
-		fmt.Printf("Name: %#v, Value: %#v, Type: %#v\n", spec.Names[i].Name, valueExpr[0], typeDef)
 		// Put the variables/consts into the symbol table
 		if spec.Names[i].Name == "_" {
 			continue
@@ -224,14 +216,12 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 }
 
 func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
-	// expr.
-	fmt.Printf("decl: %#v\n", statement.Decl)
 	switch decl := statement.Decl.(type) {
 	case *ast.GenDecl:
 		for _, spec := range decl.Specs {
-			fmt.Printf("gendecl.spec: %#v\n", spec)
 			switch genDeclSpec := spec.(type) {
 			case *ast.ValueSpec:
+				glog.Infof("Processing value spec declaration %#v\n", genDeclSpec)
 				defs, err := sp.ParseValueSpec(genDeclSpec)
 				if err != nil {
 					return err
@@ -244,7 +234,7 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 					}
 				}
 			case *ast.TypeSpec:
-				fmt.Printf("TypeSpec: %#v\n", genDeclSpec)
+				glog.Infof("Processing type spec declaration %#v\n", genDeclSpec)
 
 				if err := sp.SymbolTable.AddDataType(&gotypes.SymbolDef{
 					Name:    genDeclSpec.Name.Name,
@@ -261,7 +251,6 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 				if err != nil {
 					return err
 				}
-				fmt.Printf("TypeDef: %#v\n", typeDef)
 
 				if err := sp.SymbolTable.AddDataType(&gotypes.SymbolDef{
 					Name:    genDeclSpec.Name.Name,
@@ -278,21 +267,23 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 	default:
 		panic(fmt.Errorf("Unrecognized declaration: %#v", statement.Decl))
 	}
-	//panic("Decl panic")
 	return nil
 }
 
 func (sp *Parser) parseLabeledStmt(statement *ast.LabeledStmt) error {
+	glog.Infof("Processing labeled statement  %#v\n", statement)
 	// the label is typeless
 	return sp.Parse(statement.Stmt)
 }
 
 func (sp *Parser) parseExprStmt(statement *ast.ExprStmt) error {
+	glog.Infof("Processing expression statement  %#v\n", statement)
 	_, err := sp.ExprParser.Parse(statement.X)
 	return err
 }
 
 func (sp *Parser) parseSendStmt(statement *ast.SendStmt) error {
+	glog.Infof("Processing statement statement  %#v\n", statement)
 	if _, err := sp.ExprParser.Parse(statement.Chan); err != nil {
 		return err
 	}
@@ -304,6 +295,7 @@ func (sp *Parser) parseSendStmt(statement *ast.SendStmt) error {
 }
 
 func (sp *Parser) parseIncDecStmt(statement *ast.IncDecStmt) error {
+	glog.Infof("Processing inc dec statement  %#v\n", statement)
 	// both --,++ has no type information
 	// TODO(jchaloup): check the --/++ can be carried over the statement.X
 	_, err := sp.ExprParser.Parse(statement.X)
@@ -311,6 +303,7 @@ func (sp *Parser) parseIncDecStmt(statement *ast.IncDecStmt) error {
 }
 
 func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
+	glog.Infof("Processing assignment statement  %#v\n", statement)
 	// expr.Lhs = expr.Rhs
 	// left-hand sice expression must be an identifier or a selector
 	exprsSize := len(statement.Lhs)
@@ -327,14 +320,12 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	// If the token is token.ASSIGN the variable must be in the symbol table.
 	// If it is and has the same type, do not do anything, Error, if the type is different.
 	// If it is not there yet, error.
-	fmt.Printf("Ass token: %v %v %v\n", statement.Tok, token.ASSIGN, token.DEFINE)
-
 	for i := 0; i < exprsSize; i++ {
 		// If the left-hand side id a selector (e.g. struct.field), we alredy know data type of the id.
 		// So, just store the field's data type into the allocated symbol table
 		//switch lhsExpr := expr.
-		fmt.Printf("Lhs: %#v\n", statement.Lhs[i])
-		fmt.Printf("Rhs: %#v\n", statement.Rhs[i])
+		glog.Infof("Assignment LHs[%v]: %#v\n", i, statement.Lhs[i])
+		glog.Infof("Assignment RHs[%v]: %#v\n", i, statement.Rhs[i])
 
 		def, err := sp.ExprParser.Parse(statement.Rhs[i])
 		if err != nil {
@@ -344,8 +335,6 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		if len(def) != 1 {
 			return fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, def)
 		}
-
-		fmt.Printf("Ass type: %#v\n", def)
 
 		switch lhsExpr := statement.Lhs[i].(type) {
 		case *ast.Ident:
@@ -371,19 +360,21 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 }
 
 func (sp *Parser) parseGoStmt(statement *ast.GoStmt) error {
+	glog.Infof("Processing Go statement  %#v\n", statement)
 	_, err := sp.ExprParser.Parse(statement.Call)
 	return err
 }
 
 func (sp *Parser) parseBranchStmt(statement *ast.BranchStmt) error {
+	glog.Infof("Processing branch statement  %#v\n", statement)
 	return nil
 }
 
 func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
+	glog.Infof("Processing switch statement  %#v\n", statement)
 	// ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] "{" { ExprCaseClause } "}" .
 	// ExprCaseClause = ExprSwitchCase ":" StatementList .
 	// ExprSwitchCase = "case" ExpressionList | "default" .
-	fmt.Printf("Init: %#v\n", statement.Init)
 	if statement.Init != nil {
 		sp.SymbolTable.Push()
 		defer sp.SymbolTable.Pop()
@@ -393,7 +384,6 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 		}
 	}
 
-	fmt.Printf("Tag: %#v\n", statement.Tag)
 	if statement.Tag != nil {
 		_, err := sp.ExprParser.Parse(statement.Tag)
 		if err != nil {
@@ -401,21 +391,17 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 		}
 	}
 
-	fmt.Printf("body: %#v\n", statement.Body.List)
-
 	for _, stmt := range statement.Body.List {
 		caseStmt, ok := stmt.(*ast.CaseClause)
 		if !ok {
 			return fmt.Errorf("Expected *ast.CaseClause in switch's body. Got %#v\n", stmt)
 		}
 		for _, caseExpr := range caseStmt.List {
-			fmt.Printf("caseExpr: %#v\n", caseExpr)
 			if _, err := sp.ExprParser.Parse(caseExpr); err != nil {
 				return nil
 			}
 		}
 
-		fmt.Printf("caseStmt.Body: %#v\n", caseStmt.Body)
 		if caseStmt.Body != nil {
 			if err := sp.Parse(&ast.BlockStmt{
 				List: caseStmt.Body,
@@ -429,7 +415,7 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 }
 
 func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
-	fmt.Printf("Init: %#v\n", statement.Init)
+	glog.Infof("Processing type switch statement  %#v\n", statement)
 	if statement.Init != nil {
 		sp.SymbolTable.Push()
 		defer sp.SymbolTable.Pop()
@@ -493,11 +479,6 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 		return fmt.Errorf("Unsupported statement in type switch")
 	}
 
-	fmt.Printf("statement.Assign: %#v\n", statement.Assign)
-	fmt.Printf("RHSIdent: %#v\n", rhsIdentifier)
-
-	fmt.Printf("body: %#v\n", statement.Body.List)
-
 	for _, stmt := range statement.Body.List {
 		caseStmt, ok := stmt.(*ast.CaseClause)
 		if !ok {
@@ -531,7 +512,6 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 				})
 			}
 
-			fmt.Printf("caseStmt.Body: %#v\n", caseStmt.Body)
 			if caseStmt.Body != nil {
 				if err := sp.Parse(&ast.BlockStmt{
 					List: caseStmt.Body,
@@ -555,24 +535,23 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 // RecvStmt   = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
 // RecvExpr   = Expression .
 func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
+	glog.Infof("Processing select statement  %#v\n", statement)
 	for _, stmt := range statement.Body.List {
 		if err := func() error {
 			sp.SymbolTable.Push()
 			defer sp.SymbolTable.Pop()
 
-			fmt.Printf("stmt: %#v\n", stmt)
 			commClause, ok := stmt.(*ast.CommClause)
 			if !ok {
 				return fmt.Errorf("Select must be a list of commClause statements")
 			}
-			fmt.Printf("\ncommClause.Comm: %#v\n", commClause.Comm)
+
 			switch clause := commClause.Comm.(type) {
 			case *ast.ExprStmt:
 				if _, err := sp.ExprParser.Parse(clause.X); err != nil {
 					return err
 				}
 			case *ast.SendStmt:
-				fmt.Printf("ast.SendStmt: %#v\n", clause)
 				if _, err := sp.ExprParser.Parse(clause.Chan); err != nil {
 					return err
 				}
@@ -580,10 +559,6 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 					return err
 				}
 			case *ast.AssignStmt:
-				fmt.Printf("ast.AssignStmt: %#v\n", clause)
-				fmt.Printf("ast.AssignStmt.LHS: %#v\n", clause.Lhs)
-				fmt.Printf("ast.AssignStmt.RHS: %#v\n", clause.Rhs)
-
 				if len(clause.Rhs) != 1 {
 					return fmt.Errorf("Expecting a single expression on the RHS of a clause assigment")
 				}
@@ -597,7 +572,6 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", chExpr)
 				}
 
-				fmt.Printf("ClauseExpr: %#v\n", chExpr)
 				rhsExpr, err := sp.ExprParser.Parse(chExpr.X)
 				if err != nil {
 					return err
@@ -616,7 +590,6 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 				case 0:
 					return fmt.Errorf("Expecting at least one expression on the LHS of a clause assigment")
 				case 1:
-					fmt.Printf("RHS: %#v\n", rhsChannel)
 					if clause.Tok == token.DEFINE {
 						// All LHS expressions must be identifiers
 						// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
@@ -631,7 +604,6 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 						})
 					}
 				case 2:
-					fmt.Printf("RHS: %#v + bool, token: %v, %v\n", rhsChannel, clause.Tok, token.DEFINE)
 					// Given a case is an implicit block, there is no need to check if any of to-be-declared variables is already declared
 					// See http://www.tapirgames.com/blog/golang-block-and-scope
 					// If an ordinary assignment (with = symbol) is used, all variables/selectors(and other assignable expression) must be already defined,
@@ -667,7 +639,6 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 				return fmt.Errorf("Unable to recognize selector CommClause CommCase. Got %#v\n", commClause.Comm)
 			}
 
-			fmt.Printf("commClause.Body: %#v\n", commClause.Body)
 			if commClause.Body != nil {
 				if err := sp.Parse(&ast.BlockStmt{
 					List: commClause.Body,
@@ -686,16 +657,12 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 // ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
 // Condition = Expression .
 func (sp *Parser) parseForStmt(statement *ast.ForStmt) error {
+	glog.Infof("Processing for statement  %#v\n", statement)
 	sp.SymbolTable.Push()
 	defer sp.SymbolTable.Pop()
 
-	fmt.Printf("ForInit %#v\n", statement.Init)
-	fmt.Printf("ForCond %#v\n", statement.Cond)
-	fmt.Printf("ForPost %#v\n", statement.Post)
-
 	if statement.Init != nil {
 		sp.StmtParser.Parse(statement.Init)
-		sp.SymbolTable.PrintTop()
 	}
 
 	if statement.Cond != nil {
@@ -706,7 +673,6 @@ func (sp *Parser) parseForStmt(statement *ast.ForStmt) error {
 
 	if statement.Post != nil {
 		sp.StmtParser.Parse(statement.Post)
-		sp.SymbolTable.PrintTop()
 	}
 
 	return sp.Parse(statement.Body)
@@ -714,17 +680,13 @@ func (sp *Parser) parseForStmt(statement *ast.ForStmt) error {
 
 // RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
 func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
+	glog.Infof("Processing range statement  %#v\n", statement)
 	// If the assignment is = all expression on the LHS are already defined.
 	// If the assignment is := all expression on the LHS are identifiers
 	xExpr, err := sp.ExprParser.Parse(statement.X)
 	if err != nil {
 		return err
 	}
-
-	fmt.Printf("ForKey %#v\n", statement.Key)
-	fmt.Printf("ForValue %#v\n", statement.Value)
-	fmt.Printf("ForX %#v\n", statement.X)
-	fmt.Printf("ForExpr[0] %#v\n", xExpr[0])
 
 	sp.SymbolTable.Push()
 	defer sp.SymbolTable.Pop()
@@ -742,32 +704,25 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 		// channel         c  chan E, <-chan E       element  e  E
 		switch xExprType := xExpr[0].(type) {
 		case *gotypes.Array:
-			fmt.Printf("Array: %#v\n", xExprType)
 			key = &gotypes.Builtin{Def: "int"}
 			value = xExprType.Elmtype
 		case *gotypes.Slice:
-			fmt.Printf("Slice: %#v\n", xExprType)
 			key = &gotypes.Builtin{Def: "int"}
 			value = xExprType.Elmtype
 		case *gotypes.Builtin:
-			fmt.Printf("Builtin: %#v\n", xExprType)
 			if xExprType.Def != "string" {
 				fmt.Errorf("Expecting string in range expression. Got %#v instead.", xExpr[0])
 			}
 			key = &gotypes.Builtin{Def: "int"}
 			value = &gotypes.Builtin{Def: "rune"}
 		case *gotypes.Map:
-			fmt.Printf("Map: %#v\n", xExprType)
 			key = xExprType.Keytype
 			value = xExprType.Valuetype
 		case *gotypes.Channel:
-			fmt.Printf("Channel: %#v\n", xExprType)
 			key = xExprType.Value
 		default:
 			panic(fmt.Errorf("Unknown type of range expression: %#v", xExpr[0]))
 		}
-
-		fmt.Printf("Key: %#v\nValue: %#v\n", key, value)
 
 		if statement.Key != nil {
 			keyIdent, ok := statement.Key.(*ast.Ident)
@@ -815,15 +770,16 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 }
 
 func (sp *Parser) parseDeferStmt(statement *ast.DeferStmt) error {
+	glog.Infof("Processing defer statement  %#v\n", statement)
 	_, err := sp.ExprParser.Parse(statement.Call)
 	return err
 }
 
 func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
+	glog.Infof("Processing it statement  %#v\n", statement)
 	// If Init; Cond { Body } Else
 
 	// The Init part is basically another block
-	fmt.Printf("\nInit: %#v\n", statement.Init)
 	if statement.Init != nil {
 		// The Init part must be an assignment statement
 		if _, ok := statement.Init.(*ast.AssignStmt); !ok {
@@ -836,26 +792,23 @@ func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
 		}
 	}
 
-	fmt.Printf("\nCond: %#v\n", statement.Cond)
 	_, err := sp.ExprParser.Parse(statement.Cond)
 	if err != nil {
 		return err
 	}
 
 	// Process the If-body
-	fmt.Printf("\nBody: %#v\n", statement.Body)
 	sp.parseBlockStmt(statement.Body)
 
 	return nil
 }
 
 func (sp *Parser) parseBlockStmt(statement *ast.BlockStmt) error {
+	glog.Infof("Processing block statement  %#v\n", statement)
 	sp.SymbolTable.Push()
 	defer sp.SymbolTable.Pop()
 
-	fmt.Printf("Block statement: %#v\n", statement)
 	for _, blockItem := range statement.List {
-		fmt.Printf("BodyItem: %#v\n", blockItem)
 		if err := sp.Parse(blockItem); err != nil {
 			return err
 		}
@@ -876,61 +829,43 @@ func (sp *Parser) parseBlockStmt(statement *ast.BlockStmt) error {
 func (sp *Parser) Parse(statement ast.Stmt) error {
 	switch stmtExpr := statement.(type) {
 	case *ast.DeclStmt:
-		fmt.Printf("DeclStmt: %#v\n", stmtExpr)
 		return sp.parseDeclStmt(stmtExpr)
 	case *ast.LabeledStmt:
-		fmt.Printf("LabeledStmt: %#v\n", stmtExpr)
 		return sp.parseLabeledStmt(stmtExpr)
 	case *ast.ExprStmt:
-		fmt.Printf("ExprStmt: %#v\n", stmtExpr)
 		return sp.parseExprStmt(stmtExpr)
 	case *ast.SendStmt:
-		fmt.Printf("SendStmt: %#v\n", stmtExpr)
 		return sp.parseSendStmt(stmtExpr)
 	case *ast.IncDecStmt:
-		fmt.Printf("IncDecStmt: %#v\n", stmtExpr)
 		return sp.parseIncDecStmt(stmtExpr)
 	case *ast.AssignStmt:
-		fmt.Printf("AssignStmt: %#v\n", stmtExpr)
 		return sp.parseAssignStmt(stmtExpr)
 	case *ast.GoStmt:
-		fmt.Printf("GoStmt: %#v\n", stmtExpr)
 		return sp.parseGoStmt(stmtExpr)
 	case *ast.ReturnStmt:
-		fmt.Printf("Return: %#v\n", stmtExpr)
 		for _, result := range stmtExpr.Results {
-			exprType, err := sp.ExprParser.Parse(result)
+			_, err := sp.ExprParser.Parse(result)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("====ExprType: %#v\n", exprType)
 		}
 	case *ast.BranchStmt:
-		fmt.Printf("BranchStmt: %#v\n", stmtExpr)
 		return sp.parseBranchStmt(stmtExpr)
 	case *ast.BlockStmt:
-		fmt.Printf("BlockStmt: %#v\n", stmtExpr)
 		return sp.parseBlockStmt(stmtExpr)
 	case *ast.IfStmt:
-		fmt.Printf("IfStmt: %#v\n", stmtExpr)
 		return sp.parseIfStmt(stmtExpr)
 	case *ast.SwitchStmt:
-		fmt.Printf("SwitchStmt: %#v\n", stmtExpr)
 		return sp.parseSwitchStmt(stmtExpr)
 	case *ast.TypeSwitchStmt:
-		fmt.Printf("TypeSwitchStmt: %#v\n", stmtExpr)
 		return sp.parseTypeSwitchStmt(stmtExpr)
 	case *ast.SelectStmt:
-		fmt.Printf("SelectStmt: %#v\n", stmtExpr)
 		return sp.parseSelectStmt(stmtExpr)
 	case *ast.ForStmt:
-		fmt.Printf("SelectStmt: %#v\n", stmtExpr)
 		return sp.parseForStmt(stmtExpr)
 	case *ast.RangeStmt:
-		fmt.Printf("RangeStmt: %#v\n", stmtExpr)
 		return sp.parseRangeStmt(stmtExpr)
 	case *ast.DeferStmt:
-		fmt.Printf("DeferStmt: %#v\n", stmtExpr)
 		return sp.parseDeferStmt(stmtExpr)
 	default:
 		panic(fmt.Errorf("Unknown statement %#v", statement))
@@ -966,7 +901,6 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 
 			// field.Names is always non-empty if param's datatype is defined
 			for _, name := range field.Names {
-				fmt.Printf("Name: %v\n", name.Name)
 				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 					Name: name.Name,
 					Def:  def,
@@ -983,7 +917,6 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 			}
 
 			for _, name := range field.Names {
-				fmt.Printf("Name: %v\n", name.Name)
 				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 					Name: name.Name,
 					Def:  def,

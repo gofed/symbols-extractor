@@ -20,6 +20,7 @@ import (
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 // Context participants:
@@ -105,7 +106,7 @@ func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImpor
 		_, err := pp.globalSymbolTable.Lookup(q.Path)
 		if err != nil {
 			missingImports = append(missingImports, q)
-			fmt.Printf("Package %q not yet processed\n", q.Path)
+			glog.Infof("Package %q not yet processed\n", q.Path)
 		}
 		// TODO(jchaloup): Check if the package is already in the package queue
 		//                 If it is it is an error (import cycles are not permitted)
@@ -128,16 +129,14 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 	for _, godir := range godirs {
 		fileInfo, err := ioutil.ReadDir(godir)
 		if err == nil {
-			fmt.Printf("Checking %v...\n", godir)
+			glog.Infof("Checking %v...\n", godir)
 			for _, file := range fileInfo {
 				if !file.Mode().IsRegular() {
 					continue
 				}
-				fmt.Printf("DirFile: %v\n", file.Name())
 				// TODO(jchaloup): filter out unacceptable files (only *.go and *.s allowed)
 				files = append(files, file.Name())
 			}
-			fmt.Printf("\n\n")
 			return files, godir, nil
 		}
 	}
@@ -175,7 +174,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 
 	c.Config = config
 
-	fmt.Printf("PackageContextCreated: %#v\n\n", c)
+	glog.Infof("PackageContextCreated: %#v\n\n", c)
 	return c, nil
 }
 
@@ -187,14 +186,14 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 			payload := &fileparser.Payload{
 				DataTypes: fileContext.DataTypes,
 			}
-			fmt.Printf("Types: %#v\n", payload.DataTypes)
+			glog.Infof("Types before processing: %#v\n", payload.DataTypes)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Types: %#v\n", payload.DataTypes)
+			glog.Infof("Types after processing: %#v\n", payload.DataTypes)
 			if payload.DataTypes != nil {
 				return fmt.Errorf("There are still some postponed data types to process after the second round: %v", p.PackagePath)
 			}
@@ -211,14 +210,14 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 			payload := &fileparser.Payload{
 				Variables: fileContext.Variables,
 			}
-			fmt.Printf("Vars: %#v\n", payload.Variables)
+			glog.Infof("Vars before processing: %#v\n", payload.Variables)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Vars: %#v\n", payload.Variables)
+			glog.Infof("Vars after processing: %#v\n", payload.Variables)
 			if payload.Variables != nil {
 				return fmt.Errorf("There are still some postponed variables to process after the second round: %v", p.PackagePath)
 			}
@@ -235,14 +234,14 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			payload := &fileparser.Payload{
 				Functions: fileContext.Functions,
 			}
-			fmt.Printf("Funcs: %#v\n", payload.Functions)
+			fmt.Printf("Funcs before processing: %#v\n", payload.Functions)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Funcs: %#v\n", payload.Functions)
+			fmt.Printf("Funcs after processing: %#v\n", payload.Functions)
 			if payload.Functions != nil {
 				return fmt.Errorf("There are still some postponed functions to process after the second round: %v", p.PackagePath)
 			}
@@ -264,12 +263,11 @@ PACKAGE_STACK:
 	for len(pp.packageStack) > 0 {
 		// Process the package stack
 		p := pp.packageStack[0]
-		fmt.Printf("========PS processing %#v...========\n", p.PackageDir)
+		glog.Infof("PS processing %#v\n", p.PackageDir)
 		// Process the files
 		fLen := len(p.Files)
 		for i := p.FileIndex; i < fLen; i++ {
 			fileContext := p.Files[i]
-			fmt.Printf("fx: %#v\n", fileContext)
 			if fileContext.FileAST == nil {
 				f, err := parser.ParseFile(token.NewFileSet(), path.Join(p.PackageDir, fileContext.Filename), nil, 0)
 				if err != nil {
@@ -277,28 +275,21 @@ PACKAGE_STACK:
 				}
 				fileContext.FileAST = f
 			}
-			fmt.Printf("FileAST:\t\t%#v\n", fileContext.FileAST)
 			// processed imported packages
-			fmt.Printf("FileAST.Imports:\t%#v\n", fileContext.FileAST.Imports)
 			if !fileContext.ImportsProcessed {
 				missingImports := pp.processImports(fileContext.FileAST.Imports)
-				fmt.Printf("Missing:\t\t%#v\n\n", missingImports)
+				glog.Infof("Unknown imports:\t\t%#v\n\n", missingImports)
 				if len(missingImports) > 0 {
 					for _, spec := range missingImports {
-						fmt.Printf("Spec:\t\t\t%#v\n", spec)
 						c, err := pp.createPackageContext(spec.Path)
 						if err != nil {
 							return err
 						}
 
 						pp.packageStack = append([]*PackageContext{c}, pp.packageStack...)
-
-						fmt.Printf("PackageContext: %#v\n\n", c)
-						// byteSlice, _ := json.Marshal(c)
-						// fmt.Printf("\nPC: %v\n", string(byteSlice))
 					}
 					// At least one imported package is not yet processed
-					fmt.Printf("----Postponing %v\n\n", p.PackageDir)
+					glog.Infof("----Postponing %v\n\n", p.PackageDir)
 					fileContext.ImportsProcessed = true
 					continue PACKAGE_STACK
 				}
@@ -313,9 +304,6 @@ PACKAGE_STACK:
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Types: %#v\n", payload.DataTypes)
-			fmt.Printf("Vars: %#v\n", payload.Variables)
-			fmt.Printf("Funcs: %#v\n", payload.Functions)
 			fileContext.DataTypes = payload.DataTypes
 			fileContext.Variables = payload.Variables
 			fileContext.Functions = payload.Functions

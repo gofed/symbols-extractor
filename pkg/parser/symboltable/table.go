@@ -132,7 +132,6 @@ func (t *Table) AddFunction(sym *gotypes.SymbolDef) error {
 
 func (t *Table) LookupVariable(key string) (*gotypes.SymbolDef, error) {
 	if sym, ok := t.symbols[VariableSymbol][key]; ok {
-		fmt.Printf("Variable found: %#v\n", sym)
 		return sym, nil
 	}
 	return nil, fmt.Errorf("Variable `%v` not found", key)
@@ -142,7 +141,6 @@ func (t *Table) Lookup(key string) (*gotypes.SymbolDef, SymbolType, error) {
 
 	for _, symbolType := range SymbolTypes {
 		if sym, ok := t.symbols[symbolType][key]; ok {
-			fmt.Printf("Symbol found: %#v\n", sym)
 			return sym, SymbolType(symbolType), nil
 		}
 	}
