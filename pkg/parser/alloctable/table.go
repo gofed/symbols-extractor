@@ -41,7 +41,9 @@ func (ast *Table) AddSymbol(origin, id string) {
 }
 
 func (ast *Table) Print() {
+	fmt.Printf("======================================================================================================\n")
 	for key := range ast.symbols {
 		fmt.Printf("%v:\t%v\n", key, ast.symbols[key])
 	}
+	fmt.Printf("======================================================================================================\n")
 }

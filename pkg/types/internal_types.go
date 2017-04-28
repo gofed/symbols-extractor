@@ -19,15 +19,3 @@ type BuiltinLiteral struct{}
 func (b *BuiltinLiteral) GetType() string {
 	return BuiltinLiteralType
 }
-
-const PackageQualifierType = "packagequalifier"
-
-// PackageQualifier represents an import of a package
-type PackageQualifier struct {
-	Name string
-	Path string
-}
-
-func (p *PackageQualifier) GetType() string {
-	return PackageQualifierType
-}

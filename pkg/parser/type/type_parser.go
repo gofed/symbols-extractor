@@ -61,9 +61,9 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 
 	// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
 	p.AllocatedSymbolsTable.AddSymbol(def.Package, def.Name)
-
 	return &gotypes.Identifier{
-		Def: typedExpr.Name,
+		Def:     typedExpr.Name,
+		Package: def.Package,
 	}, nil
 }
 
@@ -125,20 +125,19 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 	//                 most-likely not as this construction is not allowed inside a data type definition
 	if ok {
 		// Get package path
+		glog.Infof("Processing qid %#v in SelectorExpr: %#v\n", id, typedExpr)
 		def, err := p.SymbolTable.LookupVariable(id.Name)
 		if err != nil {
 			return nil, fmt.Errorf("Qualified id %q not found in the symbol table", id.Name)
 		}
-		qid, ok := def.Def.(*gotypes.PackageQualifier)
+		qid, ok := def.Def.(*gotypes.Packagequalifier)
 		if !ok {
 			return nil, fmt.Errorf("Qualified id %q does not correspond to an import path", id.Name)
 		}
 		p.AllocatedSymbolsTable.AddSymbol(qid.Path, typedExpr.Sel.Name)
 		return &gotypes.Selector{
-			Item: typedExpr.Sel.Name,
-			Prefix: &gotypes.Identifier{
-				Def: id.Name,
-			},
+			Item:   typedExpr.Sel.Name,
+			Prefix: qid,
 		}, nil
 	}
 

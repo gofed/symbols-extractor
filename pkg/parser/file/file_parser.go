@@ -1,6 +1,7 @@
 package file
 
 import (
+	"fmt"
 	"go/ast"
 	"path"
 	"strings"
@@ -28,8 +29,8 @@ func NewParser(config *types.Config) *FileParser {
 	}
 }
 
-func MakePackageQualifier(spec *ast.ImportSpec) *gotypes.PackageQualifier {
-	q := &gotypes.PackageQualifier{
+func MakePackagequalifier(spec *ast.ImportSpec) *gotypes.Packagequalifier {
+	q := &gotypes.Packagequalifier{
 		Path: strings.Replace(spec.Path.Value, "\"", "", -1),
 	}
 
@@ -69,7 +70,7 @@ func MakePayload(f *ast.File) *Payload {
 }
 
 func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
-	q := MakePackageQualifier(spec)
+	q := MakePackagequalifier(spec)
 
 	// TODO(jchaloup): store non-qualified imports as well
 	if q.Name == "." {
@@ -77,7 +78,7 @@ func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
 	}
 
 	err := fp.SymbolTable.AddImport(&gotypes.SymbolDef{Name: q.Name, Def: q})
-	glog.Infof("PackageQualifier added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
+	glog.Infof("Packagequalifier added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
 	return err
 }
 
@@ -157,6 +158,7 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 			// are already processed, the identifier comes from the same package, just
 			// from a different file. So the type parser should assume that and choose
 			// symbol's origin accordingaly.
+			glog.Warningf("File parse error: %v\n", err)
 			postponed = append(postponed, spec)
 			continue
 		}
@@ -172,6 +174,7 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 		// if an error is returned, put the function's AST into a context list
 		// and continue with other definition
 		if err := fp.StmtParser.ParseFuncBody(spec); err != nil {
+			glog.Warningf("File parse error: %v\n", err)
 			postponed = append(postponed, spec)
 			continue
 		}
@@ -228,7 +231,8 @@ func (fp *FileParser) Parse(p *Payload) error {
 		p.Functions = postponed
 	}
 
-	//fp.AllocatedSymbolsTable.Print()
+	fmt.Printf("AllocST for %q\n", fp.PackageName)
+	fp.AllocatedSymbolsTable.Print()
 
 	return nil
 }

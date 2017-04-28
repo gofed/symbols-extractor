@@ -1,9 +1,11 @@
 package types
 
 import (
+	"fmt"
 	"go/ast"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -49,4 +51,19 @@ type Config struct {
 	ExprParser ExpressionParser
 	// statement parser
 	StmtParser StatementParser
+}
+
+// Lookup retrieves a definition of identifier ident
+func (c *Config) Lookup(ident *gotypes.Identifier) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
+	if ident.Package == "" {
+		return nil, "", fmt.Errorf("Identifier %#v does not set its Package field", ident)
+	}
+	if ident.Package == c.PackageName {
+		return c.SymbolTable.Lookup(ident.Def)
+	}
+	table, err := c.GlobalSymbolTable.Lookup(ident.Package)
+	if err != nil {
+		return nil, "", err
+	}
+	return table.Lookup(ident.Def)
 }

@@ -99,9 +99,9 @@ func New(packagePath string) *ProjectParser {
 	}
 }
 
-func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImports []*gotypes.PackageQualifier) {
+func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImports []*gotypes.Packagequalifier) {
 	for _, spec := range imports {
-		q := fileparser.MakePackageQualifier(spec)
+		q := fileparser.MakePackagequalifier(spec)
 		// Check if the imported package is already processed
 		_, err := pp.globalSymbolTable.Lookup(q.Path)
 		if err != nil {

@@ -172,9 +172,38 @@
 					"type": "string",
 					"description": "Primitive type or ID",
 					"minLength": 1
+				},
+				"package": {
+					"type": "string",
+					"description": "!!omit",
+					"minLength": 1
 				}
 			},
 			"required": ["type", "def"]
+		},
+		"packagequalifier": {
+			"type": "object",
+			"description": "Package qualifier definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Package qualifier",
+					"oneOf": [
+						{"enum": ["packagequalifier"]}
+					]
+				},
+				"name": {
+					"type": "string",
+					"description": "Package identifier",
+					"minLength": 1
+				},
+				"path": {
+					"type": "string",
+					"description": "Package path",
+					"minLength": 1
+				}
+			},
+			"required": ["type", "name", "path"]
 		},
 		"builtin": {
 			"type": "object",
@@ -210,7 +239,8 @@
 					"type": "object",
 					"description": "Prefix definition",
 					"oneOf": [
-						{ "$ref": "#/definitions/identifier" }
+						{ "$ref": "#/definitions/identifier" },
+						{ "$ref": "#/definitions/packagequalifier" }
 					]
 				},
 				"item": {
