@@ -156,31 +156,6 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 	return nil
 }
 
-func (ep *Parser) retrieveQualifiedIdentifier(qid, symbolName string) (*gotypes.SymbolDef, error) {
-	qidDef, defErr := ep.SymbolTable.LookupVariable(qid)
-	if defErr != nil {
-		return nil, fmt.Errorf("Unable to retrieve qid %q from the local symbol table: %v", qid, defErr)
-	}
-
-	qidPQ, ok := qidDef.Def.(*gotypes.PackageQualifier)
-	if !ok {
-		return nil, fmt.Errorf("Local variable %q is not a QID, it is %#v instead", qid, qidDef.Def)
-	}
-	st, err := ep.GlobalSymbolTable.Lookup(qidPQ.Path)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid, err)
-	}
-
-	packageIdent, _, piErr := st.Lookup(symbolName)
-	if piErr != nil {
-		return nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", symbolName, qid, piErr)
-	}
-
-	ep.AllocatedSymbolsTable.AddSymbol(qidPQ.Path, symbolName)
-
-	return packageIdent, nil
-}
-
 func (ep *Parser) parseCompositeLitElements(lit *ast.CompositeLit, symbolDef *gotypes.SymbolDef) error {
 	switch clTypeDataType := symbolDef.Def.(type) {
 	case *gotypes.Struct:
@@ -266,22 +241,29 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 		}
 	case *gotypes.Selector:
 		// If it is a selector, it must be qui.id (as the litTypeExpr is a type)
-		qid, ok := litTypeExpr.Prefix.(*gotypes.Identifier)
+		qid, ok := litTypeExpr.Prefix.(*gotypes.Packagequalifier)
 		if !ok {
-			return nil, fmt.Errorf("Expecting identifier in CL selector: %#v", litTypeExpr)
+			return nil, fmt.Errorf("Expecting package qualifier in CL selector: %#v", litTypeExpr)
 		}
 
-		symbolDef, err := ep.retrieveQualifiedIdentifier(qid.Def, litTypeExpr.Item)
+		st, err := ep.GlobalSymbolTable.Lookup(qid.Path)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid, err)
 		}
+
+		symbolDef, _, piErr := st.Lookup(litTypeExpr.Item)
+		if piErr != nil {
+			return nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", litTypeExpr.Item, qid.Path, piErr)
+		}
+
+		ep.AllocatedSymbolsTable.AddSymbol(qid.Path, litTypeExpr.Item)
 
 		if err := ep.parseCompositeLitElements(lit, symbolDef); err != nil {
 			return nil, err
 		}
 	case *gotypes.Identifier:
 		// If the LC type is an identifier, determine a type which is defined by the identifier
-		ClTypeIdentifierDef, _, err := ep.SymbolTable.Lookup(litTypeExpr.Def)
+		ClTypeIdentifierDef, _, err := ep.Config.Lookup(litTypeExpr)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", litTypeExpr)
 		}
@@ -571,28 +553,50 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 	if len(xDef) != 1 {
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
+	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\n", xDef[0], expr.Sel)
 
 	// The struct and an interface are the only data type from which a field/method is retriveable
 	switch xType := xDef[0].(type) {
 	// If the X expression is a qualified id, the selector is a symbol from a package pointed by the id
-	case *gotypes.PackageQualifier:
-		fmt.Printf("Trying to retrieve a symbol %#v from package %v\n", expr.Sel.Name, xType.Path)
-		// TODO(jchaloup): implement retrieval a symbols from other symbol tables
-		panic("Symbol retrieval from other packages not yet implemented")
+	case *gotypes.Packagequalifier:
+		glog.Infof("Trying to retrieve a symbol %#v from package %v\n", expr.Sel.Name, xType.Path)
+		st, err := ep.GlobalSymbolTable.Lookup(xType.Path)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", xType, err)
+		}
+
+		packageIdent, _, piErr := st.Lookup(expr.Sel.Name)
+		if piErr != nil {
+			return nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", expr.Sel.Name, xType, piErr)
+		}
+		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name)
+		return packageIdent.Def, nil
 	case *gotypes.Pointer:
-		def, ok := xType.Def.(*gotypes.Identifier)
-		if !ok {
+		switch def := xType.Def.(type) {
+		case *gotypes.Identifier:
+			// Get struct's definition given by its identifier
+			structDefsymbol, _, err := ep.Config.Lookup(def)
+			if err != nil {
+				return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", def.Def)
+			}
+			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
+		case *gotypes.Selector:
+			// qid to different package
+			fmt.Printf("Item: %#v\n", def.Item)
+			fmt.Printf("Prefix: %#v\n", def.Prefix)
+			pq, ok := def.Prefix.(*gotypes.Packagequalifier)
+			if !ok {
+				return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-qualified struct data type: %#v", expr.Sel.Name, def)
+			}
+			structDefsymbol, _, err := ep.Config.Lookup(&gotypes.Identifier{Def: def.Item, Package: pq.Path})
+			fmt.Printf("FF: %#v, %v\n", structDefsymbol, err)
+			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
+		default:
 			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
-		// Get struct's definition given by its identifier
-		structDefsymbol, _, err := ep.SymbolTable.Lookup(def.Def)
-		if err != nil {
-			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", def.Def)
-		}
-		return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 	case *gotypes.Identifier:
 		// Get struct/interface definition given by its identifier
-		defSymbol, _, err := ep.SymbolTable.Lookup(xType.Def)
+		defSymbol, _, err := ep.Config.Lookup(xType)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", xType.Def)
 		}

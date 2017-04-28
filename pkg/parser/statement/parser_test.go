@@ -141,10 +141,10 @@ func createSymDefFunc(gopkg, recv, name string, method, pntr bool) *gotypes.Symb
 		return symdef
 	} else if pntr {
 		symdef.Def = &gotypes.Method{
-			Receiver: &gotypes.Pointer{&gotypes.Identifier{recv}},
+			Receiver: &gotypes.Pointer{&gotypes.Identifier{Def: recv}},
 		}
 	} else {
-		symdef.Def = &gotypes.Method{Receiver: &gotypes.Identifier{recv}}
+		symdef.Def = &gotypes.Method{Receiver: &gotypes.Identifier{Def: recv}}
 	}
 
 	return symdef

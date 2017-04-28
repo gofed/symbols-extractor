@@ -23,10 +23,10 @@ func TestProjectParser(t *testing.T) {
 		pkgs[key] = struct{}{}
 	}
 
-	expectedPackages := []string{
-		"github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered",
-		"github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg",
-		"github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkgb",
+	expectedPackages := map[string]string{
+		"unordered": "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered",
+		"pkg":       "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg",
+		"pkgb":      "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkgb",
 	}
 
 	for _, pkg := range expectedPackages {
@@ -40,20 +40,24 @@ func TestProjectParser(t *testing.T) {
 		st := symboltable.NewTable()
 		st.AddDataType(&types.SymbolDef{
 			Name:    "Struct",
-			Package: "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered",
+			Package: expectedPackages["unordered"],
 			Def: &types.Struct{
 				Fields: []types.StructFieldsItem{
 					{
 						Name: "i",
-						Def:  &types.Identifier{Def: "MyInt"},
+						Def: &types.Identifier{
+							Def:     "MyInt",
+							Package: expectedPackages["unordered"],
+						},
 					},
 					{
 						Name: "impa",
 						Def: &types.Pointer{
 							Def: &types.Selector{
 								Item: "Imp",
-								Prefix: &types.Identifier{
-									Def: "pkg",
+								Prefix: &types.Packagequalifier{
+									Name: "pkg",
+									Path: expectedPackages["pkg"],
 								},
 							},
 						},
@@ -63,8 +67,9 @@ func TestProjectParser(t *testing.T) {
 						Def: &types.Pointer{
 							Def: &types.Selector{
 								Item: "Imp",
-								Prefix: &types.Identifier{
-									Def: "pkgb",
+								Prefix: &types.Packagequalifier{
+									Name: "pkgb",
+									Path: expectedPackages["pkgb"],
 								},
 							},
 						},
@@ -74,14 +79,14 @@ func TestProjectParser(t *testing.T) {
 		})
 		st.AddDataType(&types.SymbolDef{
 			Name:    "MyInt",
-			Package: "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered",
+			Package: expectedPackages["unordered"],
 			Def: &types.Builtin{
 				Def: "int",
 			},
 		})
 		st.AddFunction(&types.SymbolDef{
 			Name:    "Nic",
-			Package: "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered",
+			Package: expectedPackages["unordered"],
 			Def: &types.Function{
 				Params: nil,
 				// *pkg.Imp
@@ -89,8 +94,9 @@ func TestProjectParser(t *testing.T) {
 					&types.Pointer{
 						Def: &types.Selector{
 							Item: "Imp",
-							Prefix: &types.Identifier{
-								Def: "pkg",
+							Prefix: &types.Packagequalifier{
+								Name: "pkg",
+								Path: expectedPackages["pkg"],
 							},
 						},
 					},
@@ -98,11 +104,11 @@ func TestProjectParser(t *testing.T) {
 			},
 		})
 
-		pst, _ := gtable.Lookup("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered")
+		pst, _ := gtable.Lookup(expectedPackages["unordered"])
 		if !reflect.DeepEqual(st, pst) {
 			x, _ := json.Marshal(pst)
 			y, _ := json.Marshal(st)
-			t.Errorf("Symbol table mismatch. Got:\n%v\nExpected:\n%v", string(x), string(y))
+			t.Errorf("Symbol table %q mismatch. Got:\n%v\nExpected:\n%v", expectedPackages["unordered"], string(x), string(y))
 		}
 	}
 
@@ -111,7 +117,7 @@ func TestProjectParser(t *testing.T) {
 		st := symboltable.NewTable()
 		st.AddDataType(&types.SymbolDef{
 			Name:    "Imp",
-			Package: "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg",
+			Package: expectedPackages["pkg"],
 			Def: &types.Struct{
 				Fields: []types.StructFieldsItem{
 					{
@@ -126,14 +132,41 @@ func TestProjectParser(t *testing.T) {
 							Def: "int",
 						},
 					},
+					{
+						Name: "Imp",
+						Def: &types.Pointer{
+							Def: &types.Selector{
+								Item: "Imp",
+								Prefix: &types.Packagequalifier{
+									Name: "pkgb",
+									Path: expectedPackages["pkgb"],
+								},
+							},
+						},
+					},
 				},
 			},
 		})
-		pst, _ := gtable.Lookup("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg")
+		st.AddFunction(&types.SymbolDef{
+			Name:    "Nic",
+			Package: expectedPackages["pkg"],
+			Def: &types.Function{
+				Params: nil,
+				Results: []types.DataType{
+					&types.Pointer{
+						Def: &types.Identifier{
+							Def:     "Imp",
+							Package: expectedPackages["pkg"],
+						},
+					},
+				},
+			},
+		})
+		pst, _ := gtable.Lookup(expectedPackages["pkg"])
 		if !reflect.DeepEqual(st, pst) {
 			x, _ := json.Marshal(pst)
 			y, _ := json.Marshal(st)
-			t.Errorf("Symbol table mismatch. Got:\n%v\nExpected:\n%v", string(x), string(y))
+			t.Errorf("Symbol table %q mismatch. Got:\n%v\nExpected:\n%v", expectedPackages["pkg"], string(x), string(y))
 		}
 	}
 
@@ -142,7 +175,7 @@ func TestProjectParser(t *testing.T) {
 		st := symboltable.NewTable()
 		st.AddDataType(&types.SymbolDef{
 			Name:    "Imp",
-			Package: "github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkgb",
+			Package: expectedPackages["pkgb"],
 			Def: &types.Struct{
 				Fields: []types.StructFieldsItem{
 					{
@@ -160,11 +193,11 @@ func TestProjectParser(t *testing.T) {
 				},
 			},
 		})
-		pst, _ := gtable.Lookup("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkgb")
+		pst, _ := gtable.Lookup(expectedPackages["pkgb"])
 		if !reflect.DeepEqual(st, pst) {
 			x, _ := json.Marshal(pst)
 			y, _ := json.Marshal(st)
-			t.Errorf("Symbol table mismatch. Got:\n%v\nExpected:\n%v", string(x), string(y))
+			t.Errorf("Symbol table %q mismatch. Got:\n%v\nExpected:\n%v", expectedPackages["pkgb"], string(x), string(y))
 		}
 	}
 }

@@ -9,20 +9,23 @@ class ObjectDefinition:
         self._array_fields = {}
         self._name = name
 
-    def addAtomicField(self, name, type):
+    def addAtomicField(self, name, type, omit=False):
         self._atomic_fields[name] = {
             "type": type,
+            "omit": omit,
         }
 
-    def addNonAtomicField(self, name, type, constraint):
+    def addNonAtomicField(self, name, type, constraint, omit=False):
         self._nonatomic_fields[name] = {
             "type": type,
             "constraint": constraint,
+            "omit": omit,
         }
-    def addArrayField(self, name, type, constraint = []):
+    def addArrayField(self, name, type, constraint = [], omit=False):
         self._array_fields[name] = {
             "type": type,
-            "constraint": constraint
+            "constraint": constraint,
+            "omit": omit,
         }
 
     def __str__(self):
@@ -32,14 +35,14 @@ const {{ Name }}Type = "{{ Name|lower }}"
 
 type {{ Name }} struct {
         {% for field in AtomicFields %}
-        {{ field|capitalize }} {{ AtomicFields[field]["type"] }} `json:"{{ field|lower }}"`
-        {% endfor %}
+        {{ field|capitalize }} {{ AtomicFields[field]["type"] }} `json:"{{ '-' if AtomicFields[field]["omit"] else field|lower }}"`
+        {%- endfor %}
         {% for field in NonAtomicFields %}
-        {{ field|capitalize }} {{ NonAtomicFields[field]["type"] }} `json:"{{ field|lower }}"`
-        {% endfor %}
+        {{ field|capitalize }} {{ NonAtomicFields[field]["type"] }} `json:"{{ '-' if NonAtomicFields[field]["omit"] else field|lower }}"`
+        {%- endfor %}
         {% for field in ArrayFields %}
-        {{ field|capitalize }} []{{ ArrayFields[field]["type"] }} `json:"{{ field|lower }}"`
-        {% endfor %}
+        {{ field|capitalize }} []{{ ArrayFields[field]["type"] }} `json:"{{ '-' if ArrayFields[field]["omit"] else field|lower }}"`
+        {%- endfor %}
 }
 
 func (o *{{ Name }}) GetType() string {
@@ -65,10 +68,12 @@ func (o *{{ Name }}) UnmarshalJSON(b []byte) error {
     }
 
     {% for item in AtomicFields %}
+    {% if not AtomicFields[item]["omit"] %}
     // TODO(jchaloup): check the objMap[\"{{ item|lower }}\"] actually exists
     if err := json.Unmarshal(*objMap[\"{{ item|lower }}\"], &o.{{ item|capitalize }}); err != nil {
         return err
     }
+    {% endif %}
     {% endfor %}
 
     {% for item in NonAtomicFields %}
@@ -165,7 +170,10 @@ def parseDefinition(dataType, definition):
                 # skip all 'type' fields
                 if property == "type":
                     continue
-                obj.addAtomicField(property.capitalize(), itemType)
+                if definition["properties"][property]["description"] == "!!omit":
+                    obj.addAtomicField(property.capitalize(), itemType, omit=True)
+                else:
+                    obj.addAtomicField(property.capitalize(), itemType, omit=False)
             # list of permited types
             elif itemType == "object":
                 ok = False
@@ -266,7 +274,7 @@ type DataType interface {
 	GetType() string
 }"""
 
-    dataTypes = ["identifier", "builtin", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
+    dataTypes = ["identifier", "builtin", "packagequalifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
 
     for definition in data["definitions"]:
         if definition not in dataTypes:

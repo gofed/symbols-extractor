@@ -15,6 +15,7 @@ type Struct struct {
 type MyInt int
 
 func Nic() *pkg.Imp {
+	pkg.Nic().Imp.Size
 	return &pkg.Imp{
 		Name: "haluz",
 		Size: 2,
