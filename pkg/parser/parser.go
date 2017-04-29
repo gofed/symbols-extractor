@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
@@ -40,6 +41,8 @@ type FileContext struct {
 	DataTypes []*ast.TypeSpec
 	Variables []*ast.ValueSpec
 	Functions []*ast.FuncDecl
+
+	AllocatedSymbolsTable *alloctable.Table
 }
 
 // PackageContext storing context for a package
@@ -56,10 +59,8 @@ type PackageContext struct {
 
 	// package name
 	PackageName string
-	// per file symbol table
+	// per package symbol table
 	SymbolTable *stack.Stack
-	// per file allocatable ST
-	AllocatedSymbolsTable *alloctable.Table
 
 	// symbol definitions postponed (only variable/constants and function bodies definitions affected)
 	DataTypes []*ast.TypeSpec
@@ -85,17 +86,17 @@ type ProjectParser struct {
 	// Global symbol table
 	globalSymbolTable *global.Table
 	// For each package and its file store its alloc symbol table
-	allocSymbolTable map[string]map[string]*alloctable.Table
-
+	globalAllocSymbolTable *allocglobal.Table
 	// package stack
 	packageStack []*PackageContext
 }
 
 func New(packagePath string) *ProjectParser {
 	return &ProjectParser{
-		packagePath:       packagePath,
-		packageStack:      make([]*PackageContext, 0),
-		globalSymbolTable: global.New(),
+		packagePath:            packagePath,
+		packageStack:           make([]*PackageContext, 0),
+		globalSymbolTable:      global.New(),
+		globalAllocSymbolTable: allocglobal.New(),
 	}
 }
 
@@ -146,10 +147,9 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 
 func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageContext, error) {
 	c := &PackageContext{
-		PackagePath:           packagePath,
-		FileIndex:             0,
-		SymbolTable:           stack.New(),
-		AllocatedSymbolsTable: alloctable.New(),
+		PackagePath: packagePath,
+		FileIndex:   0,
+		SymbolTable: stack.New(),
 	}
 
 	files, path, err := pp.getPackageFiles(packagePath)
@@ -158,14 +158,18 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 	}
 	c.PackageDir = path
 	for _, file := range files {
-		c.Files = append(c.Files, &FileContext{Filename: file})
+		fc := &FileContext{
+			Filename:              file,
+			AllocatedSymbolsTable: alloctable.New(),
+		}
+		c.Files = append(c.Files, fc)
+		pp.globalAllocSymbolTable.Add(packagePath, file, fc.AllocatedSymbolsTable)
 	}
 
 	config := &types.Config{
-		PackageName:           packagePath,
-		SymbolTable:           c.SymbolTable,
-		AllocatedSymbolsTable: c.AllocatedSymbolsTable,
-		GlobalSymbolTable:     pp.globalSymbolTable,
+		PackageName:       packagePath,
+		SymbolTable:       c.SymbolTable,
+		GlobalSymbolTable: pp.globalSymbolTable,
 	}
 
 	config.TypeParser = typeparser.New(config)
@@ -190,6 +194,7 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
+			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -214,6 +219,7 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
+			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -238,6 +244,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
+			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -301,6 +308,7 @@ PACKAGE_STACK:
 				panic(err)
 			}
 			payload := fileparser.MakePayload(fileContext.FileAST)
+			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -340,11 +348,16 @@ PACKAGE_STACK:
 		// Pop the package from the package stack
 		pp.packageStack = pp.packageStack[1:]
 	}
+
 	return nil
 }
 
 func (pp *ProjectParser) GlobalSymbolTable() *global.Table {
 	return pp.globalSymbolTable
+}
+
+func (pp *ProjectParser) GlobalAllocTable() *allocglobal.Table {
+	return pp.globalAllocSymbolTable
 }
 
 func printDataType(dataType gotypes.DataType) {
