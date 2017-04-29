@@ -582,14 +582,14 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 		case *gotypes.Selector:
 			// qid to different package
-			fmt.Printf("Item: %#v\n", def.Item)
-			fmt.Printf("Prefix: %#v\n", def.Prefix)
 			pq, ok := def.Prefix.(*gotypes.Packagequalifier)
 			if !ok {
 				return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-qualified struct data type: %#v", expr.Sel.Name, def)
 			}
 			structDefsymbol, _, err := ep.Config.Lookup(&gotypes.Identifier{Def: def.Item, Package: pq.Path})
-			fmt.Printf("FF: %#v, %v\n", structDefsymbol, err)
+			if err != nil {
+				return nil, err
+			}
 			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 		default:
 			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)

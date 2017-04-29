@@ -875,6 +875,8 @@ func (sp *Parser) Parse(statement ast.Stmt) error {
 }
 
 func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
+	sp.AllocatedSymbolsTable.Lock()
+	defer sp.AllocatedSymbolsTable.Unlock()
 	if funcDecl.Recv != nil {
 		// Receiver has a single parametr
 		// https://golang.org/ref/spec#Receiver
