@@ -130,14 +130,14 @@ func TestBinaryExpr(t *testing.T) {
 	testExpr := []struct {
 		expRes        gotypes.DataType
 		expr          string
-		expectedError error
+		expectedError bool
 	}{
-		{&gotypes.Builtin{}, "var FooB1 int     = 1 + 4", nil},
-		{&gotypes.Builtin{}, "var FooB2 float32 = 1.2 + 4", nil},
-		{&gotypes.Identifier{Def: userType}, "var FooU3 FInt    = FInt(12) + FInt(4)", nil},
-		{&gotypes.Identifier{Def: userType}, "var FooU4 FInt    = FooU3 * FooU3", nil},
-		{&gotypes.Builtin{}, "var FooB5 uint32  = uint32(FooU3) + uint32(FooU4)", nil},
-		{&gotypes.Builtin{}, "var FooB5 uint32  = uint16(FooU3) + int(FooU4)", nil},
+		{&gotypes.Builtin{}, "var FooB1 int     = 1 + 4", false},
+		{&gotypes.Builtin{}, "var FooB2 float32 = 1.2 + 4", true},
+		{&gotypes.Identifier{Def: userType}, "var FooU3 FInt    = FInt(12) + FInt(4)", false},
+		{&gotypes.Identifier{Def: userType}, "var FooU4 FInt    = FooU3 * FooU3", false},
+		{&gotypes.Builtin{}, "var FooB5 uint32  = uint32(FooU3) + uint32(FooU4)", false},
+		{&gotypes.Builtin{}, "var FooB5 uint32  = uint16(FooU3) + int(FooU4)", true},
 	}
 
 	// complete source code
@@ -158,25 +158,34 @@ func TestBinaryExpr(t *testing.T) {
 	failed := false
 
 	for i, valSpec := range iterVar(astF) {
+		fmt.Printf("Proceessing: %#v\n", testExpr[i].expr)
 		binExpr := valSpec.Values[0].(*ast.BinaryExpr)
 		res, err := config.ExprParser.(*Parser).parseBinaryExpr(binExpr)
-		fmt.Printf("BinaryExprResult: %#v\n", res)
+		fmt.Printf("BinaryExprResult: %#v\terr: %v\n", res, err)
 		// check that error is returned when is is expected
 
-		if testExpr[i].expectedError != err {
-			t.Errorf("Unexpected error for '%s': %v\n", testExpr[i].expr, err)
+		if testExpr[i].expectedError && err == nil {
+			t.Errorf("Expected error for '%s' did not occur", testExpr[i].expr)
 			failed = true
 			continue
 		}
 
-		// compare returned and expected value
-		if testExpr[i].expRes.GetType() != res.GetType() {
-			t.Errorf("Expected '%s' type, got '%s' instead. Line: '%s'",
-				testExpr[i].expRes.GetType(),
-				res.GetType(),
-				testExpr[i].expr,
-			)
+		if !testExpr[i].expectedError && err != nil {
+			t.Errorf("Unexpected error for '%s' occurred: %v", testExpr[i].expr, err)
 			failed = true
+			continue
+		}
+
+		if !testExpr[i].expectedError && err == nil {
+			// compare returned and expected value
+			if testExpr[i].expRes.GetType() != res.GetType() {
+				t.Errorf("Expected '%s' type, got '%s' instead. Line: '%s'",
+					testExpr[i].expRes.GetType(),
+					res.GetType(),
+					testExpr[i].expr,
+				)
+				failed = true
+			}
 		}
 	}
 

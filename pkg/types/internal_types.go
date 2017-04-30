@@ -13,7 +13,9 @@ func (n *Nil) GetType() string {
 const BuiltinLiteralType = "builtinliteral"
 
 // BuiltinLiteral represents literals like true or false
-type BuiltinLiteral struct{}
+type BuiltinLiteral struct {
+	Def string
+}
 
 // GetType gets type
 func (b *BuiltinLiteral) GetType() string {
