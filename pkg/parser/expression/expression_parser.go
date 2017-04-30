@@ -41,15 +41,15 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
 	switch lit.Kind {
 	case token.INT:
-		return &gotypes.Builtin{}, nil
+		return &gotypes.Builtin{Def: "int"}, nil
 	case token.FLOAT:
-		return &gotypes.Builtin{}, nil
+		return &gotypes.Builtin{Def: "float"}, nil
 	case token.IMAG:
-		return &gotypes.Builtin{}, nil
+		return &gotypes.Builtin{Def: "imag"}, nil
 	case token.STRING:
-		return &gotypes.Builtin{}, nil
+		return &gotypes.Builtin{Def: "string"}, nil
 	case token.CHAR:
-		return &gotypes.Builtin{}, nil
+		return &gotypes.Builtin{Def: "char"}, nil
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
@@ -287,7 +287,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 
 	// true/false
 	if ident.Name == "true" || ident.Name == "false" {
-		return &gotypes.BuiltinLiteral{}, nil
+		return &gotypes.BuiltinLiteral{Def: "bool"}, nil
 	}
 
 	// Check if the symbol is in the symbol table.
@@ -366,7 +366,12 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 
 	// If both types are built-in, just return built-in
 	if x[0].GetType() == y[0].GetType() && x[0].GetType() == gotypes.BuiltinType {
-		return &gotypes.Builtin{}, nil
+		xt := x[0].(*gotypes.Builtin).Def
+		yt := y[0].(*gotypes.Builtin).Def
+		if xt != yt {
+			return nil, fmt.Errorf("Binary operation %q over two different types: %q != %q", expr.Op, xt, yt)
+		}
+		return &gotypes.Builtin{Def: xt}, nil
 	}
 
 	// At least one of the type is an identifier
