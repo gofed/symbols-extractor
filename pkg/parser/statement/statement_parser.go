@@ -128,8 +128,15 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 		return nil
 	}
 	sp.SymbolTable.Push()
-	// byteSlice, err := json.Marshal(sp.SymbolTable)
-	// fmt.Printf("\nTable: %v\nerr: %v", string(byteSlice), err)
+	defer func() {
+		sp.SymbolTable.Pop()
+		sp.SymbolTable.Pop()
+	}()
+	// if funcDecl.Body is nil, then the function/method is declared only and its definition
+	// is most likely in .s file(s)
+	if funcDecl.Body == nil {
+		return nil
+	}
 
 	// The stack will always have at least one symbol table (with receivers, resp. parameters, resp. results)
 	for _, statement := range funcDecl.Body.List {
@@ -137,10 +144,6 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 			return err
 		}
 	}
-
-	//stack.Print()
-	sp.SymbolTable.Pop()
-	sp.SymbolTable.Pop()
 
 	return nil
 }

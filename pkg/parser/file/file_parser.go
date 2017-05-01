@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
@@ -150,29 +151,37 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 	var postponed []*ast.FuncDecl
 	for _, spec := range specs {
 
-		// process function definitions as the last
-		funcDef, err := fp.StmtParser.ParseFuncDecl(spec)
-		if err != nil {
-			// TODO(jchaloup): this should not error (ever)
-			// It can happen an identifier is unknown. Given all imported packages
-			// are already processed, the identifier comes from the same package, just
-			// from a different file. So the type parser should assume that and choose
-			// symbol's origin accordingaly.
-			glog.Warningf("File parse error: %v\n", err)
-			postponed = append(postponed, spec)
-			continue
-		}
+		_, sType, err := fp.SymbolTable.Lookup(spec.Name.Name)
+		// In case the function declaration has been parsed previously
+		if err != nil || sType != symboltable.FunctionSymbol {
+			// process function definitions as the last
+			funcDef, err := fp.StmtParser.ParseFuncDecl(spec)
+			if err != nil {
+				// TODO(jchaloup): this should not error (ever)
+				// It can happen an identifier is unknown. Given all imported packages
+				// are already processed, the identifier comes from the same package, just
+				// from a different file. So the type parser should assume that and choose
+				// symbol's origin accordingaly.
+				glog.Warningf("File parse error: %v\n", err)
+				postponed = append(postponed, spec)
+				continue
+			}
 
-		if err := fp.SymbolTable.AddFunction(&gotypes.SymbolDef{
-			Name:    spec.Name.Name,
-			Package: fp.PackageName,
-			Def:     funcDef,
-		}); err != nil {
-			return nil, err
+			if err := fp.SymbolTable.AddFunction(&gotypes.SymbolDef{
+				Name:    spec.Name.Name,
+				Package: fp.PackageName,
+				Def:     funcDef,
+			}); err != nil {
+				return nil, err
+			}
+		} else {
+			glog.Infof("Re-processing function %q\n", spec.Name.Name)
 		}
 
 		// if an error is returned, put the function's AST into a context list
 		// and continue with other definition
+		// TODO(jchaloup): reset the alloc table back to the state before the body got processed
+		// in case the processing ended with an error
 		if err := fp.StmtParser.ParseFuncBody(spec); err != nil {
 			glog.Warningf("File parse error: %v\n", err)
 			postponed = append(postponed, spec)

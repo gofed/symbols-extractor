@@ -11,8 +11,7 @@ import (
 )
 
 func TestProjectParser(t *testing.T) {
-	gopkg := "github.com/gofed/symbols-extractor/pkg/parser/testdata"
-	pp := New(gopkg)
+	pp := New("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered")
 	if err := pp.Parse(); err != nil {
 		t.Errorf("Parse error: %v", err)
 	}
