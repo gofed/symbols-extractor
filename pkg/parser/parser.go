@@ -116,17 +116,21 @@ func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImpor
 }
 
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
+	var godirs []string
+
+	// e.g. /usr/lib/golang
+	goroot := os.Getenv("GOROOT")
+	if goroot != "" {
+		godirs = append(godirs, path.Join(goroot, "src", packagePath))
+	}
+
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
 		return nil, "", fmt.Errorf("GOPATH env not set")
 	}
 
-	// TODO(jchaloup): detect the GOROOT env from `go env` command
-	goroot := "/usr/lib/golang/"
-	godirs := []string{
-		path.Join(goroot, "src", packagePath),
-		path.Join(gopath, "src", packagePath),
-	}
+	godirs = append(godirs, path.Join(gopath, "src", packagePath))
+
 	for _, godir := range godirs {
 		fileInfo, err := ioutil.ReadDir(godir)
 		if err == nil {
@@ -136,6 +140,9 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 					continue
 				}
 				// TODO(jchaloup): filter out unacceptable files (only *.go and *.s allowed)
+				if !strings.HasSuffix(file.Name(), ".go") {
+					continue
+				}
 				files = append(files, file.Name())
 			}
 			return files, godir, nil
@@ -186,6 +193,7 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
+		glog.Infof("File %q processing...", fileContext.Filename)
 		if fileContext.DataTypes != nil {
 			payload := &fileparser.Payload{
 				DataTypes: fileContext.DataTypes,
@@ -211,6 +219,7 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
+		glog.Infof("File %q processing...", fileContext.Filename)
 		if fileContext.Variables != nil {
 			payload := &fileparser.Payload{
 				Variables: fileContext.Variables,
@@ -236,6 +245,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
+		glog.Infof("File %q processing...", fileContext.Filename)
 		if fileContext.Functions != nil {
 			payload := &fileparser.Payload{
 				Functions: fileContext.Functions,
@@ -250,6 +260,9 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			}
 			fmt.Printf("Funcs after processing: %#v\n", payload.Functions)
 			if payload.Functions != nil {
+				for _, name := range payload.Functions {
+					glog.Errorf("Function %q not processed", name.Name)
+				}
 				return fmt.Errorf("There are still some postponed functions to process after the second round: %v", p.PackagePath)
 			}
 		}
@@ -259,7 +272,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 
 func (pp *ProjectParser) Parse() error {
 	// Process the input package
-	c, err := pp.createPackageContext("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered")
+	c, err := pp.createPackageContext(pp.packagePath)
 	if err != nil {
 		return err
 	}

@@ -374,6 +374,8 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 		return &gotypes.Builtin{Def: xt}, nil
 	}
 
+	glog.Infof("Binaryexpr.x: %#v\nBinaryexpr.y: %#v\n", x[0], y[0])
+
 	// At least one of the type is an identifier
 	xIdent, xOk := x[0].(*gotypes.Identifier)
 	yIdent, yOk := y[0].(*gotypes.Identifier)
@@ -401,9 +403,11 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 
-	return &gotypes.Pointer{
-		Def: def[0],
-	}, nil
+	val, ok := def[0].(*gotypes.Pointer)
+	if !ok {
+		return nil, fmt.Errorf("Accessing a value of non-pointer type: %#v", def[0])
+	}
+	return val.Def, nil
 }
 
 func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) {
@@ -716,6 +720,9 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 		return []gotypes.DataType{def}, err
 	case *ast.Ident:
 		def, err := ep.parseIdentifier(exprType)
+		return []gotypes.DataType{def}, err
+	case *ast.StarExpr:
+		def, err := ep.parseStarExpr(exprType)
 		return []gotypes.DataType{def}, err
 	case *ast.UnaryExpr:
 		def, err := ep.parseUnaryExpr(exprType)

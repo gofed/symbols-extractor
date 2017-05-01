@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
@@ -42,6 +43,7 @@ func (s *Stack) Pop() {
 		panic("Popping over an empty stack of symbol tables")
 		// If you reached this line you are a magician
 	}
+	glog.Infof("Popping symbol table stack %v\n", s.Size)
 }
 
 func (s *Stack) AddImport(sym *gotypes.SymbolDef) error {
@@ -66,6 +68,7 @@ func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
 }
 
 func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
+	glog.Infof("Adding function %q as: %#v", sym.Name, sym.Def)
 	if s.Size > 0 {
 		return s.Tables[s.Size-1].AddFunction(sym)
 	}
@@ -119,6 +122,11 @@ func (s *Stack) Print() {
 	for i := s.Size - 1; i >= 0; i-- {
 		fmt.Printf("Table %v: symbol: %#v\n", i, s.Tables[i])
 	}
+}
+
+func (s *Stack) Json() {
+	x, _ := json.Marshal(s)
+	fmt.Print(string(x))
 }
 
 func (s *Stack) PrintTop() {
