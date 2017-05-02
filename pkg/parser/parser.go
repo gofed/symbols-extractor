@@ -271,8 +271,22 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 }
 
 func (pp *ProjectParser) Parse() error {
+	// process builtin package first
+	if err := pp.processPackage("builtin"); err != nil {
+		return err
+	}
+	// check if the requested package is already provided
+	if _, err := pp.globalSymbolTable.Lookup(pp.packagePath); err == nil {
+		return nil
+	}
+
+	// process the requested package
+	return pp.processPackage(pp.packagePath)
+}
+
+func (pp *ProjectParser) processPackage(packagePath string) error {
 	// Process the input package
-	c, err := pp.createPackageContext(pp.packagePath)
+	c, err := pp.createPackageContext(packagePath)
 	if err != nil {
 		return err
 	}

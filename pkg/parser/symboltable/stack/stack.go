@@ -90,6 +90,17 @@ func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
 	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
+func (s *Stack) LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error) {
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := s.Size - 1; i >= 0; i-- {
+		def, err := s.Tables[i].LookupMethod(datatype, methodName)
+		if err == nil {
+			return def, nil
+		}
+	}
+	return nil, fmt.Errorf("Method %q of data type %q not found", methodName, datatype)
+}
+
 // Lookup looks for the first occurrence of a symbol with the given name
 func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
 	// The top most item on the stack is the right most item in the simpleSlice

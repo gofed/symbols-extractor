@@ -73,7 +73,7 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 }
 
 func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
-	glog.Infof("Processing function declaration: %#v\n", d)
+	glog.Infof("Processing function %q declaration: %#v\n", d.Name.Name, d)
 	// parseFunction does not store name of params, resp. results
 	// as the names are not important. Just params, resp. results ordering is.
 	// Thus, this method is used to parse function's signature only.
@@ -98,13 +98,16 @@ func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
 
 	// Receiver has a single parametr
 	// https://golang.org/ref/spec#Receiver
-	if len((*d.Recv).List) != 1 || len((*d.Recv).List[0].Names) != 1 {
-		return nil, fmt.Errorf("Receiver is not a single parameter")
+	if len(d.Recv.List) != 1 || len(d.Recv.List[0].Names) > 2 {
+		if len(d.Recv.List) != 1 {
+			return nil, fmt.Errorf("Method %q has no receiver", d.Name.Name)
+		}
+		return nil, fmt.Errorf("Receiver is not a single parameter: %#v, %#v", d.Recv, d.Recv.List[0].Names)
 	}
 
 	//fmt.Printf("Rec Name: %#v\n", (*d.Recv).List[0].Names[0].Name)
 
-	recDef, err := sp.parseReceiver((*d.Recv).List[0].Type, false)
+	recDef, err := sp.parseReceiver(d.Recv.List[0].Type, false)
 	if err != nil {
 		return nil, err
 	}
@@ -355,8 +358,13 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					Def:     def[0],
 				})
 			}
+		case *ast.SelectorExpr, *ast.StarExpr:
+			_, err := sp.ExprParser.Parse(statement.Lhs[i])
+			if err != nil {
+				return nil
+			}
 		default:
-			return fmt.Errorf("Lhs of an assignment type %#v is not recognized", statement.Lhs[i])
+			return fmt.Errorf("Lhs[%v] of an assignment type %#v is not recognized", i, statement.Lhs[i])
 		}
 	}
 	return nil
@@ -779,7 +787,7 @@ func (sp *Parser) parseDeferStmt(statement *ast.DeferStmt) error {
 }
 
 func (sp *Parser) parseIfStmt(statement *ast.IfStmt) error {
-	glog.Infof("Processing it statement  %#v\n", statement)
+	glog.Infof("Processing if statement  %#v\n", statement)
 	// If Init; Cond { Body } Else
 
 	// The Init part is basically another block
@@ -883,18 +891,24 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 	if funcDecl.Recv != nil {
 		// Receiver has a single parametr
 		// https://golang.org/ref/spec#Receiver
-		if len((*funcDecl.Recv).List) != 1 || len((*funcDecl.Recv).List[0].Names) != 1 {
-			return fmt.Errorf("Receiver is not a single parameter")
+		if len(funcDecl.Recv.List) != 1 || len(funcDecl.Recv.List[0].Names) > 2 {
+			if len(funcDecl.Recv.List) != 1 {
+				return fmt.Errorf("Method %q has no receiver", funcDecl.Name.Name)
+			}
+			return fmt.Errorf("Receiver is not a single parameter: %#v, %#v", funcDecl.Recv, funcDecl.Recv.List[0].Names)
 		}
 
-		def, err := sp.parseReceiver((*funcDecl.Recv).List[0].Type, true)
+		def, err := sp.parseReceiver(funcDecl.Recv.List[0].Type, true)
 		if err != nil {
 			return err
 		}
-		sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-			Name: (*funcDecl.Recv).List[0].Names[0].Name,
-			Def:  def,
-		})
+		// the receiver can be typed only
+		if funcDecl.Recv.List[0].Names != nil {
+			sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+				Name: (*funcDecl.Recv).List[0].Names[0].Name,
+				Def:  def,
+			})
+		}
 	}
 
 	if funcDecl.Type.Params != nil {

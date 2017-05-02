@@ -242,6 +242,7 @@ func (fp *FileParser) Parse(p *Payload) error {
 
 	fmt.Printf("AllocST for %q\n", fp.PackageName)
 	fp.AllocatedSymbolsTable.Print()
+	//fp.SymbolTable.Json()
 
 	return nil
 }

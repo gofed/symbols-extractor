@@ -48,8 +48,8 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	// it is allocated.
 
 	// Check if the identifier is a built-in type
-	if isBuiltin(typedExpr.Name) {
-		p.AllocatedSymbolsTable.AddSymbol("", typedExpr.Name)
+	if p.Config.IsBuiltin(typedExpr.Name) {
+		p.AllocatedSymbolsTable.AddSymbol("builtin", typedExpr.Name)
 		return &gotypes.Builtin{Def: typedExpr.Name}, nil
 	}
 

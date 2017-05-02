@@ -2,31 +2,29 @@ package statement
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
-	"path"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/testing/utils"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
-
-/**** HELP FUNCTIONS ****/
 
 func prepareParser(pkgName string) *types.Config {
 	c := &types.Config{
 		PackageName:           pkgName,
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
+		GlobalSymbolTable:     global.New(),
 	}
+
+	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())
 
 	c.SymbolTable.Push()
 	c.TypeParser = typeparser.New(c)
@@ -34,80 +32,6 @@ func prepareParser(pkgName string) *types.Config {
 	c.StmtParser = New(c)
 
 	return c
-}
-
-func getAst(gopkg, filename string, gocode interface{}) (*ast.File, *token.FileSet, error) {
-	fset := token.NewFileSet()
-	gofile := path.Join(os.Getenv("GOPATH"), "src", gopkg, filename)
-	f, err := parser.ParseFile(fset, gofile, gocode, 0)
-	if err != nil {
-		return nil, fset, err
-	}
-
-	return f, fset, nil
-}
-
-func parseNonFunc(config *types.Config, astF *ast.File) error {
-	//TODO: later parsing of values will be required
-	for _, d := range astF.Decls {
-		switch decl := d.(type) {
-		case *ast.GenDecl:
-			for _, spec := range decl.Specs {
-				//fmt.Printf("=== %#v", spec)
-				switch d := spec.(type) {
-				case *ast.TypeSpec:
-					if err := config.SymbolTable.AddDataType(&gotypes.SymbolDef{
-						Name:    d.Name.Name,
-						Package: config.PackageName,
-						Def:     nil,
-					}); err != nil {
-						return err
-					}
-
-					typeDef, err := config.TypeParser.Parse(d.Type)
-					if err != nil {
-						return err
-					}
-
-					if err := config.SymbolTable.AddDataType(&gotypes.SymbolDef{
-						Name:    d.Name.Name,
-						Package: config.PackageName,
-						Def:     typeDef,
-					}); err != nil {
-						return err
-					}
-					// case *ast.ValueSpec:
-					// 	_, err := config.TypeParser.Parse(d.Type)
-					// 	if err != nil {
-					// 		return err
-					// 	}
-					// 	config.SymbolTable.AddVariable(&gotypes.SymbolDef{
-					// 		Name:    d.Names[0].Name,
-					// 		Package: config.PackageName,
-					// 		Def: &gotypes.Identifier{
-					// 			Def: d.Names[0].Name,
-					// 		},
-					// 	})
-				}
-			}
-		default:
-			continue
-		}
-	}
-
-	return nil
-}
-
-func iterFunc(astF *ast.File) []*ast.FuncDecl {
-	var decls []*ast.FuncDecl
-
-	for _, decl := range astF.Decls {
-		if fdecl, ok := decl.(*ast.FuncDecl); ok {
-			decls = append(decls, fdecl)
-		}
-	}
-
-	return decls
 }
 
 /**** TEST FUNCTIONS ****/
@@ -258,7 +182,7 @@ TEST_LOOP:
 	for _, tfdecl := range testFDecl {
 		// create AST
 		gocode := funcSrc + strings.Join(tfdecl.fDecl, "\n")
-		astF, _, err := getAst(gopkg, "funcDecl.go", gocode)
+		astF, _, err := utils.GetAst(gopkg, "funcDecl.go", gocode)
 		if err != nil {
 			t.Errorf("Wrong input data: %v", err)
 			return
@@ -268,13 +192,13 @@ TEST_LOOP:
 
 		// complete pre-test data (add Function type)
 		config := prepareParser(gopkg)
-		err = parseNonFunc(config, astF)
+		err = utils.ParseNonFunc(config, astF)
 		if err != nil {
 			t.Errorf("Can't parse types outside of body: %#v", err)
 			continue
 		}
 
-		for i, fdecl := range iterFunc(astF) {
+		for i, fdecl := range utils.IterFunc(astF) {
 			if tfdecl.expectRes[i] == nil {
 				continue
 			}
@@ -289,8 +213,8 @@ TEST_LOOP:
 		}
 
 		// TEST
-		for i, fdecl := range iterFunc(astF) {
-
+		for i, fdecl := range utils.IterFunc(astF) {
+			fmt.Printf("Parsing %#v\n", tfdecl.fDecl[i])
 			// test that function returns expected values
 			if ret, err := config.StmtParser.ParseFuncDecl(fdecl); err != nil {
 				if tfdecl.expectRes[i] != nil {

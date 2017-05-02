@@ -9,6 +9,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 // TypeParser implementation is responsible for Go data type parsing/processing
@@ -51,6 +52,26 @@ type Config struct {
 	ExprParser ExpressionParser
 	// statement parser
 	StmtParser StatementParser
+}
+
+func (c *Config) GetBuiltin(name string) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
+	table, err := c.GlobalSymbolTable.Lookup("builtin")
+	if err != nil {
+		return nil, "", err
+	}
+	return table.Lookup(name)
+}
+
+func (c *Config) IsBuiltin(name string) bool {
+	table, err := c.GlobalSymbolTable.Lookup("builtin")
+	if err != nil {
+		glog.Warning(err)
+		return false
+	}
+	if _, _, err := table.Lookup(name); err == nil {
+		return true
+	}
+	return false
 }
 
 // Lookup retrieves a definition of identifier ident

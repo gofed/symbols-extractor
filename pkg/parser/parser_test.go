@@ -109,7 +109,7 @@ func TestProjectParser(t *testing.T) {
 		if !reflect.DeepEqual(st, pst) {
 			x, _ := json.Marshal(pst)
 			y, _ := json.Marshal(st)
-			t.Errorf("Symbol table %q mismatch. Got:\n%v\nExpected:\n%v", expectedPackages["unordered"], string(x), string(y))
+			t.Errorf("Symbol table %q mismatch. \nGot:\n%v\nExpected:\n%v", expectedPackages["unordered"], string(x), string(y))
 		}
 
 		at := alloctable.New()
@@ -122,7 +122,7 @@ func TestProjectParser(t *testing.T) {
 		at.AddSymbol(expectedPackages["pkg"], "Imp")
 		at.AddSymbol(expectedPackages["pkgb"], "Imp")
 		// type MyInt int
-		at.AddSymbol("", "int")
+		at.AddSymbol("builtin", "int")
 		// func Nic() *pkg.Imp {
 		// 	pkg.Nic().Imp.Size
 		// 	return &pkg.Imp{
@@ -205,11 +205,11 @@ func TestProjectParser(t *testing.T) {
 		if !reflect.DeepEqual(st, pst) {
 			x, _ := json.Marshal(pst)
 			y, _ := json.Marshal(st)
-			t.Errorf("Symbol table %q mismatch. Got:\n%v\nExpected:\n%v", expectedPackages["pkg"], string(x), string(y))
+			t.Errorf("Symbol table %q mismatch. \nGot:\n%v\nExpected:\n%v", expectedPackages["pkg"], string(x), string(y))
 		}
 		at := alloctable.New()
-		at.AddSymbol("", "string")
-		at.AddSymbol("", "int")
+		at.AddSymbol("builtin", "string")
+		at.AddSymbol("builtin", "int")
 		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkgb", "Imp")
 		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg", "Imp")
 		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg", "Imp")
@@ -252,8 +252,8 @@ func TestProjectParser(t *testing.T) {
 			t.Errorf("Symbol table %q mismatch.\nGot:\n%v\nExpected:\n%v", expectedPackages["pkgb"], string(x), string(y))
 		}
 		at := alloctable.New()
-		at.AddSymbol("", "string")
-		at.AddSymbol("", "int")
+		at.AddSymbol("builtin", "string")
+		at.AddSymbol("builtin", "int")
 
 		pat, _ := atable.Lookup(expectedPackages["pkgb"], "pkg.go")
 		if !reflect.DeepEqual(at, pat) {
