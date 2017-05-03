@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
@@ -280,14 +281,29 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 
 func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	glog.Infof("Processing identifier: %#v\n", ident)
-	// TODO(jchaloup): put the nil into the allocated symbol table
-	if ident.Name == "nil" {
-		return &gotypes.Nil{}, nil
-	}
 
-	// true/false
-	if ident.Name == "true" || ident.Name == "false" {
-		return &gotypes.BuiltinLiteral{Def: "bool"}, nil
+	table, err := ep.GlobalSymbolTable.Lookup("builtin")
+	if err != nil {
+		return nil, err
+	}
+	symbolDef, symbolType, symbolErr := table.Lookup(ident.Name)
+	if symbolErr == nil {
+		switch symbolType {
+		case symboltable.VariableSymbol:
+			switch ident.Name {
+			case "true", "false":
+				return &gotypes.Builtin{Def: "bool"}, nil
+			case "nil":
+				return &gotypes.Nil{}, nil
+			// TODO(jchaloup): process iota as well
+			default:
+				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
+			}
+		case symboltable.FunctionSymbol:
+			return symbolDef.Def, nil
+		default:
+			return nil, fmt.Errorf("Unsupported symbol type: %v", symbolType)
+		}
 	}
 
 	// Check if the symbol is in the symbol table.
@@ -331,11 +347,15 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 		return &gotypes.Pointer{
 			Def: def[0],
 		}, nil
+	// channel
 	case token.ARROW:
 		if def[0].GetType() != gotypes.ChannelType {
 			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead", def[0].GetType())
 		}
 		return def[0].(*gotypes.Channel).Value, nil
+		// other
+	case token.XOR:
+		return def[0], nil
 	default:
 		return nil, fmt.Errorf("Unary operator %#v not recognized", expr.Op)
 	}
@@ -362,6 +382,12 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	y, xErr := ep.Parse(expr.Y)
 	if xErr != nil {
 		return nil, xErr
+	}
+
+	switch expr.Op {
+	case token.EQL, token.NEQ:
+		// TODO(jchaloup): check both operands have acceptable data type
+		return &gotypes.Builtin{Def: "bool"}, nil
 	}
 
 	// If both types are built-in, just return built-in
@@ -410,8 +436,103 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 	return val.Def, nil
 }
 
+func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
+	e = expr
+	for {
+		if pe, ok := e.(*ast.ParenExpr); ok {
+			e = pe.X
+			continue
+		}
+		return
+	}
+}
+
+func (ep *Parser) isDataType(expr ast.Expr) bool {
+	glog.Infof("Detecting isDataType for %#v", expr)
+	switch exprType := expr.(type) {
+	case *ast.Ident:
+		// not a user defined type
+		if table, err := ep.GlobalSymbolTable.Lookup("builtin"); err == nil {
+			if _, symType, err := table.Lookup(exprType.Name); err == nil {
+				return symType.IsDataType()
+			}
+		}
+		// user defined type
+		_, symType, err := ep.SymbolTable.Lookup(exprType.Name)
+		if err != nil {
+			// I don't know state which get catched later
+			return false
+		}
+		return symType.IsDataType()
+	case *ast.SelectorExpr:
+		// Selector based data type is in a form qid.typeid
+		// If the selector.X is not an identifier => variable
+		ident, ok := exprType.X.(*ast.Ident)
+		if !ok {
+			return false
+		}
+		// is ident qid?
+		qiddef, err := ep.SymbolTable.LookupVariable(ident.Name)
+		if err != nil {
+			return false
+		}
+		qid, ok := qiddef.Def.(*gotypes.Packagequalifier)
+		if !ok {
+			return false
+		}
+		if table, err := ep.GlobalSymbolTable.Lookup(qid.Path); err == nil {
+			if _, symType, err := table.Lookup(exprType.Sel.Name); err == nil {
+				return symType.IsDataType()
+			}
+		}
+		// the symbol table for qid not found => get catched later
+		return false
+	case *ast.StarExpr:
+		return ep.isDataType(exprType.X)
+	case *ast.ParenExpr:
+		return ep.isDataType(exprType.X)
+	case *ast.FuncLit:
+		return true
+	// TODO(jchaloup): what about (&functionidvar)(args)?
+	default:
+		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
+		panic(fmt.Errorf("Unrecognized isDataType expr: %#v", expr))
+	}
+	return false
+}
+
+func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error) {
+	switch typeDef := def.(type) {
+	case *gotypes.Identifier:
+		// local definition
+		if typeDef.Package == "" {
+			def, defType, err := ep.SymbolTable.Lookup(typeDef.Def)
+			if err != nil {
+				return nil, err
+			}
+			if defType.IsFunctionType() {
+				return def.Def, nil
+			}
+			if !defType.IsVariable() {
+				return nil, fmt.Errorf("Function call expression %#v is not expected to be a type", def)
+			}
+			return ep.getFunctionDef(def.Def)
+		}
+	case *gotypes.Function:
+		return def, nil
+	case *gotypes.Method:
+		return def, nil
+	case *gotypes.Pointer:
+		return nil, fmt.Errorf("Can not invoke non-function expression: %#v", def)
+	default:
+		panic(fmt.Errorf("Unrecognized getFunctionDef def: %#v", def))
+	}
+	return nil, nil
+}
+
 func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) {
 	glog.Infof("Processing CallExpr: %#v\n", expr)
+	defer glog.Infof("Leaving CallExpr: %#v\n", expr)
 
 	for _, arg := range expr.Args {
 		// an argument is passed to the function so its data type does not affect the result data type of the call
@@ -426,70 +547,35 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 		// to provide more information about the type if the function parameter is an interface.
 	}
 
-	var function gotypes.DataType
-	switch exprType := expr.Fun.(type) {
-	case *ast.Ident:
-		// simple function ID
-		// check if the function name is a variable or a type
+	expr.Fun = ep.parseParenExpr(expr.Fun)
 
-		// not a user defined type
-		if def, err := ep.TypeParser.Parse(exprType); err == nil {
-			if def.GetType() == gotypes.BuiltinType {
-				return []gotypes.DataType{def}, nil
-			}
-		}
-
-		def, symbolType, err := ep.SymbolTable.Lookup(exprType.Name)
-		if err != nil {
-			// Return an error so the function body processing can be postponed
-			// TODO(jchaloup): return more information about the missing symbol so the
-			// body can be re-processed right after the symbol is stored into the symbol table.
-			return nil, err
-		}
-		if symbolType.IsDataType() {
-			return []gotypes.DataType{
-				&gotypes.Identifier{Def: exprType.Name},
-			}, nil
-		}
-
-		// Get function's definition from the symbol table (if it exists)
-		// and use its result type as the return type.
-		// If a function/method call is a part of an expression, the function/method has only ony result type.
-
-		// Store the symbol to the allocated ST
-		ep.AllocatedSymbolsTable.AddSymbol(def.Package, exprType.Name)
-		function = def.Def
-	case *ast.SelectorExpr:
-		def, err := ep.parseSelectorExpr(exprType)
-		if err != nil {
-			return []gotypes.DataType{def}, err
-		}
-		function = def
-	case *ast.FuncLit:
-		if err := ep.StmtParser.ParseFuncBody(&ast.FuncDecl{
-			Type: exprType.Type,
-			Body: exprType.Body,
-		}); err != nil {
-			return nil, err
-		}
-
-		def, err := ep.TypeParser.Parse(exprType.Type)
+	// data type => explicit type casting
+	if ep.isDataType(expr.Fun) {
+		def, err := ep.TypeParser.Parse(expr.Fun)
 		if err != nil {
 			return nil, err
 		}
-
-		function = def
-	default:
-		return nil, fmt.Errorf("Call expr not recognized: %#v", expr)
+		return []gotypes.DataType{def}, nil
 	}
 
-	switch funcType := function.(type) {
+	// function
+	def, err := ep.ExprParser.Parse(expr.Fun)
+	if err != nil {
+		return nil, err
+	}
+
+	funcDef, err := ep.getFunctionDef(def[0])
+	if err != nil {
+		return nil, err
+	}
+
+	switch funcType := funcDef.(type) {
 	case *gotypes.Function:
 		return funcType.Results, nil
 	case *gotypes.Method:
 		return funcType.Def.(*gotypes.Function).Results, nil
 	default:
-		return nil, fmt.Errorf("Symbol %#v to be called is not a function", function)
+		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
 }
 
@@ -530,6 +616,12 @@ func (ep *Parser) retrieveStructField(structDefsymbol *gotypes.SymbolDef, field 
 			}
 			return item.Def, nil
 		}
+	}
+
+	// If it is not a field, is it a method?
+	glog.Infof("Retrieving method %q of data type %q", field, structDefsymbol.Name)
+	if method, err := ep.SymbolTable.LookupMethod(structDefsymbol.Name, field); err == nil {
+		return method.Def, nil
 	}
 	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", field, structDefsymbol)
 }

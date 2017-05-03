@@ -647,3 +647,21 @@ label:
 
 var a, b = "nic", "d"
 var c, d string
+
+type F struct{}
+
+func (f *F) test() {}
+
+func TestFuncionCallExprs() {
+	{
+		a := func() *Function { return nil }
+		a()
+		// invalid use of expression invocation
+		// b := &a
+		// b()
+	}
+	{
+		f := F{}
+		f.test()
+	}
+}
