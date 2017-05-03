@@ -44,7 +44,7 @@ func BuiltinOrIdent(s string) string {
 
 type Test struct {
 	Code     string `yaml:"code"`
-	Expected string `yaml:"expected"`
+	Expected []string `yaml:"expected"`
 }
 
 type Target struct {
@@ -139,7 +139,6 @@ func getPkgPath() string {
 }
 
 /* TODO(pstodulk):
- * -? fill symboltable - troubles with function
  * - complete templates (binexp complete)
  */
 

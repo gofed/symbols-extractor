@@ -71,10 +71,11 @@ func initExprTest(expr_str string) (*types.Config, ast.Expr, error) {
 
   {{if eq $target "parseBinaryExpr"}}{{range $i, $elem := .Tests}}
     func Test{{tittle $target}}{{$i}} (t *testing.T) {
+        {{$expected := (index .Expected 0) -}}
         expr_str := "{{.Code}}"
-        expected_type := &gotypes.{{BuiltinOrIdent .Expected}}{{"{"}}
-            Def:"{{.Expected}}",
-            {{if not (isBuiltin .Expected)}}Package: gopkg,{{end}}
+        expected_type := &gotypes.{{BuiltinOrIdent $expected}}{{"{"}}
+            Def:"{{$expected}}",
+            {{if not (isBuiltin $expected)}}Package: gopkg,{{end}}
         {{"}"}}
         config, expr, errE := initExprTest(expr_str)
         if errE != nil {
@@ -114,9 +115,9 @@ func initExprTest(expr_str string) (*types.Config, ast.Expr, error) {
         }
 
         fmt.Printf("%#v\n", res)
-        //if res.GetType() != "{{.Expected}}" {
+        //if res.GetType() != "{{.Expected 0}}" {
         //  msgf := "Expected type '%s', received '%s' instead for expr: '%s' "
-        //  t.Errorf(msgf, "{{.Expected}}", res.GetType(), expr_str)
+        //  t.Errorf(msgf, "{{.Expected 0}}", res.GetType(), expr_str)
         //}
   }{{template "nlspace"}}{{end}}{{end}}
 {{end}}
