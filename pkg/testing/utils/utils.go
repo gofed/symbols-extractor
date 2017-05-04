@@ -38,7 +38,7 @@ func GetAst(gopkg, filename string, gocode interface{}) (*ast.File, *token.FileS
 	gofile := path.Join(os.Getenv("GOPATH"), "src", gopkg, filename)
 	f, err := parser.ParseFile(fset, gofile, gocode, 0)
 	if err != nil {
-		return nil, fset, err
+		return nil, nil, err
 	}
 
 	return f, fset, nil
@@ -95,6 +95,25 @@ func ParseNonFunc(config *types.Config, astF *ast.File) error {
 		default:
 			continue
 		}
+	}
+
+	return nil
+}
+
+func ParseFuncDecls(config *types.Config, astF *ast.File) error {
+	// parse declarations of functions; ignore body
+    for _, fDecl := range IterFunc(astF) {
+			funcDef, errF := config.StmtParser.ParseFuncDecl(fDecl)
+			if errF != nil {
+				return errF
+			}
+
+			config.SymbolTable.AddFunction(&gotypes.SymbolDef{
+				Name:    fDecl.Name.Name,
+				Package: config.PackageName,
+				Def:     funcDef,
+			})
+
 	}
 
 	return nil
