@@ -7,13 +7,35 @@ import (
 	"reflect"
 	"testing"
 
-	//    "github.com/gofed/symbols-extractor/pkg/parser/alloctable"
-	//    "github.com/gofed/symbols-extractor/pkg/parser/symboltable"
-	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
+	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 
-	//    typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/testing/utils"
+
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
+
+func prepareParser(pkgName string) *types.Config {
+	c := &types.Config{
+		PackageName:           pkgName,
+		SymbolTable:           stack.New(),
+		AllocatedSymbolsTable: alloctable.New(),
+		GlobalSymbolTable:     global.New(),
+	}
+
+	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())
+
+	c.SymbolTable.Push()
+	c.TypeParser = typeparser.New(c)
+	c.ExprParser = New(c)
+	c.StmtParser = stmtparser.New(c)
+
+	return c
+}
 
 const gopkg string = "github.com/gofed/symbols-extractor/pkg/parser/testdata/valid"
 const gocode string = `
@@ -33,16 +55,16 @@ package exprtest
 
 func initST() (*types.Config, error) {
 	config := prepareParser(gopkg)
-	astF, _, err := getAst(gopkg, "", gocode)
+	astF, _, err := utils.GetAst(gopkg, "", gocode)
 	if err != nil {
 		return nil, fmt.Errorf("Broken test! Fix test suite: %v", err)
 	}
-	if err = parseNonFunc(config, astF); err != nil {
-		return nil, err
+	if err = utils.ParseNonFunc(config, astF); err != nil {
+		return nil, fmt.Errorf("utils.ParseNonFunc: %v", err)
 	}
 
-	if err = parseFuncDecls(config, astF); err != nil {
-		return nil, fmt.Errorf("parseFuncDecls: %v", err)
+	if err = utils.ParseFuncDecls(config, astF); err != nil {
+		return nil, fmt.Errorf("utils.ParseFuncDecls: %v", err)
 	}
 
 	return config, nil

@@ -42,7 +42,7 @@ targets:
       -
         code: '\"Hello\" + \" Johnny!\"'
         expected: [string]
-      - 
+      -
         code: "2 + int(MyFunc(3))"
         expected: [int]
       -
