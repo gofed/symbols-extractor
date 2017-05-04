@@ -16,6 +16,7 @@ import (
 // generated test files use this prefix
 const prefix string = "gen_"
 
+// TODO: these can be removed probably. Check it later
 var builtinTypes = map[string]struct{}{
 	"uint": {}, "uint8": {}, "uint16": {}, "uint32": {}, "uint64": {},
 	"int": {}, "int8": {}, "int16": {}, "int32": {}, "int64": {},

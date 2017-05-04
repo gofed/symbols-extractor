@@ -1,10 +1,40 @@
 ---
+# TODO(pstodulk): Missing tests with
+#  - interfaces
+#  - use of methods
+#  - exported/private symbols
+#  - pointers
+#  - anonymous types
+#  - try maps and channels!
+#  - - find simple way how to assemble various DataTypes, including
+#      maps, slices, .... - think about '@type' format, e.g.:
+#         '@map[string]int'
+#      Such string should be parsed by ast in suitable way and then can be
+#      used some function which creates from this expected data type
+#  --- parse special format @type to q
+#  - user dict for symboltable to create ST representing other files
 symboltable:
   - "type MyInt int"
-  - "var FooMyInt MyInt"
   - "type MyStruct struct { Foo int }"
+  - "var FooMyInt MyInt"
+  - "var pFooMyInt *MyInt"
+  - "var FooMyStruct MyStruct"
   - "func MyFunc(MyInt) MyInt"
   - "func MyFuncStr(MyInt) string"
+  - "func (i *MyInt) Inc(increment MyInt)"
+  - "func (i MyInt) GetAbs() uint"
+  # various funcs for parseCallExpr and others
+  - "func Sum(a, b int) int"
+  - "func SumEllipsis(i ...int) int"
+  - "func Difference(a int, b int) int"
+  - "func Div(a,b int32) (int, error)"
+  - "func TransformMyStruct (a MyStruct) MyStruct"
+  - "func Mapping() map[string]MyStruct"
+  - "func fibonacci() func() int"
+  - "func (s *MyStruct) getFoo() int"
+  - "func (i *MyInt) Op(fce func (MyInt, MyInt) MyInt)"
+  - "func Closure(s string, i int) func(int) (string, error)"
+  - "func DClosure(fn func(int) uint, s string) (func(string) (int,error), func(int) uint)"
 targets:
   -
     target: parseBinaryExpr
@@ -87,15 +117,38 @@ targets:
       -
         code: "true || ((5+1) * (MyFunc(11) / MyInt(14))) > 0"
         expected: [bool]
-  #-
-  #  target: parseCallExpr
-  #  tests:
-  #    -
-  #      code: "MyFunc(MyInt(3))"
-  #      expected:
-  #      - int
-  #      - int
-  #    -
-  #      code: "MyFuncStr(MyInt(2))"
-  #      expected: string
+      -
+        code: "(5 + 1) + (10 * 1)"
+        expected: [int]
+  -
+    target: parseCallExpr
+    tests:
+      -
+        code: "Sum(5, 3)"
+        expected: [int]
+      -
+        code: "Div(5, 3)"
+        expected: [int, error]
+      -
+        code: "SumEllipsis(5, 3, 4)"
+        expected: [int]
+      -
+        code: "MyFunc(MyInt(3))"
+        expected: [MyInt]
+      -
+        code: "MyFuncStr(MyInt(2))"
+        expected: [string]
+      -
+        code: "TransformMyStruct(FooMyStruct)"
+        expected: [MyStruct]
+      -
+        code: FooMyStruct.GetAbs()
+        expected: [uint]
+      -
+        code: FooMyStruct.Inc(4)
+        expected: []
+      #-
+      #  #TODO
+      #  code: "Mapping()"
+      #  expected: ["@map[string]MyStruct"]
 ...
