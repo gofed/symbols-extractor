@@ -376,12 +376,12 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	// user defined type returning built-in type, both operands must be processed.
 
 	// X Op Y
-	x, yErr := ep.Parse(expr.X)
+	x, yErr := ep.Parse(ep.parseParenExpr(expr.X))
 	if yErr != nil {
 		return nil, yErr
 	}
 
-	y, xErr := ep.Parse(expr.Y)
+	y, xErr := ep.Parse(ep.parseParenExpr(expr.Y))
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -420,6 +420,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 
 func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing StarExpr: %#v\n", expr)
+	//TODO: what about ParenExpr?
 	def, err := ep.Parse(expr.X)
 	if err != nil {
 		return nil, err
@@ -438,8 +439,10 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 
 func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
 	e = expr
+	glog.Info("Processing ParenExpr: %#v\n", expr)
 	for {
 		if pe, ok := e.(*ast.ParenExpr); ok {
+			glog.Info("Processing ParenExpr: dive deeper: %#v\n", pe)
 			e = pe.X
 			continue
 		}
