@@ -387,7 +387,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	}
 
 	switch expr.Op {
-	case token.EQL, token.NEQ:
+	case token.EQL, token.NEQ, token.LEQ, token.GEQ, token.LSS, token.GTR, token.LAND, token.LOR:
 		// TODO(jchaloup): check both operands have acceptable data type
 		return &gotypes.Builtin{Def: "bool"}, nil
 	}
@@ -411,8 +411,6 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	if !xOk && !yOk {
 		return nil, fmt.Errorf("Both operands of a binary operator must be identifiers")
 	}
-
-	// TODO(jchaloup): logical and/or over any two operands is always a bool
 
 	if xOk {
 		return xIdent, nil
