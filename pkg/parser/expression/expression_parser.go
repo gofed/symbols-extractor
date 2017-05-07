@@ -356,6 +356,8 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 		// other
 	case token.XOR:
 		return def[0], nil
+	case token.NOT:
+		return def[0], nil
 	default:
 		return nil, fmt.Errorf("Unary operator %#v not recognized", expr.Op)
 	}
