@@ -356,6 +356,8 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 		// other
 	case token.XOR:
 		return def[0], nil
+	case token.NOT:
+		return def[0], nil
 	default:
 		return nil, fmt.Errorf("Unary operator %#v not recognized", expr.Op)
 	}
@@ -374,18 +376,18 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	// user defined type returning built-in type, both operands must be processed.
 
 	// X Op Y
-	x, yErr := ep.Parse(expr.X)
+	x, yErr := ep.Parse(ep.parseParenExpr(expr.X))
 	if yErr != nil {
 		return nil, yErr
 	}
 
-	y, xErr := ep.Parse(expr.Y)
+	y, xErr := ep.Parse(ep.parseParenExpr(expr.Y))
 	if xErr != nil {
 		return nil, xErr
 	}
 
 	switch expr.Op {
-	case token.EQL, token.NEQ:
+	case token.EQL, token.NEQ, token.LEQ, token.GEQ, token.LSS, token.GTR, token.LAND, token.LOR:
 		// TODO(jchaloup): check both operands have acceptable data type
 		return &gotypes.Builtin{Def: "bool"}, nil
 	}
@@ -410,8 +412,6 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 		return nil, fmt.Errorf("Both operands of a binary operator must be identifiers")
 	}
 
-	// TODO(jchaloup): logical and/or over any two operands is always a bool
-
 	if xOk {
 		return xIdent, nil
 	}
@@ -420,6 +420,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 
 func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing StarExpr: %#v\n", expr)
+	//TODO: what about ParenExpr?
 	def, err := ep.Parse(expr.X)
 	if err != nil {
 		return nil, err
@@ -438,8 +439,10 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 
 func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
 	e = expr
+	glog.Info("Processing ParenExpr: %#v\n", expr)
 	for {
 		if pe, ok := e.(*ast.ParenExpr); ok {
+			glog.Info("Processing ParenExpr: dive deeper: %#v\n", pe)
 			e = pe.X
 			continue
 		}
