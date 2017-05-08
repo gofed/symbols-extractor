@@ -310,14 +310,69 @@ func (sp *Parser) parseIncDecStmt(statement *ast.IncDecStmt) error {
 
 func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	glog.Infof("Processing assignment statement  %#v\n", statement)
-	// expr.Lhs = expr.Rhs
-	// left-hand sice expression must be an identifier or a selector
+
+	// define general Rhs index function
+	rhsIndexer := func(i int) (gotypes.DataType, error) {
+		def, err := sp.ExprParser.Parse(statement.Rhs[i])
+		if err != nil {
+			return nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v", i, statement, err)
+		}
+		if len(def) != 1 {
+			return nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, def)
+		}
+		return def[0], err
+	}
+
 	exprsSize := len(statement.Lhs)
+	rExprSize := len(statement.Rhs)
 	// Some assignments are of a different number of expression on both sides.
 	// E.g. value, ok := somemap[key]
-	// TODO(jchaloup): cover all the cases as well
-	if exprsSize != len(statement.Rhs) {
-		return fmt.Errorf("Number of expression of the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", statement.Lhs, statement.Rhs)
+	//      ret1, ..., retn = func(...)
+	if exprsSize != rExprSize {
+		if rExprSize != 1 {
+			return fmt.Errorf("Number of expressions on the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", statement.Lhs, statement.Rhs)
+		}
+		// function call or key reading?
+		switch typeExpr := statement.Rhs[0].(type) {
+		case *ast.CallExpr:
+			callExprDef, err := sp.ExprParser.Parse(typeExpr)
+			if err != nil {
+				return err
+			}
+			if exprsSize != len(callExprDef) {
+				return fmt.Errorf("Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v", statement.Lhs, callExprDef)
+			}
+			rhsIndexer = func(i int) (gotypes.DataType, error) {
+				return callExprDef[i], nil
+			}
+			rExprSize = len(callExprDef)
+		case *ast.IndexExpr:
+			if exprsSize != 2 {
+				return fmt.Errorf("Expecting two expression on the RHS when accessing an index expression for for val, ok = indexexpr[key], got %#v instead", statement.Lhs)
+			}
+			xDef, err := sp.ExprParser.Parse(typeExpr.X)
+			if err != nil {
+				return err
+			}
+			if len(xDef) != 1 {
+				return fmt.Errorf("Index expression is not a single expression: %#v", xDef)
+			}
+			if _, err := sp.ExprParser.Parse(typeExpr.Index); err != nil {
+				return err
+			}
+			rhsIndexer = func(i int) (gotypes.DataType, error) {
+				if i == 0 {
+					return xDef[0], nil
+				}
+				if i == 1 {
+					return &gotypes.Builtin{Def: "bool"}, nil
+				}
+				return nil, fmt.Errorf("Rhs index %v out of range", i)
+			}
+			rExprSize = 2
+		default:
+			panic(fmt.Errorf("Expecting callExpr, got %#v instead", statement.Rhs[0]))
+		}
 	}
 
 	// If the assignment token is token.DEFINE a variable gets stored into the symbol table.
@@ -330,17 +385,12 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		// If the left-hand side id a selector (e.g. struct.field), we alredy know data type of the id.
 		// So, just store the field's data type into the allocated symbol table
 		//switch lhsExpr := expr.
-		glog.Infof("Assignment LHs[%v]: %#v\n", i, statement.Lhs[i])
-		glog.Infof("Assignment RHs[%v]: %#v\n", i, statement.Rhs[i])
-
-		def, err := sp.ExprParser.Parse(statement.Rhs[i])
+		rhsExpr, err := rhsIndexer(i)
 		if err != nil {
-			return fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v", i, statement, err)
+			return err
 		}
-
-		if len(def) != 1 {
-			return fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, def)
-		}
+		glog.Infof("Assignment LHs[%v]: %#v\n", i, statement.Lhs[i])
+		glog.Infof("Assignment RHs[%v]: %#v\n", i, rhsExpr)
 
 		switch lhsExpr := statement.Lhs[i].(type) {
 		case *ast.Ident:
@@ -355,12 +405,19 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 					Name:    lhsExpr.Name,
 					Package: sp.PackageName,
-					Def:     def[0],
+					Def:     rhsExpr,
 				})
 			}
 		case *ast.SelectorExpr, *ast.StarExpr:
 			_, err := sp.ExprParser.Parse(statement.Lhs[i])
 			if err != nil {
+				return nil
+			}
+		case *ast.IndexExpr:
+			if _, err := sp.ExprParser.Parse(lhsExpr.X); err != nil {
+				return nil
+			}
+			if _, err := sp.ExprParser.Parse(lhsExpr.Index); err != nil {
 				return nil
 			}
 		default:

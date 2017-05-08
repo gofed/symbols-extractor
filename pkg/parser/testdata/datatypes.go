@@ -652,6 +652,10 @@ type F struct{}
 
 func (f *F) test() {}
 
+func f1() (int, int, int) {
+	return 1, 2, 3
+}
+
 func TestFuncionCallExprs() {
 	{
 		a := func() *Function { return nil }
@@ -663,5 +667,16 @@ func TestFuncionCallExprs() {
 	{
 		f := F{}
 		f.test()
+	}
+
+	{
+		_, _, _ := f1()
+	}
+
+	{
+		a := map[string]int{
+			"a": 1,
+		}
+		_, _ := a["a"]
 	}
 }
