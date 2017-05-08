@@ -220,6 +220,10 @@
 					"type": "string",
 					"description": "Primitive type",
 					"minLength": 1
+				},
+				"untyped": {
+					"type": "boolean",
+					"description": "Presence of data type"
 				}
 			},
 			"required": ["type", "def"]
