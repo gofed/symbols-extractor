@@ -24,6 +24,33 @@ import (
 	"github.com/golang/glog"
 )
 
+var GOOS = map[string]struct{}{
+	"android":   {},
+	"darwin":    {},
+	"dragonfly": {},
+	"freebsd":   {},
+	"linux":     {},
+	"nacl":      {},
+	"netbsd":    {},
+	"openbsd":   {},
+	"plan9":     {},
+	"solaris":   {},
+	"windows":   {},
+}
+
+var GOARCH = map[string]struct{}{
+	"386":      {},
+	"amd64":    {},
+	"amd64p32": {},
+	"arm64":    {},
+	"arm":      {},
+	"mips64":   {},
+	"mips64le": {},
+	"ppc64":    {},
+	"ppc64le":  {},
+	"s390x":    {},
+}
+
 // Context participants:
 // - package (fully qualified package name, e.g. github.com/coreos/etcd/pkg/wait)
 // - package file (package + its underlying filename)
@@ -115,6 +142,41 @@ func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImpor
 	return
 }
 
+func skipGoFile(filename string) bool {
+	// http://blog.ralch.com/tutorial/golang-conditional-compilation/#file-suffixes
+	// *_GOOS // operation system
+	// *_GOARCH // platform architecture
+	// *_GOOS_GOARCH // both combined
+	// strip the *.go part
+	parts := strings.Split(strings.TrimSuffix(filename, ".go"), "_")
+	l := len(parts)
+	// GOOS or GOARCH
+	if _, ok := GOOS[parts[l-1]]; ok {
+		if parts[l-1] == "linux" {
+			return false
+		}
+		return true
+	}
+
+	if _, ok := GOARCH[parts[l-1]]; ok {
+		if l > 1 {
+			if _, ok := GOOS[parts[l-2]]; ok {
+				if parts[l-2] == "linux" && parts[l-1] == "amd64" {
+					return false
+				}
+				return true
+			}
+			if parts[l-1] == "amd64" {
+				return false
+			}
+		}
+		return true
+	}
+
+	fmt.Printf("\t\t\t%v\n", parts[l-1])
+	return false
+}
+
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
 	var godirs []string
 
@@ -141,6 +203,11 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 				}
 				// TODO(jchaloup): filter out unacceptable files (only *.go and *.s allowed)
 				if !strings.HasSuffix(file.Name(), ".go") {
+					continue
+				}
+				// Accept linux, x86_64 only
+				// TODO(jchaloup): extend the support to more OSes and archs
+				if skipGoFile(file.Name()) {
 					continue
 				}
 				files = append(files, file.Name())
