@@ -42,15 +42,15 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
 	switch lit.Kind {
 	case token.INT:
-		return &gotypes.Builtin{Def: "int"}, nil
+		return &gotypes.Builtin{Def: "int", Untyped: true}, nil
 	case token.FLOAT:
-		return &gotypes.Builtin{Def: "float"}, nil
+		return &gotypes.Builtin{Def: "float", Untyped: true}, nil
 	case token.IMAG:
-		return &gotypes.Builtin{Def: "imag"}, nil
+		return &gotypes.Builtin{Def: "imag", Untyped: true}, nil
 	case token.STRING:
-		return &gotypes.Builtin{Def: "string"}, nil
+		return &gotypes.Builtin{Def: "string", Untyped: true}, nil
 	case token.CHAR:
-		return &gotypes.Builtin{Def: "char"}, nil
+		return &gotypes.Builtin{Def: "char", Untyped: true}, nil
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
@@ -354,10 +354,10 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 		}
 		return def[0].(*gotypes.Channel).Value, nil
 		// other
-	case token.XOR:
+	case token.XOR, token.OR, token.SUB:
 		return def[0], nil
 	default:
-		return nil, fmt.Errorf("Unary operator %#v not recognized", expr.Op)
+		return nil, fmt.Errorf("Unary operator %#v, %#v not recognized", expr.Op)
 	}
 }
 
@@ -385,19 +385,35 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	}
 
 	switch expr.Op {
-	case token.EQL, token.NEQ:
-		// TODO(jchaloup): check both operands have acceptable data type
+	case token.EQL, token.NEQ, token.LEQ, token.LSS, token.GEQ, token.GTR:
+		// We should check both operands are compatible with the operator.
+		// However, it requires a hard-coded knowledge of all available data types.
+		// I.e. we must know int, int8, int16, int32, etc. types exists and if one
+		// of the operators is untyped integral constant, the operator is valid.
+		// As the list of all data types is read from the builtin package,
+		// it is not possible to keep a clean solution and provide
+		// the check for the operands validity at the same time.
 		return &gotypes.Builtin{Def: "bool"}, nil
 	}
 
 	// If both types are built-in, just return built-in
 	if x[0].GetType() == y[0].GetType() && x[0].GetType() == gotypes.BuiltinType {
-		xt := x[0].(*gotypes.Builtin).Def
-		yt := y[0].(*gotypes.Builtin).Def
-		if xt != yt {
-			return nil, fmt.Errorf("Binary operation %q over two different types: %q != %q", expr.Op, xt, yt)
+		xt := x[0].(*gotypes.Builtin)
+		yt := y[0].(*gotypes.Builtin)
+		if xt.Def != yt.Def {
+			switch expr.Op {
+			case token.AND, token.SHL, token.SHR, token.OR:
+				// The same reasoning as with the relational operators
+				if xt.Untyped {
+					return yt, nil
+				}
+				if yt.Untyped {
+					return xt, nil
+				}
+			}
+			return nil, fmt.Errorf("Binary operation %q over two different built-in types: %q != %q", expr.Op, xt, yt)
 		}
-		return &gotypes.Builtin{Def: xt}, nil
+		return &gotypes.Builtin{Def: xt.Def}, nil
 	}
 
 	glog.Infof("Binaryexpr.x: %#v\nBinaryexpr.y: %#v\n", x[0], y[0])
@@ -407,11 +423,13 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	yIdent, yOk := y[0].(*gotypes.Identifier)
 
 	if !xOk && !yOk {
-		return nil, fmt.Errorf("Both operands of a binary operator must be identifiers")
+		return nil, fmt.Errorf("At least one operand of a binary operator %v must be an identifier", expr.Op)
 	}
 
-	// TODO(jchaloup): logical and/or over any two operands is always a bool
-
+	// Even here we assume existence of untyped constants.
+	// If there is only one identifier it means the other operand is a built-in type.
+	// Assuming the code is written correctly (it compiles), resulting data type of the operation
+	// is always the identifier.
 	if xOk {
 		return xIdent, nil
 	}
@@ -551,12 +569,14 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 
 	// data type => explicit type casting
 	if ep.isDataType(expr.Fun) {
+		glog.Infof("isDataType of %#v is true", expr.Fun)
 		def, err := ep.TypeParser.Parse(expr.Fun)
 		if err != nil {
 			return nil, err
 		}
 		return []gotypes.DataType{def}, nil
 	}
+	glog.Infof("isDataType of %#v is false", expr.Fun)
 
 	// function
 	def, err := ep.ExprParser.Parse(expr.Fun)
@@ -577,6 +597,35 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	default:
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
+}
+
+func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (gotypes.DataType, error) {
+	if expr.Low != nil {
+		if _, err := ep.Parse(expr.Low); err != nil {
+			return nil, err
+		}
+	}
+	if expr.High != nil {
+		if _, err := ep.Parse(expr.High); err != nil {
+			return nil, err
+		}
+	}
+	if expr.Max != nil {
+		if _, err := ep.Parse(expr.Max); err != nil {
+			return nil, err
+		}
+	}
+
+	exprDef, err := ep.Parse(expr.X)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(exprDef) != 1 {
+		return nil, fmt.Errorf("SliceExpr is not a single argument")
+	}
+
+	return exprDef[0], nil
 }
 
 func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (gotypes.DataType, error) {
@@ -757,6 +806,12 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 		return xType.Elmtype, nil
 	case *gotypes.Slice:
 		return xType.Elmtype, nil
+	case *gotypes.Builtin:
+		if xType.Def == "string" {
+			// Checked at https://play.golang.org/
+			return &gotypes.Builtin{Def: "uint8"}, nil
+		}
+		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDef[0]))
 	}
@@ -840,6 +895,9 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 		return []gotypes.DataType{def}, err
 	case *ast.FuncLit:
 		def, err := ep.parseFuncLit(exprType)
+		return []gotypes.DataType{def}, err
+	case *ast.SliceExpr:
+		def, err := ep.parseSliceExpr(exprType)
 		return []gotypes.DataType{def}, err
 	default:
 		return nil, fmt.Errorf("Unrecognized expression: %#v\n", expr)

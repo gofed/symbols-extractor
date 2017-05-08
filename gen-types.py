@@ -174,6 +174,14 @@ def parseDefinition(dataType, definition):
                     obj.addAtomicField(property.capitalize(), itemType, omit=True)
                 else:
                     obj.addAtomicField(property.capitalize(), itemType, omit=False)
+            elif itemType == "boolean":
+                # skip all 'type' fields
+                if property == "type":
+                    continue
+                if definition["properties"][property]["description"] == "!!omit":
+                    obj.addAtomicField(property.capitalize(), "bool", omit=True)
+                else:
+                    obj.addAtomicField(property.capitalize(), "bool", omit=False)
             # list of permited types
             elif itemType == "object":
                 ok = False
@@ -204,7 +212,7 @@ def parseDefinition(dataType, definition):
                     itemDef = parseDefinition("%s%sItem" % (dataType.capitalize(), property.capitalize()), definition["properties"][property]["items"])
                     obj.addArrayField(property.capitalize(), "%s%sItem" % (dataType.capitalize(), property.capitalize()))
             else:
-                logging.error("unrecognized type: %s" % itemType)
+                logging.error("Unrecognized type: %s" % itemType)
                 exit(1)
 
     print obj

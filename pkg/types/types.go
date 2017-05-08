@@ -1002,7 +1002,8 @@ func (o *Selector) UnmarshalJSON(b []byte) error {
 const BuiltinType = "builtin"
 
 type Builtin struct {
-	Def string `json:"def"`
+	Untyped bool   `json:"untyped"`
+	Def     string `json:"def"`
 }
 
 func (o *Builtin) GetType() string {
@@ -1024,6 +1025,11 @@ func (o *Builtin) UnmarshalJSON(b []byte) error {
 	var objMap map[string]*json.RawMessage
 
 	if err := json.Unmarshal(b, &objMap); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["untyped"] actually exists
+	if err := json.Unmarshal(*objMap["untyped"], &o.Untyped); err != nil {
 		return err
 	}
 
