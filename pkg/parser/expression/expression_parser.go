@@ -727,7 +727,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			// Get struct's definition given by its identifier
 			structDefsymbol, _, err := ep.Config.Lookup(def)
 			if err != nil {
-				return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", def.Def)
+				return nil, fmt.Errorf("Cannot retrieve identifier %q from the symbol table: %v", def.Def, err)
 			}
 			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 		case *gotypes.Selector:

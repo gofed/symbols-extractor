@@ -68,7 +68,7 @@ func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
 }
 
 func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
-	glog.Infof("Adding function %q as: %#v", sym.Name, sym.Def)
+	glog.Infof("====Adding function %q as: %#v", sym.Name, sym.Def)
 	if s.Size > 0 {
 		return s.Tables[s.Size-1].AddFunction(sym)
 	}
@@ -76,6 +76,7 @@ func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
 }
 
 func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
+	glog.Infof("====Looking up a variable %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupVariable(name)

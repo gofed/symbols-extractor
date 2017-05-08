@@ -41,7 +41,8 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 		}
 
 		return &gotypes.Identifier{
-			Def: typedExpr.Name,
+			Def:     typedExpr.Name,
+			Package: ep.PackageName,
 		}, nil
 	case *ast.StarExpr:
 		switch idExpr := typedExpr.X.(type) {
@@ -61,7 +62,8 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 
 			return &gotypes.Pointer{
 				Def: &gotypes.Identifier{
-					Def: idExpr.Name,
+					Def:     idExpr.Name,
+					Package: ep.PackageName,
 				},
 			}, nil
 		default:
