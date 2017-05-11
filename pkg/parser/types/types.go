@@ -88,3 +88,31 @@ func (c *Config) Lookup(ident *gotypes.Identifier) (*gotypes.SymbolDef, symbolta
 	}
 	return table.Lookup(ident.Def)
 }
+
+func (c *Config) LookupMethod(ident *gotypes.Identifier, method string) (*gotypes.SymbolDef, error) {
+	if ident.Package == "" {
+		return nil, fmt.Errorf("Identifier %#v does not set its Package field", ident)
+	}
+	if ident.Package == c.PackageName {
+		return c.SymbolTable.LookupMethod(ident.Def, method)
+	}
+	table, err := c.GlobalSymbolTable.Lookup(ident.Package)
+	if err != nil {
+		return nil, err
+	}
+	return table.LookupMethod(ident.Def, method)
+}
+
+func (c *Config) LookupDataType(ident *gotypes.Identifier) (*gotypes.SymbolDef, error) {
+	if ident.Package == "" {
+		return nil, fmt.Errorf("Identifier %#v does not set its Package field", ident)
+	}
+	if ident.Package == c.PackageName {
+		return c.SymbolTable.LookupDataType(ident.Def)
+	}
+	table, err := c.GlobalSymbolTable.Lookup(ident.Package)
+	if err != nil {
+		return nil, err
+	}
+	return table.LookupDataType(ident.Def)
+}

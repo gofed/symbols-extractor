@@ -1,6 +1,7 @@
 package expression
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -279,9 +280,35 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 	return litTypedef, nil
 }
 
+// Identifier is always a variable.
+// It is either a qid, local variable or global variable of the current package.
+// It can be also an identifier of a function.
+// In all cases data type of the variable/function/qid is returned
 func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
-	glog.Infof("Processing identifier: %#v\n", ident)
+	glog.Infof("Processing variable-like identifier: %#v\n", ident)
 
+	// TODO(jchaloup): check for variables/functions first
+	// E.g. user can define
+	//    make := func() {}
+	// which overwrites the builtin.make function
+
+	// Does the local symbol exists at all?
+	var postponedErr error
+	if !ep.SymbolTable.Exists(ident.Name) {
+		postponedErr = fmt.Errorf("parseIdentifier: Symbol %q not yet processed", ident.Name)
+	} else {
+		// If it is a variable, return its definition
+		if def, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
+			byteSlice, _ := json.Marshal(def)
+			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
+			// The data type of the variable is not accounted as it is not implicitely used
+			// The variable itself carries the data type and as long as the variable does not
+			// get used, the data type can change.
+			return def.Def, nil
+		}
+	}
+
+	// Maybe it is a builtin variable
 	table, err := ep.GlobalSymbolTable.Lookup("builtin")
 	if err != nil {
 		return nil, err
@@ -295,7 +322,8 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 				return &gotypes.Builtin{Def: "bool"}, nil
 			case "nil":
 				return &gotypes.Nil{}, nil
-			// TODO(jchaloup): process iota as well
+			case "iota":
+				return &gotypes.Builtin{Def: "iota"}, nil
 			default:
 				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
 			}
@@ -306,26 +334,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 		}
 	}
 
-	// Check if the symbol is in the symbol table.
-	// It is either a local variable or a global variable (as it is used inside an expression).
-	// If the symbol is not found, it means it is not defined and never will be.
-
-	// If it is a variable, return its definition
-	if def, err := ep.SymbolTable.LookupVariable(ident.Name); err == nil {
-		return def.Def, nil
-	}
-
-	// Otherwise it is a data type of a function declation -> return just the data type identifier
-	def, _, err := ep.SymbolTable.Lookup(ident.Name)
-	if err != nil {
-		// Return an error so the function body processing can be postponed
-		// TODO(jchaloup): return more information about the missing symbol so the
-		// body can be re-processed right after the symbol is stored into the symbol table.
-		return nil, err
-	}
-
-	// TODO(jchaloup): put the identifier's type into the allocated symbol table
-	return &gotypes.Identifier{Def: def.Name}, nil
+	return nil, postponedErr
 }
 
 func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) {
@@ -354,10 +363,10 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 		}
 		return def[0].(*gotypes.Channel).Value, nil
 		// other
-	case token.XOR, token.OR, token.SUB:
+	case token.XOR, token.OR, token.SUB, token.NOT, token.ADD:
 		return def[0], nil
 	default:
-		return nil, fmt.Errorf("Unary operator %#v, %#v not recognized", expr.Op)
+		return nil, fmt.Errorf("Unary operator %#v (%#v) not recognized", expr.Op, token.ADD)
 	}
 }
 
@@ -384,6 +393,16 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 		return nil, xErr
 	}
 
+	{
+		byteSlice, _ := json.Marshal(x)
+		glog.Infof("xx: %v\n", string(byteSlice))
+	}
+
+	{
+		byteSlice, _ := json.Marshal(y)
+		glog.Infof("yy: %v\n", string(byteSlice))
+	}
+
 	switch expr.Op {
 	case token.EQL, token.NEQ, token.LEQ, token.LSS, token.GEQ, token.GTR:
 		// We should check both operands are compatible with the operator.
@@ -402,16 +421,60 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 		yt := y[0].(*gotypes.Builtin)
 		if xt.Def != yt.Def {
 			switch expr.Op {
-			case token.AND, token.SHL, token.SHR, token.OR:
+			case token.SHL, token.SHR:
+				// The right operand in a shift expression must have unsigned integer type
+				// or be an untyped constant that can be converted to unsigned integer type.
+				// If the left operand of a non-constant shift expression is an untyped constant,
+				// it is first converted to the type it would assume if the shift expression
+				// were replaced by its left operand alone.
+
+				// The right operand can be ignored (it is always converted to an integer).
+				// If the left operand is untyped int => untyped int (or int for non-constant expressions)
+				// if the left operand is typed int => return int
+				if xt.Untyped {
+					// const a = 8.0 << 1
+					// a is of type int, checked at https://play.golang.org/
+					return &gotypes.Builtin{Def: "int", Untyped: true}, nil
+				}
+				return xt, nil
+			case token.AND, token.OR, token.MUL, token.SUB, token.QUO, token.ADD, token.AND_NOT, token.REM, token.XOR:
 				// The same reasoning as with the relational operators
+				// Experiments:
+				// 1+1.0 is untyped float64
+				if xt.Untyped && yt.Untyped {
+
+				}
 				if xt.Untyped {
 					return yt, nil
 				}
 				if yt.Untyped {
 					return xt, nil
 				}
+				// byte(2)&uint8(3) is uint8
+				if (xt.Def == "byte" && yt.Def == "uint8") || (yt.Def == "byte" && xt.Def == "uint8") {
+					return &gotypes.Builtin{Def: "uint8"}, nil
+				}
 			}
 			return nil, fmt.Errorf("Binary operation %q over two different built-in types: %q != %q", expr.Op, xt, yt)
+		}
+		if xt.Untyped {
+			{
+				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped})
+				glog.Infof("xx+yy: %v\n", string(byteSlice))
+			}
+			return &gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}, nil
+		}
+		if yt.Untyped {
+			{
+				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped})
+				glog.Infof("xx+yy: %v\n", string(byteSlice))
+			}
+			return &gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}, nil
+		}
+		// both operands are typed => Untyped = false
+		{
+			byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def})
+			glog.Infof("xx+yy: %v\n", string(byteSlice))
 		}
 		return &gotypes.Builtin{Def: xt.Def}, nil
 	}
@@ -465,58 +528,79 @@ func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
 	}
 }
 
-func (ep *Parser) isDataType(expr ast.Expr) bool {
+func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 	glog.Infof("Detecting isDataType for %#v", expr)
 	switch exprType := expr.(type) {
 	case *ast.Ident:
-		// not a user defined type
-		if table, err := ep.GlobalSymbolTable.Lookup("builtin"); err == nil {
-			if _, symType, err := table.Lookup(exprType.Name); err == nil {
-				return symType.IsDataType()
+		// user defined type
+		// try to find any local symbol, if it is not found, the local symbol is unknown
+		var postponedErr error
+		if !ep.SymbolTable.Exists(exprType.Name) {
+			postponedErr = fmt.Errorf("isDataType: symbol %q is unknown", exprType.Name)
+		} else {
+			if _, err := ep.SymbolTable.LookupDataType(exprType.Name); err == nil {
+				return true, nil
 			}
 		}
-		// user defined type
-		_, symType, err := ep.SymbolTable.Lookup(exprType.Name)
-		if err != nil {
-			// I don't know state which get catched later
-			return false
+
+		// not a user defined type
+		if table, err := ep.GlobalSymbolTable.Lookup("builtin"); err == nil {
+			glog.Infof("isDataType Builtin seaching for %q", exprType.Name)
+			if _, err := table.LookupDataType(exprType.Name); err == nil {
+				glog.Info("isDataType Builtin found")
+				return true, nil
+			}
+			return false, nil
 		}
-		return symType.IsDataType()
+
+		// neither user defined type, nor builtin type
+		return false, postponedErr
 	case *ast.SelectorExpr:
 		// Selector based data type is in a form qid.typeid
 		// If the selector.X is not an identifier => variable
 		ident, ok := exprType.X.(*ast.Ident)
 		if !ok {
-			return false
+			return false, nil
 		}
 		// is ident qid?
 		qiddef, err := ep.SymbolTable.LookupVariable(ident.Name)
 		if err != nil {
-			return false
+			return false, nil
 		}
 		qid, ok := qiddef.Def.(*gotypes.Packagequalifier)
 		if !ok {
-			return false
+			return false, nil
 		}
 		if table, err := ep.GlobalSymbolTable.Lookup(qid.Path); err == nil {
-			if _, symType, err := table.Lookup(exprType.Sel.Name); err == nil {
-				return symType.IsDataType()
+			if _, err := table.LookupDataType(exprType.Sel.Name); err == nil {
+				return true, nil
 			}
 		}
 		// the symbol table for qid not found => get catched later
-		return false
+		return false, nil
+	case *ast.ArrayType:
+		return true, nil
 	case *ast.StarExpr:
 		return ep.isDataType(exprType.X)
 	case *ast.ParenExpr:
 		return ep.isDataType(exprType.X)
 	case *ast.FuncLit:
-		return true
-	// TODO(jchaloup): what about (&functionidvar)(args)?
+		// Empty body => anonymous function type assertion
+		// E.g. (func(int, int))funcid
+		if exprType.Body == nil {
+			return true, nil
+		}
+		return false, nil
+		// TODO(jchaloup): what about (&functionidvar)(args)?
+	case *ast.FuncType:
+		return true, nil
+	case *ast.InterfaceType:
+		return true, nil
 	default:
 		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
 		panic(fmt.Errorf("Unrecognized isDataType expr: %#v", expr))
 	}
-	return false
+	return false, nil
 }
 
 func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error) {
@@ -536,6 +620,7 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error)
 			}
 			return ep.getFunctionDef(def.Def)
 		}
+		panic("typeDef.Package != \"\"")
 	case *gotypes.Function:
 		return def, nil
 	case *gotypes.Method:
@@ -552,26 +637,52 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	glog.Infof("Processing CallExpr: %#v\n", expr)
 	defer glog.Infof("Leaving CallExpr: %#v\n", expr)
 
-	for _, arg := range expr.Args {
-		// an argument is passed to the function so its data type does not affect the result data type of the call
-		def, err := ep.Parse(arg)
-		if err != nil {
-			return nil, err
-		}
-		if len(def) != 1 {
-			return nil, fmt.Errorf("Argument %#v of a call expression does not have one return value", arg)
-		}
-		// TODO(jchaloup): data type of the argument itself can be propagated to the function/method
-		// to provide more information about the type if the function parameter is an interface.
-	}
-
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
+	processArgs := func(args []ast.Expr, params []gotypes.DataType) error {
+		if params != nil {
+			if len(args) == 1 {
+				def, err := ep.Parse(args[0])
+				if err != nil {
+					return err
+				}
+				if len(params) == len(def) {
+					return nil
+				}
+				if len(def) != 1 {
+					return fmt.Errorf("Argument %#v of a call expression does not have one return value", args[0])
+				}
+				return nil
+			}
+		}
+		for _, arg := range args {
+			// an argument is passed to the function so its data type does not affect the result data type of the call
+			def, err := ep.Parse(arg)
+			if err != nil {
+				return err
+			}
+
+			if len(def) != 1 {
+				return fmt.Errorf("Argument %#v of a call expression does not have one return value", arg)
+			}
+			// TODO(jchaloup): data type of the argument itself can be propagated to the function/method
+			// to provide more information about the type if the function parameter is an interface.
+		}
+		return nil
+	}
+
 	// data type => explicit type casting
-	if ep.isDataType(expr.Fun) {
+	isType, err := ep.isDataType(expr.Fun)
+	if err != nil {
+		return nil, err
+	}
+	if isType {
 		glog.Infof("isDataType of %#v is true", expr.Fun)
 		def, err := ep.TypeParser.Parse(expr.Fun)
 		if err != nil {
+			return nil, err
+		}
+		if err := processArgs(expr.Args, nil); err != nil {
 			return nil, err
 		}
 		return []gotypes.DataType{def}, nil
@@ -589,10 +700,59 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 		return nil, err
 	}
 
+	// a) f1() (int, int), f2(int, int) => f2(f1())
+	// b) f(arg, arg, arg) => f(a,a,a)
+
 	switch funcType := funcDef.(type) {
 	case *gotypes.Function:
+		// built-in make or new?
+		if ident, isIdent := expr.Fun.(*ast.Ident); isIdent {
+			switch ident.Name {
+			case "make":
+				// arglen == 1: make(type) type
+				// arglen == 2: make(type, size) type
+				// arglen == 3: make(type, size, cap) type
+				switch arglen := len(expr.Args); arglen {
+				case 1:
+					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
+					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+					return []gotypes.DataType{typeDef}, err
+				case 2:
+					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
+					if err := processArgs([]ast.Expr{expr.Args[1]}, nil); err != nil {
+						return nil, err
+					}
+					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+					return []gotypes.DataType{typeDef}, err
+				case 3:
+					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
+					if err := processArgs([]ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+						return nil, err
+					}
+					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+					return []gotypes.DataType{typeDef}, err
+				default:
+					return nil, fmt.Errorf("Expecting 1, 2 or 3 arguments of built-in function make, got %q instead", arglen)
+				}
+			case "new":
+				// The new built-in function allocates memory. The first argument is a type,
+				// not a value, and the value returned is a pointer to a newly
+				// allocated zero value of that type.
+				if len(expr.Args) != 1 {
+					return nil, fmt.Errorf("Len of new args != 1, it is %#v", expr.Args)
+				}
+				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+				return []gotypes.DataType{&gotypes.Pointer{Def: typeDef}}, err
+			}
+		}
+		if err := processArgs(expr.Args, funcType.Params); err != nil {
+			return nil, err
+		}
 		return funcType.Results, nil
 	case *gotypes.Method:
+		if err := processArgs(expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
+			return nil, err
+		}
 		return funcType.Def.(*gotypes.Function).Results, nil
 	default:
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
@@ -628,6 +788,30 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (gotypes.DataType, error) 
 	return exprDef[0], nil
 }
 
+func (ep *Parser) parseChanType(expr *ast.ChanType) (gotypes.DataType, error) {
+	valueDef, err := ep.Parse(expr.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(valueDef) != 1 {
+		return nil, fmt.Errorf("ChanType is not a single argument")
+	}
+
+	channel := &gotypes.Channel{Value: valueDef[0]}
+
+	switch expr.Dir {
+	case ast.SEND:
+		channel.Dir = "1"
+	case ast.RECV:
+		channel.Dir = "2"
+	default:
+		channel.Dir = "3"
+	}
+
+	return channel, nil
+}
+
 func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (gotypes.DataType, error) {
 	glog.Infof("Processing FuncLit: %#v\n", expr)
 	if err := ep.StmtParser.ParseFuncBody(&ast.FuncDecl{
@@ -642,36 +826,83 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (gotypes.DataType, error) {
 
 func (ep *Parser) parseStructType(expr *ast.StructType) (gotypes.DataType, error) {
 	glog.Infof("Processing StructType: %#v\n", expr)
-	for _, field := range expr.Fields.List {
-		for _, name := range field.Names {
-			fmt.Printf("FieldName: %#v\n", name.Name)
-		}
-		fmt.Printf("Field: %#v\n", field.Type)
-	}
-
-	panic("Panic")
+	return ep.TypeParser.Parse(expr)
 }
 
 func (ep *Parser) retrieveStructField(structDefsymbol *gotypes.SymbolDef, field string) (gotypes.DataType, error) {
 	glog.Infof("Retrieving StructType field %q from %#v\n", field, structDefsymbol)
+	// Only data type declaration is known
+	if structDefsymbol.Def == nil {
+		return nil, fmt.Errorf("Data type definition of %q is not known", structDefsymbol.Name)
+	}
 	if structDefsymbol.Def.GetType() != gotypes.StructType {
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", field, structDefsymbol.Def)
 	}
 
+	var embeddedStructs []*gotypes.SymbolDef
+
+	// Check struct field
+	var fieldItem *gotypes.StructFieldsItem
 	for _, item := range structDefsymbol.Def.(*gotypes.Struct).Fields {
-		if item.Name == field {
-			if structDefsymbol.Name != "" {
-				ep.AllocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, field)
+		fieldName := item.Name
+		// anonymous field (can be embedded struct as well)
+		if fieldName == "" {
+			switch fieldType := item.Def.(type) {
+			case *gotypes.Identifier:
+				if fieldType.Def == field {
+					fieldItem = &item
+					break
+				}
+				// check if the field is an embedded struct
+				def, err := ep.SymbolTable.LookupDataType(fieldType.Def)
+				if err != nil {
+					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
+				}
+				if def.Def == nil {
+					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
+				}
+				if _, ok := def.Def.(*gotypes.Struct); ok {
+					embeddedStructs = append(embeddedStructs, def)
+				}
+				continue
+			case *gotypes.Pointer:
+				panic("FFF")
+			case *gotypes.Selector:
+				panic("FFFEEE")
+			default:
+				panic(fmt.Errorf("Unknown anonymous field type %#v", item.Def))
 			}
-			return item.Def, nil
+		}
+		if fieldName == field {
+			fieldItem = &item
+			break
 		}
 	}
 
-	// If it is not a field, is it a method?
+	if fieldItem != nil {
+		if structDefsymbol.Name != "" {
+			ep.AllocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, field)
+		}
+		return fieldItem.Def, nil
+	}
+
+	// First, check methods, then embedded structs
+
+	// Check struct methods
 	glog.Infof("Retrieving method %q of data type %q", field, structDefsymbol.Name)
 	if method, err := ep.SymbolTable.LookupMethod(structDefsymbol.Name, field); err == nil {
 		return method.Def, nil
 	}
+
+	glog.Info("Retrieving fields from embedded structs")
+	if len(embeddedStructs) != 0 {
+		for _, structDef := range embeddedStructs {
+			if fieldDef, err := ep.retrieveStructField(structDef, field); err == nil {
+				return fieldDef, nil
+			}
+		}
+	}
+
 	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", field, structDefsymbol)
 }
 
@@ -703,7 +934,8 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 	if len(xDef) != 1 {
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
-	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\n", xDef[0], expr.Sel)
+	byteSlice, _ := json.Marshal(xDef[0])
+	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\t\t%v\n", xDef[0], expr.Sel, string(byteSlice))
 
 	// The struct and an interface are the only data type from which a field/method is retriveable
 	switch xType := xDef[0].(type) {
@@ -719,15 +951,25 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		if piErr != nil {
 			return nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", expr.Sel.Name, xType, piErr)
 		}
+		byteSlice, _ := json.Marshal(packageIdent)
+		glog.Infof("packageIdent: %v\n", string(byteSlice))
 		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name)
 		return packageIdent.Def, nil
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {
 		case *gotypes.Identifier:
 			// Get struct's definition given by its identifier
-			structDefsymbol, _, err := ep.Config.Lookup(def)
+			{
+				byteSlice, _ := json.Marshal(def)
+				glog.Infof("Looking for: %v\n", string(byteSlice))
+			}
+			structDefsymbol, err := ep.Config.LookupDataType(def)
 			if err != nil {
 				return nil, fmt.Errorf("Cannot retrieve identifier %q from the symbol table: %v", def.Def, err)
+			}
+			{
+				byteSlice, _ := json.Marshal(structDefsymbol)
+				glog.Infof("Struct retrieved: %v\n", string(byteSlice))
 			}
 			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
 		case *gotypes.Selector:
@@ -736,19 +978,25 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			if !ok {
 				return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-qualified struct data type: %#v", expr.Sel.Name, def)
 			}
-			structDefsymbol, _, err := ep.Config.Lookup(&gotypes.Identifier{Def: def.Item, Package: pq.Path})
+			structDefsymbol, err := ep.Config.LookupDataType(&gotypes.Identifier{Def: def.Item, Package: pq.Path})
 			if err != nil {
 				return nil, err
 			}
 			return ep.retrieveStructField(structDefsymbol, expr.Sel.Name)
+		case *gotypes.Struct:
+			// anonymous struct
+			return ep.retrieveStructField(&gotypes.SymbolDef{Def: def}, expr.Sel.Name)
 		default:
-			return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
+			return nil, fmt.Errorf("Trying to retrieve a %q field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
 	case *gotypes.Identifier:
 		// Get struct/interface definition given by its identifier
-		defSymbol, _, err := ep.Config.Lookup(xType)
+		defSymbol, err := ep.Config.LookupDataType(xType)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", xType.Def)
+		}
+		if defSymbol.Def == nil {
+			return nil, fmt.Errorf("Trying to retrieve a field/method from a data type %#v that is not yet fully processed", xType)
 		}
 		switch defSymbol.Def.(type) {
 		case *gotypes.Struct:
@@ -756,7 +1004,13 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		case *gotypes.Interface:
 			return ep.retrieveInterfaceMethod(defSymbol, expr.Sel.Name)
 		default:
-			return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v", defSymbol)
+			// check data types with receivers
+			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", expr.Sel.Name, xType)
+			def, err := ep.Config.LookupMethod(xType, expr.Sel.Name)
+			if err != nil {
+				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v", defSymbol)
+			}
+			return def.Def, nil
 		}
 	// anonymous struct
 	case *gotypes.Struct:
@@ -773,7 +1027,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			Def:     xType,
 		}, expr.Sel.Name)
 	default:
-		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", expr.Sel.Name, xDef[0])
+		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v", expr.Sel.Name, xDef[0])
 	}
 }
 
@@ -795,9 +1049,18 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 
+	// One can not do &(&(a))
+	var indexEpxr gotypes.DataType
+	pointer, ok := xDef[0].(*gotypes.Pointer)
+	if ok {
+		indexEpxr = pointer.Def
+	} else {
+		indexEpxr = xDef[0]
+	}
+
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
-	switch xType := xDef[0].(type) {
+	switch xType := indexEpxr.(type) {
 	case *gotypes.Identifier:
 		return xType, nil
 	case *gotypes.Map:
@@ -812,6 +1075,8 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 			return &gotypes.Builtin{Def: "uint8"}, nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
+	case *gotypes.Ellipsis:
+		return xType.Def, nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDef[0]))
 	}
@@ -898,6 +1163,11 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 		return []gotypes.DataType{def}, err
 	case *ast.SliceExpr:
 		def, err := ep.parseSliceExpr(exprType)
+		return []gotypes.DataType{def}, err
+	case *ast.ParenExpr:
+		return ep.Parse(ep.parseParenExpr(exprType))
+	case *ast.ChanType:
+		def, err := ep.parseChanType(exprType)
 		return []gotypes.DataType{def}, err
 	default:
 		return nil, fmt.Errorf("Unrecognized expression: %#v\n", expr)
