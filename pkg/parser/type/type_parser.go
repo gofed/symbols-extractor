@@ -230,14 +230,25 @@ func (p *Parser) parseArray(typedExpr *ast.ArrayType) (gotypes.DataType, error) 
 }
 
 func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interface, error) {
-	glog.Infof("Processing InterfaceType: %#v\n", typedExpr)
+	glog.Infof("Processing InterfaceType at %v: %#v\n", typedExpr.Pos(), typedExpr)
 	// TODO(jchaloup): extend the interface definition with embedded interfaces
 	interfaceObj := &gotypes.Interface{}
 	var methods []gotypes.InterfaceMethodsItem
 	for _, m := range typedExpr.Methods.List {
+		glog.Infof("Processing interface field: %#v", m)
 		def, err := p.Parse(m.Type)
 		if err != nil {
 			return nil, err
+		}
+
+		// embedded interface
+		if m.Names == nil {
+			item := gotypes.InterfaceMethodsItem{
+				Name: "",
+				Def:  def,
+			}
+			methods = append(methods, item)
+			continue
 		}
 
 		for _, name := range m.Names {
@@ -248,6 +259,7 @@ func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interfac
 			methods = append(methods, item)
 		}
 	}
+
 	if len(methods) > 0 {
 		interfaceObj.Methods = methods
 	}
