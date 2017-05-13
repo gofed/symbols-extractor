@@ -3,6 +3,7 @@ package symboltable
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
@@ -111,7 +112,7 @@ func (t *Table) addSymbol(symbolType string, name string, sym *gotypes.SymbolDef
 		// If the symbol definition is empty, we just allocated a name for the symbol.
 		// Later on, it gets populated with its definition.
 		if def.Def != nil {
-			return fmt.Errorf("Symbol '%s' already exists", sym.Name)
+			return fmt.Errorf("Symbol '%s' already exists", name)
 		}
 		def.Def = sym.Def
 		return nil
@@ -160,6 +161,22 @@ func (t *Table) AddDataType(sym *gotypes.SymbolDef) error {
 }
 
 func (t *Table) AddFunction(sym *gotypes.SymbolDef) error {
+	// Function/Method is always stored with its definition
+	if def, ok := sym.Def.(*gotypes.Method); ok {
+		switch rExpr := def.Receiver.(type) {
+		case *gotypes.Identifier:
+			glog.Infof("Storing method %q into a symbol table", strings.Join([]string{rExpr.Def, sym.Name}, "."))
+			return t.addSymbol(FunctionSymbol, strings.Join([]string{rExpr.Def, sym.Name}, "."), sym)
+		case *gotypes.Pointer:
+			if ident, ok := rExpr.Def.(*gotypes.Identifier); ok {
+				glog.Infof("Storing method %q into a symbol table", strings.Join([]string{ident.Def, sym.Name}, "."))
+				return t.addSymbol(FunctionSymbol, strings.Join([]string{ident.Def, sym.Name}, "."), sym)
+			}
+			return fmt.Errorf("Expecting a pointer to an identifier as a receiver when adding %q method, got %#v instead", sym.Name, rExpr)
+		default:
+			return fmt.Errorf("Expecting an identifier or a pointer to an identifier as a receiver when adding %q method, got %#v instead", sym.Name, def)
+		}
+	}
 	return t.addSymbol(FunctionSymbol, sym.Name, sym)
 }
 
@@ -168,6 +185,36 @@ func (t *Table) LookupVariable(key string) (*gotypes.SymbolDef, error) {
 		return sym, nil
 	}
 	return nil, fmt.Errorf("Variable `%v` not found", key)
+}
+
+func (t *Table) LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error) {
+	for _, symbolType := range SymbolTypes {
+		if symbolType == DataTypeSymbol {
+			continue
+		}
+		if sym, ok := t.symbols[symbolType][key]; ok {
+			if _, ok := sym.Def.(*gotypes.Method); ok {
+				continue
+			}
+			return sym, nil
+		}
+	}
+
+	return nil, fmt.Errorf("VariableLike symbol `%v` not found", key)
+}
+
+func (t *Table) LookupFunction(key string) (*gotypes.SymbolDef, error) {
+	if sym, ok := t.symbols[FunctionSymbol][key]; ok {
+		return sym, nil
+	}
+	return nil, fmt.Errorf("Function `%v` not found", key)
+}
+
+func (t *Table) LookupDataType(key string) (*gotypes.SymbolDef, error) {
+	if sym, ok := t.symbols[DataTypeSymbol][key]; ok {
+		return sym, nil
+	}
+	return nil, fmt.Errorf("DataType `%v` not found", key)
 }
 
 func (t *Table) LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error) {

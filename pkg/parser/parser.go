@@ -6,8 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
-	"os"
+	"os/exec"
 	"path"
 	"strings"
 
@@ -178,45 +177,27 @@ func skipGoFile(filename string) bool {
 }
 
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
-	var godirs []string
 
-	// e.g. /usr/lib/golang
-	goroot := os.Getenv("GOROOT")
-	if goroot != "" {
-		godirs = append(godirs, path.Join(goroot, "src", packagePath))
-	}
-
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		return nil, "", fmt.Errorf("GOPATH env not set")
-	}
-
-	godirs = append(godirs, path.Join(gopath, "src", packagePath))
-
-	for _, godir := range godirs {
-		fileInfo, err := ioutil.ReadDir(godir)
-		if err == nil {
-			glog.Infof("Checking %v...\n", godir)
-			for _, file := range fileInfo {
-				if !file.Mode().IsRegular() {
-					continue
-				}
-				// TODO(jchaloup): filter out unacceptable files (only *.go and *.s allowed)
-				if !strings.HasSuffix(file.Name(), ".go") {
-					continue
-				}
-				// Accept linux, x86_64 only
-				// TODO(jchaloup): extend the support to more OSes and archs
-				if skipGoFile(file.Name()) {
-					continue
-				}
-				files = append(files, file.Name())
-			}
-			return files, godir, nil
+	{
+		cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", packagePath)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, "", err
 		}
+		lines := strings.Split(string(output), "\n")
+		files = strings.Split(lines[0][1:len(lines[0])-1], " ")
+	}
+	{
+		cmd := exec.Command("go", "list", "-f", "{{.Dir}}", packagePath)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, "", err
+		}
+		lines := strings.Split(string(output), "\n")
+		packageLocation = string(lines[0])
 	}
 
-	return nil, "", fmt.Errorf("Package %q not found in any of %s locations", packagePath, strings.Join(godirs, ":"))
+	return files, packageLocation, nil
 }
 
 func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageContext, error) {
@@ -260,7 +241,7 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.Infof("File %q processing...", fileContext.Filename)
+		glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
 		if fileContext.DataTypes != nil {
 			payload := &fileparser.Payload{
 				DataTypes: fileContext.DataTypes,
@@ -286,7 +267,7 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.Infof("File %q processing...", fileContext.Filename)
+		glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
 		if fileContext.Variables != nil {
 			payload := &fileparser.Payload{
 				Variables: fileContext.Variables,
@@ -308,16 +289,25 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	return nil
 }
 
-func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
+func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error {
+	printFuncNames := func(funcs []*ast.FuncDecl) []string {
+		var names []string
+		for _, f := range funcs {
+			names = append(names, f.Name.Name)
+		}
+		return names
+	}
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.Infof("File %q processing...", fileContext.Filename)
+		glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+		glog.Infof("Postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
 		if fileContext.Functions != nil {
 			payload := &fileparser.Payload{
-				Functions: fileContext.Functions,
+				Functions:         fileContext.Functions,
+				FunctionDeclsOnly: true,
 			}
-			fmt.Printf("Funcs before processing: %#v\n", payload.Functions)
+			fmt.Printf("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
@@ -325,12 +315,48 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Funcs after processing: %#v\n", payload.Functions)
+			fmt.Printf("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			if payload.Functions != nil {
+				for _, name := range payload.Functions {
+					glog.Warningf("Function declaration of %q not yet processed", name.Name)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
+	printFuncNames := func(funcs []*ast.FuncDecl) []string {
+		var names []string
+		for _, f := range funcs {
+			names = append(names, f.Name.Name)
+		}
+		return names
+	}
+	fLen := len(p.Files)
+	for i := 0; i < fLen; i++ {
+		fileContext := p.Files[i]
+		glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+		glog.Infof("Postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
+		if fileContext.Functions != nil {
+			payload := &fileparser.Payload{
+				Functions: fileContext.Functions,
+			}
+			fmt.Printf("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			for _, spec := range fileContext.FileAST.Imports {
+				payload.Imports = append(payload.Imports, spec)
+			}
+			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
+				return err
+			}
+			fmt.Printf("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			if payload.Functions != nil {
 				for _, name := range payload.Functions {
 					glog.Errorf("Function %q not processed", name.Name)
 				}
-				return fmt.Errorf("There are still some postponed functions to process after the second round: %v", p.PackagePath)
+				panic(fmt.Errorf("There are still some postponed functions to process after the second round: %v", strings.Join(printFuncNames(payload.Functions), ",")))
 			}
 		}
 	}
@@ -364,11 +390,12 @@ PACKAGE_STACK:
 	for len(pp.packageStack) > 0 {
 		// Process the package stack
 		p := pp.packageStack[0]
-		glog.Infof("PS processing %#v\n", p.PackageDir)
+		glog.Infof("\n\n\nPS processing %#v\n", p.PackageDir)
 		// Process the files
 		fLen := len(p.Files)
 		for i := p.FileIndex; i < fLen; i++ {
 			fileContext := p.Files[i]
+			glog.Infof("File %q processing...", path.Join(p.PackageDir, fileContext.Filename))
 			if fileContext.FileAST == nil {
 				f, err := parser.ParseFile(token.NewFileSet(), path.Join(p.PackageDir, fileContext.Filename), nil, 0)
 				if err != nil {
@@ -409,19 +436,29 @@ PACKAGE_STACK:
 			fileContext.DataTypes = payload.DataTypes
 			fileContext.Variables = payload.Variables
 			fileContext.Functions = payload.Functions
+			glog.Infof("Storing possible postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
 			p.FileIndex++
 		}
 
 		// re-process data types
+		glog.Infof("\n\n========REPROCESSING DATA TYPES========\n\n")
 		if err := pp.reprocessDataTypes(p); err != nil {
 			return err
 		}
 
+		// re-process function declerations
+		glog.Infof("\n\n========REPROCESSING FUNC DECLS========\n\n")
+		if err := pp.reprocessFunctionDeclarations(p); err != nil {
+			glog.Warningf("Processing function declarations with error: %v", err)
+		}
+
 		// re-process variables
+		glog.Infof("\n\n========REPROCESSING VARIABLES========\n\n")
 		if err := pp.reprocessVariables(p); err != nil {
 			return err
 		}
 		// re-process functions
+		glog.Infof("\n\n========REPROCESSING FUNCTIONS========\n\n")
 		if err := pp.reprocessFunctions(p); err != nil {
 			return err
 		}

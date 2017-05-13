@@ -68,7 +68,7 @@ func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
 }
 
 func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
-	glog.Infof("Adding function %q as: %#v", sym.Name, sym.Def)
+	glog.Infof("====Adding function %q as: %#v", sym.Name, sym.Def)
 	if s.Size > 0 {
 		return s.Tables[s.Size-1].AddFunction(sym)
 	}
@@ -76,6 +76,7 @@ func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
 }
 
 func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
+	glog.Infof("====Looking up a variable %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupVariable(name)
@@ -99,6 +100,56 @@ func (s *Stack) LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, e
 		}
 	}
 	return nil, fmt.Errorf("Method %q of data type %q not found", methodName, datatype)
+}
+
+func (s *Stack) LookupFunction(name string) (*gotypes.SymbolDef, error) {
+	glog.Infof("====Looking up a function %q", name)
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := s.Size - 1; i >= 0; i-- {
+		def, err := s.Tables[i].LookupFunction(name)
+		if err == nil {
+			return def, nil
+		}
+	}
+	return nil, fmt.Errorf("Symbol %v not found", name)
+}
+
+func (s *Stack) LookupDataType(name string) (*gotypes.SymbolDef, error) {
+	glog.Infof("====Looking up a data type %q", name)
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := s.Size - 1; i >= 0; i-- {
+		def, err := s.Tables[i].LookupDataType(name)
+		if err == nil {
+			return def, nil
+		}
+	}
+	return nil, fmt.Errorf("Symbol %v not found", name)
+}
+
+func (s *Stack) LookupVariableLikeSymbol(name string) (*gotypes.SymbolDef, error) {
+	glog.Infof("====Looking up a variablelike %q", name)
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := s.Size - 1; i >= 0; i-- {
+		def, err := s.Tables[i].LookupVariableLikeSymbol(name)
+		if err == nil {
+			return def, nil
+		}
+	}
+	// if the variable is not found, check the qids
+	if def, ok := s.Imports[name]; ok {
+		return def, nil
+	}
+	return nil, fmt.Errorf("VariableLike Symbol %v not found", name)
+}
+
+func (s *Stack) Exists(name string) bool {
+	if _, _, err := s.Lookup(name); err == nil {
+		return true
+	}
+	if _, ok := s.Imports[name]; ok {
+		return true
+	}
+	return false
 }
 
 // Lookup looks for the first occurrence of a symbol with the given name

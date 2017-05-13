@@ -61,14 +61,18 @@ func createSymDefFunc(gopkg, recv, name string, method, pntr bool) *gotypes.Symb
 		Package: gopkg,
 		Def:     &gotypes.Function{},
 	}
-	if method == false {
+	if !method {
 		return symdef
-	} else if pntr {
+	}
+
+	if pntr {
 		symdef.Def = &gotypes.Method{
-			Receiver: &gotypes.Pointer{&gotypes.Identifier{Def: recv}},
+			Receiver: &gotypes.Pointer{&gotypes.Identifier{Def: recv, Package: gopkg}},
 		}
 	} else {
-		symdef.Def = &gotypes.Method{Receiver: &gotypes.Identifier{Def: recv}}
+		symdef.Def = &gotypes.Method{
+			Receiver: &gotypes.Identifier{Def: recv, Package: gopkg},
+		}
 	}
 
 	return symdef
@@ -216,7 +220,8 @@ TEST_LOOP:
 		for i, fdecl := range utils.IterFunc(astF) {
 			fmt.Printf("Parsing %#v\n", tfdecl.fDecl[i])
 			// test that function returns expected values
-			if ret, err := config.StmtParser.ParseFuncDecl(fdecl); err != nil {
+			ret, err := config.StmtParser.ParseFuncDecl(fdecl)
+			if err != nil {
 				if tfdecl.expectRes[i] != nil {
 					msgf := "Found error instead of expected result: %v" +
 						"\n==== GOCODE ====\n%s\n==== END ===="
@@ -224,12 +229,16 @@ TEST_LOOP:
 				}
 				// we are done here
 				continue TEST_LOOP
-			} else if tfdecl.expectRes[i] == nil {
+			}
+
+			if tfdecl.expectRes[i] == nil {
 				msgf := "Returned DataType instead of error.Code:\n%#v" +
 					"\n==== GOCODE ====\n%s\n==== END ===="
 				t.Errorf(msgf, ret, gocode)
 				continue TEST_LOOP
-			} else if !reflect.DeepEqual(tfdecl.expectRes[i].Def, ret) {
+			}
+
+			if !reflect.DeepEqual(tfdecl.expectRes[i].Def, ret) {
 				msgf := "Returned different value:\nExpected: %#v\nGet: %#v" +
 					"\n==== GOCODE ====\n%s\n==== END ===="
 				t.Errorf(msgf, tfdecl.expectRes[i].Def, ret, gocode)

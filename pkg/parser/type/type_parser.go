@@ -263,15 +263,21 @@ func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 	var results []gotypes.DataType
 
 	if typedExpr.Params != nil {
+		glog.Infof("len(typedExpr.Params.List): %#v\n", len(typedExpr.Params.List))
 		for _, field := range typedExpr.Params.List {
+			glog.Infof("Processing field.Type: %#v\n", field.Type)
 			def, err := p.Parse(field.Type)
 			if err != nil {
 				return nil, err
 			}
-
+			glog.Infof("Processing field.Names: %#v\n", field.Names)
 			// field.Names list must be singletion at least
-			for i := 0; i < len(field.Names); i++ {
+			if len(field.Names) == 0 {
 				params = append(params, def)
+			} else {
+				for i := 0; i < len(field.Names); i++ {
+					params = append(params, def)
+				}
 			}
 		}
 
@@ -287,7 +293,7 @@ func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 				return nil, err
 			}
 
-			// results can be identifier free
+			// results can be iderigin="buntifier free
 			if len(field.Names) == 0 {
 				results = append(results, def)
 			} else {
@@ -329,7 +335,7 @@ func (p *Parser) Parse(expr ast.Expr) (gotypes.DataType, error) {
 	case *ast.FuncType:
 		return p.parseFunction(typedExpr)
 	}
-	return nil, fmt.Errorf("ast.Expr (%#v) not recognized", expr)
+	return nil, fmt.Errorf("ast.Expr (%#v) not recognized when parsing a type definition", expr)
 }
 
 // New creates an instance of the type Parser
