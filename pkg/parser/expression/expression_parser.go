@@ -912,14 +912,29 @@ func (ep *Parser) retrieveInterfaceMethod(interfaceDefsymbol *gotypes.SymbolDef,
 		return nil, fmt.Errorf("Trying to retrieve a %v method from a non-interface data type: %#v", method, interfaceDefsymbol.Def)
 	}
 
+	var methodItem *gotypes.InterfaceMethodsItem
+
 	for _, item := range interfaceDefsymbol.Def.(*gotypes.Interface).Methods {
-		if item.Name == method {
-			if interfaceDefsymbol.Name != "" {
-				ep.AllocatedSymbolsTable.AddDataTypeField(interfaceDefsymbol.Package, interfaceDefsymbol.Name, method)
-			}
-			return item.Def, nil
+		methodName := item.Name
+		// anonymous field (can be embedded struct as well)
+		if methodName == "" {
+			// Given a data type implements an interface, there is no need to check embedded interface.
+			// Once we carry interface analysis, it will become relevant
+			panic("Embedded interface, not yet implemented")
+		}
+		if methodName == method {
+			methodItem = &item
+			break
 		}
 	}
+
+	if methodItem != nil {
+		if interfaceDefsymbol.Name != "" {
+			ep.AllocatedSymbolsTable.AddDataTypeField(interfaceDefsymbol.Package, interfaceDefsymbol.Name, method)
+		}
+		return methodItem.Def, nil
+	}
+
 	return nil, fmt.Errorf("Unable to find a method %v in interface %#v", method, interfaceDefsymbol)
 }
 
