@@ -46,7 +46,8 @@ func TestBinaryExpr(t *testing.T) {
 		expectedError bool
 	}{
 		{&gotypes.Builtin{}, "var FooB1 int     = 1 + 4", false},
-		{&gotypes.Builtin{}, "var FooB2 float32 = 1.2 + 4", true},
+		// 1.2 + 4 is an untyped constant so combination of int and float is permitted
+		{&gotypes.Builtin{}, "var FooB2 float32 = 1.2 + 4", false},
 		{&gotypes.Identifier{Def: userType}, "var FooU3 FInt    = FInt(12) + FInt(4)", false},
 		{&gotypes.Identifier{Def: userType}, "var FooU4 FInt    = FooU3 * FooU3", false},
 		{&gotypes.Builtin{}, "var FooB5 uint32  = uint32(FooU3) + uint32(FooU4)", false},

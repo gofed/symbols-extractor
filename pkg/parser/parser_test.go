@@ -134,6 +134,8 @@ func TestProjectParser(t *testing.T) {
 		at.AddSymbol(expectedPackages["pkg"], "Nic")
 		// accounted as it is returned by pkg.Nic() and its field Imp is accessed
 		at.AddSymbol(expectedPackages["pkg"], "Imp")
+		// temporary bump by one once the allocated symbol is extended with file.go:linenumber
+		at.AddSymbol(expectedPackages["pkg"], "Imp")
 		// Accessing field Imp of type Imp does not imply allocation of the type Imp itself,
 		// Return type of the Nic() can change but it the field Imp is still available,
 		// The change is backward compatible. Thus, the type Imp must not be allocated.
@@ -212,6 +214,8 @@ func TestProjectParser(t *testing.T) {
 		at.AddSymbol("builtin", "int")
 		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkgb", "Imp")
 		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg", "Imp")
+		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg", "Imp")
+		// temporary bump by one once the allocated symbol is extended with file.go:linenumber
 		at.AddSymbol("github.com/gofed/symbols-extractor/pkg/parser/testdata/unordered/pkg", "Imp")
 
 		pat, _ := atable.Lookup(expectedPackages["pkg"], "pkg.go")
