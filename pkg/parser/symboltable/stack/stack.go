@@ -194,3 +194,5 @@ func (s *Stack) Json() {
 func (s *Stack) PrintTop() {
 	fmt.Printf("TableSymbols: %#v\n", s.Tables[s.Size-1])
 }
+
+var _ symboltable.SymbolLookable = &Stack{}

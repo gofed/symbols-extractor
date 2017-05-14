@@ -9,6 +9,15 @@ import (
 	"github.com/golang/glog"
 )
 
+type SymbolLookable interface {
+	LookupVariable(key string) (*gotypes.SymbolDef, error)
+	LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error)
+	LookupFunction(key string) (*gotypes.SymbolDef, error)
+	LookupDataType(key string) (*gotypes.SymbolDef, error)
+	LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error)
+	Lookup(key string) (*gotypes.SymbolDef, SymbolType, error)
+}
+
 // Participants:
 // - symbol table (global per package, one-level table)
 // - multi-level symbol table (one symbol table for each block)
@@ -239,3 +248,5 @@ func (t *Table) Lookup(key string) (*gotypes.SymbolDef, SymbolType, error) {
 
 	return nil, SymbolType(""), fmt.Errorf("Symbol `%v` not found", key)
 }
+
+var _ SymbolLookable = &Table{}
