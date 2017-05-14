@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -157,14 +158,14 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 }
 
 func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, error) {
-	glog.Infof("Processing value spec: %#v\n\tNames: %#v\n", spec, spec.Names[0])
+	var names []string
+	for _, name := range spec.Names {
+		names = append(names, name.Name)
+	}
+	glog.Infof("Processing value spec: %#v\n\tNames: %#v\n", spec, strings.Join(names, ","))
 
 	nLen := len(spec.Names)
 	vLen := len(spec.Values)
-
-	if nLen < vLen {
-		return nil, fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
-	}
 
 	var typeDef gotypes.DataType
 	if spec.Type != nil {
@@ -176,6 +177,34 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 	}
 
 	var symbolsDef = make([]*gotypes.SymbolDef, 0)
+
+	if vLen == 1 {
+		valueExpr, err := sp.ExprParser.Parse(spec.Values[0])
+		if err != nil {
+			return nil, err
+		}
+
+		if builtin, ok := valueExpr[0].(*gotypes.Builtin); !ok || builtin.Def != "iota" {
+			if nLen != len(valueExpr) {
+				return nil, fmt.Errorf("ValueSpec %#v has different number of identifiers on LHS (%v) than a number of results of invocation on RHS (%v)", spec, nLen, len(valueExpr))
+			}
+			for i, name := range spec.Names {
+				if name.Name == "_" {
+					continue
+				}
+				symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+					Name:    name.Name,
+					Package: sp.PackageName,
+					Def:     valueExpr[i],
+				})
+			}
+			return symbolsDef, nil
+		}
+	}
+
+	if nLen < vLen {
+		return nil, fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
+	}
 
 	for i := 0; i < vLen; i++ {
 		glog.Infof("----Processing ast.ValueSpec[%v]: %#v\n", i, spec.Values[i])
