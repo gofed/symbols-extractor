@@ -17,6 +17,7 @@ type Payload struct {
 	Variables         []*ast.ValueSpec
 	Functions         []*ast.FuncDecl
 	FunctionDeclsOnly bool
+	Reprocessing      bool
 	Imports           []*ast.ImportSpec
 }
 
@@ -127,23 +128,36 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 	return postponed, nil
 }
 
-func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec) ([]*ast.ValueSpec, error) {
+func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool) ([]*ast.ValueSpec, error) {
 	var postponed []*ast.ValueSpec
-	for _, spec := range specs {
 
-		defs, err := fp.StmtParser.ParseValueSpec(spec)
-		if err != nil {
-			glog.Warningf("File parse ValueSpec %q error: %v\n", spec.Names[0].Name, err)
-			postponed = append(postponed, spec)
-			continue
-		}
-		for _, def := range defs {
-			// TPDP(jchaloup): we should store all variables or non.
-			// Given the error is set only if the variable already exists, it should not matter so much.
-			if err := fp.SymbolTable.AddVariable(def); err != nil {
-				return nil, nil
+	for {
+		for _, spec := range specs {
+			defs, err := fp.StmtParser.ParseValueSpec(spec)
+			if err != nil {
+				glog.Warningf("File parse ValueSpec %q error: %v\n", spec.Names[0].Name, err)
+				postponed = append(postponed, spec)
+				continue
+			}
+
+			for _, def := range defs {
+				// TPDP(jchaloup): we should store all variables or non.
+				// Given the error is set only if the variable already exists, it should not matter so much.
+				if err := fp.SymbolTable.AddVariable(def); err != nil {
+					return nil, err
+				}
 			}
 		}
+		if !reprocessing {
+			break
+		}
+
+		if len(postponed) < len(specs) {
+			specs = postponed
+			postponed = nil
+			continue
+		}
+		break
 	}
 
 	return postponed, nil
@@ -298,7 +312,7 @@ func (fp *FileParser) Parse(p *Payload) error {
 	// // Vars/constants
 	{
 		glog.Infof("\n\nBefore parseValueSpecs: %v\tNames: %v\n", len(p.Variables), strings.Join(printVarNames(p.Variables), ","))
-		postponed, err := fp.parseValueSpecs(p.Variables)
+		postponed, err := fp.parseValueSpecs(p.Variables, p.Reprocessing)
 		if err != nil {
 			return err
 		}
