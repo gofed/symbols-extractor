@@ -919,7 +919,13 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			value = xExprType.Elmtype
 		case *gotypes.Builtin:
 			if xExprType.Def != "string" {
-				fmt.Errorf("Expecting string in range expression. Got %#v instead.", xExpr[0])
+				fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xExpr[0])
+			}
+			key = &gotypes.Builtin{Def: "int"}
+			value = &gotypes.Builtin{Def: "rune"}
+		case *gotypes.Identifier:
+			if xExprType.Def != "string" {
+				fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xExpr[0])
 			}
 			key = &gotypes.Builtin{Def: "int"}
 			value = &gotypes.Builtin{Def: "rune"}
