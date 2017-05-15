@@ -1,6 +1,7 @@
 package statement
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -77,7 +78,11 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 }
 
 func (sp *Parser) ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error) {
-	glog.Infof("Processing function %q declaration: %#v\n", d.Name.Name, d)
+	if d.Name != nil {
+		glog.Infof("Processing function %q declaration: %#v\n", d.Name.Name, d)
+	} else {
+		glog.Infof("Processing function declaration: %#v\n", d)
+	}
 	// parseFunction does not store name of params, resp. results
 	// as the names are not important. Just params, resp. results ordering is.
 	// Thus, this method is used to parse function's signature only.
@@ -385,6 +390,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	// Some assignments are of a different number of expression on both sides.
 	// E.g. value, ok := somemap[key]
 	//      ret1, ..., retn = func(...)
+	//		  expr, ok = expr.(type)
 	if exprsSize != rExprSize {
 		if rExprSize != 1 {
 			return fmt.Errorf("Number of expressions on the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", statement.Lhs, statement.Rhs)
@@ -419,7 +425,29 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, error) {
 				if i == 0 {
-					return xDef[0], nil
+					// - map
+					// - identifier of map
+					// - qid.id of map
+					{
+						byteSlice, _ := json.Marshal(xDef[0])
+						fmt.Printf("\n\tHHHH: %v\n", string(byteSlice))
+					}
+					var indexedObject gotypes.DataType
+					switch xDef[0].(type) {
+					case *gotypes.Identifier:
+						panic("Ident")
+					case *gotypes.Selector:
+						panic("Selector")
+					default:
+						indexedObject = xDef[0]
+					}
+
+					switch indexedObjectDef := indexedObject.(type) {
+					case *gotypes.Map:
+						return indexedObjectDef.Valuetype, nil
+					default:
+						panic(fmt.Errorf("Unsuported indexed object %#v", indexedObject))
+					}
 				}
 				if i == 1 {
 					return &gotypes.Builtin{Def: "bool"}, nil
@@ -686,107 +714,113 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 // RecvExpr   = Expression .
 func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 	glog.Infof("Processing select statement  %#v\n", statement)
+	// TODO(jchaloup): deal with select{}
 	for _, stmt := range statement.Body.List {
 		if err := func() error {
 			sp.SymbolTable.Push()
 			defer sp.SymbolTable.Pop()
+
+			glog.Infof("Processing select statement clause %#v\n", stmt)
 
 			commClause, ok := stmt.(*ast.CommClause)
 			if !ok {
 				return fmt.Errorf("Select must be a list of commClause statements")
 			}
 
-			switch clause := commClause.Comm.(type) {
-			case *ast.ExprStmt:
-				if _, err := sp.ExprParser.Parse(clause.X); err != nil {
-					return err
-				}
-			case *ast.SendStmt:
-				if _, err := sp.ExprParser.Parse(clause.Chan); err != nil {
-					return err
-				}
-				if _, err := sp.ExprParser.Parse(clause.Value); err != nil {
-					return err
-				}
-			case *ast.AssignStmt:
-				if len(clause.Rhs) != 1 {
-					return fmt.Errorf("Expecting a single expression on the RHS of a clause assigment")
-				}
-
-				chExpr, ok := clause.Rhs[0].(*ast.UnaryExpr)
-				if !ok {
-					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", clause.Rhs[0])
-				}
-
-				if chExpr.Op != token.ARROW {
-					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", chExpr)
-				}
-
-				rhsExpr, err := sp.ExprParser.Parse(chExpr.X)
-				if err != nil {
-					return err
-				}
-
-				if len(rhsExpr) != 1 {
-					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr)
-				}
-
-				rhsChannel, ok := rhsExpr[0].(*gotypes.Channel)
-				if !ok {
-					return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr[0])
-				}
-
-				switch lhsLen := len(clause.Lhs); lhsLen {
-				case 0:
-					return fmt.Errorf("Expecting at least one expression on the LHS of a clause assigment")
-				case 1:
-					if clause.Tok == token.DEFINE {
-						// All LHS expressions must be identifiers
-						// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
-						ident, ok := clause.Lhs[0].(*ast.Ident)
-						if !ok {
-							return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
-						}
-						sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-							Name:    ident.Name,
-							Package: sp.PackageName,
-							Def:     rhsChannel.Value,
-						})
+			// default has empty Comm
+			if commClause.Comm != nil {
+				switch clause := commClause.Comm.(type) {
+				case *ast.ExprStmt:
+					if _, err := sp.ExprParser.Parse(clause.X); err != nil {
+						return err
 					}
-				case 2:
-					// Given a case is an implicit block, there is no need to check if any of to-be-declared variables is already declared
-					// See http://www.tapirgames.com/blog/golang-block-and-scope
-					// If an ordinary assignment (with = symbol) is used, all variables/selectors(and other assignable expression) must be already defined,
-					// so they are not included as new variables.
-					if clause.Tok == token.DEFINE {
-						// All LHS expressions must be identifiers
-						// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
-						ident1, ok := clause.Lhs[0].(*ast.Ident)
-						if !ok {
-							return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
-						}
-						ident2, ok := clause.Lhs[1].(*ast.Ident)
-						if !ok {
-							return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
-						}
+				case *ast.SendStmt:
+					if _, err := sp.ExprParser.Parse(clause.Chan); err != nil {
+						return err
+					}
+					if _, err := sp.ExprParser.Parse(clause.Value); err != nil {
+						return err
+					}
+				case *ast.AssignStmt:
+					if len(clause.Rhs) != 1 {
+						return fmt.Errorf("Expecting a single expression on the RHS of a clause assigment")
+					}
 
-						sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-							Name:    ident1.Name,
-							Package: "",
-							Def:     rhsChannel,
-						})
+					chExpr, ok := clause.Rhs[0].(*ast.UnaryExpr)
+					if !ok {
+						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", clause.Rhs[0])
+					}
 
-						sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-							Name:    ident2.Name,
-							Package: "",
-							Def:     &gotypes.Builtin{},
-						})
+					if chExpr.Op != token.ARROW {
+						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", chExpr)
+					}
+
+					rhsExpr, err := sp.ExprParser.Parse(chExpr.X)
+					if err != nil {
+						return err
+					}
+
+					if len(rhsExpr) != 1 {
+						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr)
+					}
+
+					rhsChannel, ok := rhsExpr[0].(*gotypes.Channel)
+					if !ok {
+						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr[0])
+					}
+
+					switch lhsLen := len(clause.Lhs); lhsLen {
+					case 0:
+						return fmt.Errorf("Expecting at least one expression on the LHS of a clause assigment")
+					case 1:
+						if clause.Tok == token.DEFINE {
+							// All LHS expressions must be identifiers
+							// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
+							ident, ok := clause.Lhs[0].(*ast.Ident)
+							if !ok {
+								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
+							}
+							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+								Name:    ident.Name,
+								Package: sp.PackageName,
+								Def:     rhsChannel.Value,
+							})
+						}
+					case 2:
+						// Given a case is an implicit block, there is no need to check if any of to-be-declared variables is already declared
+						// See http://www.tapirgames.com/blog/golang-block-and-scope
+						// If an ordinary assignment (with = symbol) is used, all variables/selectors(and other assignable expression) must be already defined,
+						// so they are not included as new variables.
+						if clause.Tok == token.DEFINE {
+							// All LHS expressions must be identifiers
+							// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
+							ident1, ok := clause.Lhs[0].(*ast.Ident)
+							if !ok {
+								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
+							}
+							ident2, ok := clause.Lhs[1].(*ast.Ident)
+							if !ok {
+								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
+							}
+
+							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+								Name:    ident1.Name,
+								Package: "",
+								Def:     rhsChannel,
+							})
+
+							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+								Name:    ident2.Name,
+								Package: "",
+								Def:     &gotypes.Builtin{},
+							})
+						}
+					default:
+						return fmt.Errorf("Expecting at most two expression on the LHS of a clause assigment")
 					}
 				default:
-					return fmt.Errorf("Expecting at most two expression on the LHS of a clause assigment")
+					return fmt.Errorf("Unable to recognize selector CommClause CommCase. Got %#v\n", commClause.Comm)
 				}
-			default:
-				return fmt.Errorf("Unable to recognize selector CommClause CommCase. Got %#v\n", commClause.Comm)
 			}
 
 			if commClause.Body != nil {
