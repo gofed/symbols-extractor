@@ -81,8 +81,9 @@ func TestProjectParser(t *testing.T) {
 		st.AddDataType(&types.SymbolDef{
 			Name:    "MyInt",
 			Package: expectedPackages["unordered"],
-			Def: &types.Builtin{
-				Def: "int",
+			Def: &types.Identifier{
+				Def:     "int",
+				Package: "builtin",
 			},
 		})
 		st.AddFunction(&types.SymbolDef{
@@ -163,14 +164,16 @@ func TestProjectParser(t *testing.T) {
 				Fields: []types.StructFieldsItem{
 					{
 						Name: "Name",
-						Def: &types.Builtin{
-							Def: "string",
+						Def: &types.Identifier{
+							Def:     "string",
+							Package: "builtin",
 						},
 					},
 					{
 						Name: "Size",
-						Def: &types.Builtin{
-							Def: "int",
+						Def: &types.Identifier{
+							Def:     "int",
+							Package: "builtin",
 						},
 					},
 					{
@@ -236,14 +239,16 @@ func TestProjectParser(t *testing.T) {
 				Fields: []types.StructFieldsItem{
 					{
 						Name: "Name",
-						Def: &types.Builtin{
-							Def: "string",
+						Def: &types.Identifier{
+							Def:     "string",
+							Package: "builtin",
 						},
 					},
 					{
 						Name: "Size",
-						Def: &types.Builtin{
-							Def: "int",
+						Def: &types.Identifier{
+							Def:     "int",
+							Package: "builtin",
 						},
 					},
 				},
