@@ -159,6 +159,7 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 }
 
 func (ep *Parser) parseCompositeLitElements(lit *ast.CompositeLit, symbolDef *gotypes.SymbolDef) error {
+	glog.Infof("Processing parseCompositeLitElements symbolDef: %#v", symbolDef)
 	switch clTypeDataType := symbolDef.Def.(type) {
 	case *gotypes.Struct:
 		if err := ep.parseCompositeLitStructElements(lit, clTypeDataType, symbolDef); err != nil {
@@ -177,7 +178,7 @@ func (ep *Parser) parseCompositeLitElements(lit *ast.CompositeLit, symbolDef *go
 			return err
 		}
 	default:
-		return fmt.Errorf("Unsupported 2 ClTypeIdentifierDef: %#v\n", symbolDef)
+		return fmt.Errorf("Unsupported 2 type %#v in ClTypeIdentifierDef of %#v\n", symbolDef.Def, symbolDef)
 	}
 	return nil
 }
