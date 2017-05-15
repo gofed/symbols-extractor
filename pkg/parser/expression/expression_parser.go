@@ -855,14 +855,21 @@ func (ep *Parser) retrieveQidStruct(qidselector *gotypes.Selector) (symboltable.
 // Get a struct's field.
 // Given a struct can embedded another struct from a different package, the method must be able to Accessing
 // symbol tables of other packages. Thus recursively process struct's definition up to all its embedded fields.
-func (ep *Parser) retrieveStructField(pkgsymboltable symboltable.SymbolLookable, structDefsymbol *gotypes.SymbolDef, field string) (gotypes.DataType, error) {
-	glog.Infof("Retrieving StructType field %q from %#v\n", field, structDefsymbol)
+func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookable, structDefsymbol *gotypes.SymbolDef, field string) (gotypes.DataType, error) {
+	glog.Infof("Retrieving data type field %q from %#v\n", field, structDefsymbol)
 	// Only data type declaration is known
 	if structDefsymbol.Def == nil {
 		return nil, fmt.Errorf("Data type definition of %q is not known", structDefsymbol.Name)
 	}
+
+	// Any data type can have its own methods.
 	if structDefsymbol.Def.GetType() != gotypes.StructType {
-		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type: %#v", field, structDefsymbol.Def)
+		// Check struct methods
+		glog.Infof("Retrieving method %q of data type %q", field, structDefsymbol.Name)
+		if method, err := pkgsymboltable.LookupMethod(structDefsymbol.Name, field); err == nil {
+			return method.Def, nil
+		}
+		return nil, fmt.Errorf("Unable to find a field %v in data type %#v", field, structDefsymbol)
 	}
 
 	type embeddedStructsItem struct {
@@ -940,7 +947,7 @@ func (ep *Parser) retrieveStructField(pkgsymboltable symboltable.SymbolLookable,
 	glog.Info("Retrieving fields from embedded structs")
 	if len(embeddedStructs) != 0 {
 		for _, item := range embeddedStructs {
-			if fieldDef, err := ep.retrieveStructField(item.symbolTable, item.symbolDef, field); err == nil {
+			if fieldDef, err := ep.retrieveDataTypeField(item.symbolTable, item.symbolDef, field); err == nil {
 				return fieldDef, nil
 			}
 		}
@@ -1029,7 +1036,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 				byteSlice, _ := json.Marshal(structDefsymbol)
 				glog.Infof("Struct retrieved: %v\n", string(byteSlice))
 			}
-			return ep.retrieveStructField(ep.SymbolTable, structDefsymbol, expr.Sel.Name)
+			return ep.retrieveDataTypeField(ep.SymbolTable, structDefsymbol, expr.Sel.Name)
 		case *gotypes.Selector:
 			// qid to different package
 			pq, ok := def.Prefix.(*gotypes.Packagequalifier)
@@ -1040,10 +1047,10 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			if err != nil {
 				return nil, err
 			}
-			return ep.retrieveStructField(ep.SymbolTable, structDefsymbol, expr.Sel.Name)
+			return ep.retrieveDataTypeField(ep.SymbolTable, structDefsymbol, expr.Sel.Name)
 		case *gotypes.Struct:
 			// anonymous struct
-			return ep.retrieveStructField(ep.SymbolTable, &gotypes.SymbolDef{Def: def}, expr.Sel.Name)
+			return ep.retrieveDataTypeField(ep.SymbolTable, &gotypes.SymbolDef{Def: def}, expr.Sel.Name)
 		default:
 			return nil, fmt.Errorf("Trying to retrieve a %q field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
@@ -1058,7 +1065,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		}
 		switch defSymbol.Def.(type) {
 		case *gotypes.Struct:
-			return ep.retrieveStructField(ep.SymbolTable, defSymbol, expr.Sel.Name)
+			return ep.retrieveDataTypeField(ep.SymbolTable, defSymbol, expr.Sel.Name)
 		case *gotypes.Interface:
 			return ep.retrieveInterfaceMethod(defSymbol, expr.Sel.Name)
 		default:
@@ -1072,7 +1079,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		}
 	// anonymous struct
 	case *gotypes.Struct:
-		return ep.retrieveStructField(ep.SymbolTable, &gotypes.SymbolDef{
+		return ep.retrieveDataTypeField(ep.SymbolTable, &gotypes.SymbolDef{
 			Name:    "",
 			Package: "",
 			Def:     xType,
@@ -1090,7 +1097,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		if err != nil {
 			return nil, err
 		}
-		return ep.retrieveStructField(st, sd, expr.Sel.Name)
+		return ep.retrieveDataTypeField(st, sd, expr.Sel.Name)
 	// case *gotypes.Builtin:
 	// 	// Check if the built-in type has some methods
 	// 	table, err := ep.GlobalSymbolTable.Lookup("builtin")
