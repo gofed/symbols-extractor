@@ -50,7 +50,15 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	// Check if the identifier is a built-in type
 	if p.Config.IsBuiltin(typedExpr.Name) {
 		p.AllocatedSymbolsTable.AddSymbol("builtin", typedExpr.Name)
-		return &gotypes.Builtin{Def: typedExpr.Name}, nil
+		table, err := p.GlobalSymbolTable.Lookup("builtin")
+		if err != nil {
+			return nil, err
+		}
+		def, err := table.LookupDataType(typedExpr.Name)
+		if err != nil {
+			return nil, err
+		}
+		return def.Def, nil
 	}
 
 	// Check if the identifier is available in the symbol table
