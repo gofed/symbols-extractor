@@ -45,7 +45,10 @@ func parseBuiltin(config *parsertypes.Config) error {
         return fmt.Errorf("AST Parse error: %v", err)
     }
 
-    payload := fileparser.MakePayload(f)
+    payload, err := fileparser.MakePayload(f)
+    if err != nil {
+      return fmt.Errorf("Cannot make payload: %v", err)
+    }
     if err := fileparser.NewParser(config).Parse(payload); err != nil {
         return fmt.Errorf("Unable to parse file %v: %v", gofile, err)
     }
@@ -81,9 +84,9 @@ func prepareParser(pkgName string) (*types.Config, error) {
     return c, nil
 }
 
-func builtinOrIdent(config *types.Config, str string) gotypes.DataType {
+func builtinOrIdent(config *types.Config, str string, untyped bool) gotypes.DataType {
   if config.IsBuiltin(str) {
-    return &gotypes.Builtin{Def: str,}
+    return &gotypes.Builtin{Untyped: untyped, Def: str,}
   }
 
   return &gotypes.Identifier{Def: str, Package: gopkg, }
@@ -149,12 +152,12 @@ func initExprTest(expr_str string) (*types.Config, ast.Expr, error) {
         return config, expr, nil
 }
 
-func parseBinaryExprTest(expr_str, expected string) error {
+func parseBinaryExprTest(expr_str, expected string, untyped bool) error {
     config, expr, errE := initExprTest(expr_str)
     if errE != nil {
        return errE
     }
-    expected_type := builtinOrIdent(config , expected)
+    expected_type := builtinOrIdent(config , expected, untyped)
     current_type, err := config.ExprParser.(*Parser).parseBinaryExpr(expr.(*ast.BinaryExpr))
     if err != nil {
         return fmt .Errorf("Unexpected error for expr '%s': %v\n", expr_str, err)
@@ -182,11 +185,11 @@ func parseBinaryExprTest(expr_str, expected string) error {
 # for better reading, tests for each target are separated by long "=====" line
 */}}
 {{range .Targets}}
-  {{$target := .Target}}
+  {{$target := .Target -}}
 
   {{if eq $target "parseBinaryExpr"}}{{range $i, $elem := .Tests}}
     func Test{{tittle $target}}{{$i}} (t *testing.T) {
-        if err := parseBinaryExprTest("{{.Code}}", "{{index .Expected 0}}" ); err != nil {
+        if err := parseBinaryExprTest("{{.Code}}", "{{index .Expected 0}}", {{index .Expected 1}} ); err != nil {
             t.Error(err)
         }
   }{{template "nlspace"}}{{end}}{{end}}
@@ -206,7 +209,7 @@ func parseBinaryExprTest(expr_str, expected string) error {
         //fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
         expected_type := []gotypes.DataType{
           {{range .Expected -}}
-            builtinOrIdent(config , "{{.}}"),
+            builtinOrIdent(config , "{{.}}", false),
           {{end}}
         }
         current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))

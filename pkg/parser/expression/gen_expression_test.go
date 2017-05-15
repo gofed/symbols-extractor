@@ -38,7 +38,10 @@ func parseBuiltin(config *parsertypes.Config) error {
 		return fmt.Errorf("AST Parse error: %v", err)
 	}
 
-	payload := fileparser.MakePayload(f)
+	payload, err := fileparser.MakePayload(f)
+	if err != nil {
+		return fmt.Errorf("Cannot make payload: %v", err)
+	}
 	if err := fileparser.NewParser(config).Parse(payload); err != nil {
 		return fmt.Errorf("Unable to parse file %v: %v", gofile, err)
 	}
@@ -74,9 +77,9 @@ func prepareParser(pkgName string) (*types.Config, error) {
 	return c, nil
 }
 
-func builtinOrIdent(config *types.Config, str string) gotypes.DataType {
+func builtinOrIdent(config *types.Config, str string, untyped bool) gotypes.DataType {
 	if config.IsBuiltin(str) {
-		return &gotypes.Builtin{Def: str}
+		return &gotypes.Builtin{Untyped: untyped, Def: str}
 	}
 
 	return &gotypes.Identifier{Def: str, Package: gopkg}
@@ -147,12 +150,12 @@ func initExprTest(expr_str string) (*types.Config, ast.Expr, error) {
 	return config, expr, nil
 }
 
-func parseBinaryExprTest(expr_str, expected string) error {
+func parseBinaryExprTest(expr_str, expected string, untyped bool) error {
 	config, expr, errE := initExprTest(expr_str)
 	if errE != nil {
 		return errE
 	}
-	expected_type := builtinOrIdent(config, expected)
+	expected_type := builtinOrIdent(config, expected, untyped)
 	current_type, err := config.ExprParser.(*Parser).parseBinaryExpr(expr.(*ast.BinaryExpr))
 	if err != nil {
 		return fmt.Errorf("Unexpected error for expr '%s': %v\n", expr_str, err)
@@ -167,163 +170,163 @@ func parseBinaryExprTest(expr_str, expected string) error {
 }
 
 func TestParseBinaryExpr0(t *testing.T) {
-	if err := parseBinaryExprTest("2 + 4", "int"); err != nil {
+	if err := parseBinaryExprTest("2 + 4", "int", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr1(t *testing.T) {
-	if err := parseBinaryExprTest("8 * 3.1", "float64"); err != nil {
+	if err := parseBinaryExprTest("8 * 3.1", "float64", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr2(t *testing.T) {
-	if err := parseBinaryExprTest("3 * 4 * 5", "int"); err != nil {
+	if err := parseBinaryExprTest("3 * 4 * 5", "int", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr3(t *testing.T) {
-	if err := parseBinaryExprTest("float32(4) - float32(3)", "float32"); err != nil {
+	if err := parseBinaryExprTest("float32(4) - float32(3)", "float32", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr4(t *testing.T) {
-	if err := parseBinaryExprTest("MyInt(2) + 3", "MyInt"); err != nil {
+	if err := parseBinaryExprTest("MyInt(2) + 3", "MyInt", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr5(t *testing.T) {
-	if err := parseBinaryExprTest("MyFunc(2) + 3", "MyInt"); err != nil {
+	if err := parseBinaryExprTest("MyFunc(2) + 3", "MyInt", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr6(t *testing.T) {
-	if err := parseBinaryExprTest("2 + MyFunc(3)", "MyInt"); err != nil {
+	if err := parseBinaryExprTest("2 + MyFunc(3)", "MyInt", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr7(t *testing.T) {
-	if err := parseBinaryExprTest("FooMyInt + 5", "MyInt"); err != nil {
+	if err := parseBinaryExprTest("FooMyInt + 5", "MyInt", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr8(t *testing.T) {
-	if err := parseBinaryExprTest("MyFunc(MyInt(3)) + MyFunc(MyInt(3))", "MyInt"); err != nil {
+	if err := parseBinaryExprTest("MyFunc(MyInt(3)) + MyFunc(MyInt(3))", "MyInt", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr9(t *testing.T) {
-	if err := parseBinaryExprTest("MyInt(MyFunc(MyInt(3))) + MyFunc(MyInt(3))", "MyInt"); err != nil {
+	if err := parseBinaryExprTest("MyInt(MyFunc(MyInt(3))) + MyFunc(MyInt(3))", "MyInt", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr10(t *testing.T) {
-	if err := parseBinaryExprTest("\"Hello\" + \" Johnny!\"", "string"); err != nil {
+	if err := parseBinaryExprTest("\"Hello\" + \" Johnny!\"", "string", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr11(t *testing.T) {
-	if err := parseBinaryExprTest("2 + int(MyFunc(3))", "int"); err != nil {
+	if err := parseBinaryExprTest("2 + int(MyFunc(3))", "int", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr12(t *testing.T) {
-	if err := parseBinaryExprTest("2 - 4", "int"); err != nil {
+	if err := parseBinaryExprTest("2 - 4", "int", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr13(t *testing.T) {
-	if err := parseBinaryExprTest("2 / 4", "int"); err != nil {
+	if err := parseBinaryExprTest("2 / 4", "int", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr14(t *testing.T) {
-	if err := parseBinaryExprTest("2 % 4", "int"); err != nil {
+	if err := parseBinaryExprTest("2 % 4", "int", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr15(t *testing.T) {
-	if err := parseBinaryExprTest("false || true", "bool"); err != nil {
+	if err := parseBinaryExprTest("false || true", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr16(t *testing.T) {
-	if err := parseBinaryExprTest("false && true", "bool"); err != nil {
+	if err := parseBinaryExprTest("false && true", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr17(t *testing.T) {
-	if err := parseBinaryExprTest("!bool(false) && bool(true)", "bool"); err != nil {
+	if err := parseBinaryExprTest("!bool(false) && bool(true)", "bool", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr18(t *testing.T) {
-	if err := parseBinaryExprTest("5 > 1", "bool"); err != nil {
+	if err := parseBinaryExprTest("5 > 1", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr19(t *testing.T) {
-	if err := parseBinaryExprTest("5 < 1", "bool"); err != nil {
+	if err := parseBinaryExprTest("5 < 1", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr20(t *testing.T) {
-	if err := parseBinaryExprTest("5 <= 1", "bool"); err != nil {
+	if err := parseBinaryExprTest("5 <= 1", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr21(t *testing.T) {
-	if err := parseBinaryExprTest("5 >= 1", "bool"); err != nil {
+	if err := parseBinaryExprTest("5 >= 1", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr22(t *testing.T) {
-	if err := parseBinaryExprTest("MyFunc(15) == 15 ", "bool"); err != nil {
+	if err := parseBinaryExprTest("MyFunc(15) == 15 ", "bool", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr23(t *testing.T) {
-	if err := parseBinaryExprTest("5 != 1", "bool"); err != nil {
+	if err := parseBinaryExprTest("5 != 1", "bool", true); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr24(t *testing.T) {
-	if err := parseBinaryExprTest("!bool(true) ==  (1 != 5)", "bool"); err != nil {
+	if err := parseBinaryExprTest("!bool(true) ==  (1 != 5)", "bool", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr25(t *testing.T) {
-	if err := parseBinaryExprTest("true || ((5+1) * (MyFunc(11) / MyInt(14))) > 0", "bool"); err != nil {
+	if err := parseBinaryExprTest("true || ((5+1) * (MyFunc(11) / MyInt(14))) > 0", "bool", false); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestParseBinaryExpr26(t *testing.T) {
-	if err := parseBinaryExprTest("(5 + 1) + (10 * 1)", "int"); err != nil {
+	if err := parseBinaryExprTest("(5 + 1) + (10 * 1)", "int", true); err != nil {
 		t.Error(err)
 	}
 }
@@ -339,7 +342,7 @@ func TestParseCallExpr0(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "int"),
+		builtinOrIdent(config, "int", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {
@@ -366,8 +369,8 @@ func TestParseCallExpr1(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "int"),
-		builtinOrIdent(config, "error"),
+		builtinOrIdent(config, "int", false),
+		builtinOrIdent(config, "error", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {
@@ -394,7 +397,7 @@ func TestParseCallExpr2(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "int"),
+		builtinOrIdent(config, "int", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {
@@ -421,7 +424,7 @@ func TestParseCallExpr3(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "MyInt"),
+		builtinOrIdent(config, "MyInt", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {
@@ -448,7 +451,7 @@ func TestParseCallExpr4(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "string"),
+		builtinOrIdent(config, "string", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {
@@ -475,7 +478,7 @@ func TestParseCallExpr5(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "MyStruct"),
+		builtinOrIdent(config, "MyStruct", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {
@@ -502,7 +505,7 @@ func TestParseCallExpr6(t *testing.T) {
 
 	//fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
 	expected_type := []gotypes.DataType{
-		builtinOrIdent(config, "uint"),
+		builtinOrIdent(config, "uint", false),
 	}
 	current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
 	if err != nil {

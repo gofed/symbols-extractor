@@ -41,85 +41,85 @@ targets:
     tests:
       -
         code: "2 + 4"
-        expected: [int]
+        expected: [int, true]
       -
         code: "8 * 3.1"
-        expected: [float64]
+        expected: [float64, true]
       -
         code: "3 * 4 * 5"
-        expected: [int]
+        expected: [int, true]
       -
         code: "float32(4) - float32(3)"
-        expected: [float32]
+        expected: [float32, false]
       -
         code: "MyInt(2) + 3"
-        expected: [MyInt]
+        expected: [MyInt, false]
       -
         code: "MyFunc(2) + 3"
-        expected: [MyInt]
+        expected: [MyInt, false]
       -
         code: "2 + MyFunc(3)"
-        expected: [MyInt]
+        expected: [MyInt, false]
       -
         code: "FooMyInt + 5"
-        expected: [MyInt]
+        expected: [MyInt, false]
       -
         code: "MyFunc(MyInt(3)) + MyFunc(MyInt(3))"
-        expected: [MyInt]
+        expected: [MyInt, false]
       -
         code: "MyInt(MyFunc(MyInt(3))) + MyFunc(MyInt(3))"
-        expected: [MyInt]
+        expected: [MyInt, false]
       -
         code: '\"Hello\" + \" Johnny!\"'
-        expected: [string]
+        expected: [string, true]
       -
         code: "2 + int(MyFunc(3))"
-        expected: [int]
+        expected: [int, false]
       -
         code: "2 - 4"
-        expected: [int]
+        expected: [int, true]
       -
         code: "2 / 4"
-        expected: [int]
+        expected: [int, true]
       -
         code: "2 % 4"
-        expected: [int]
+        expected: [int, true]
       -
         code: "false || true"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "false && true"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "!bool(false) && bool(true)"
-        expected: [bool]
+        expected: [bool, false]
       -
         code: "5 > 1"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "5 < 1"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "5 <= 1"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "5 >= 1"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "MyFunc(15) == 15 "
-        expected: [bool]
+        expected: [bool, false]
       -
         code: "5 != 1"
-        expected: [bool]
+        expected: [bool, true]
       -
         code: "!bool(true) ==  (1 != 5)"
-        expected: [bool]
+        expected: [bool, false]
       -
         code: "true || ((5+1) * (MyFunc(11) / MyInt(14))) > 0"
-        expected: [bool]
+        expected: [bool, false]
       -
         code: "(5 + 1) + (10 * 1)"
-        expected: [int]
+        expected: [int, true]
   -
     target: parseCallExpr
     tests:
