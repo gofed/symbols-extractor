@@ -486,7 +486,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	yIdent, yOk := y[0].(*gotypes.Identifier)
 
 	if !xOk && !yOk {
-		return nil, fmt.Errorf("At least one operand of a binary operator %v must be an identifier", expr.Op)
+		return nil, fmt.Errorf("At least one operand of a binary operator %v must be an identifier, at %v", expr.Op, expr.Pos())
 	}
 
 	// Even here we assume existence of untyped constants.
@@ -597,6 +597,8 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 	case *ast.InterfaceType:
 		return true, nil
 	case *ast.TypeAssertExpr:
+		return false, nil
+	case *ast.ChanType:
 		return true, nil
 	default:
 		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
@@ -1089,8 +1091,19 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			return nil, err
 		}
 		return ep.retrieveStructField(st, sd, expr.Sel.Name)
+	// case *gotypes.Builtin:
+	// 	// Check if the built-in type has some methods
+	// 	table, err := ep.GlobalSymbolTable.Lookup("builtin")
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	//
+	// 	def, err := ep.SymbolTable.LookupMethod(xType.Def, expr.Sel.Name)
+	// 	fmt.Printf("def: %#v, err: %v\n", def, err)
+	//
+	// 	panic("JJJ")
 	default:
-		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v", expr.Sel.Name, xDef[0])
+		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v at %v", expr.Sel.Name, xDef[0], expr.Pos())
 	}
 }
 
@@ -1157,27 +1170,20 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (gotypes.DataTyp
 	// Or we can assume it does and just return the Type itself
 	// TODO(jchaloup): check the data type Type really implements interface of X (if it is an interface)
 
-	// Assertion type can be an identifier or a pointer to an identifier.
-	// Here, the symbol definition of the data type is not returned as it is lookup later by the caller
-	switch typeType := expr.Type.(type) {
-	case *ast.Ident:
-		// TODO(jchaloup): check the type is not built-in type. If it is, return the &Builtin{}.
-		return &gotypes.Identifier{
-			Def: typeType.Name,
-		}, nil
-	case *ast.StarExpr:
-		iDef, ok := typeType.X.(*ast.Ident)
-		if !ok {
-			return nil, fmt.Errorf("TypeAssert type %#v is not a pointer to an identifier", expr.Type)
-		}
-		return &gotypes.Pointer{
-			Def: &gotypes.Identifier{
-				Def: iDef.Name,
-			},
-		}, nil
-	default:
-		return nil, fmt.Errorf("Unsupported TypeAssert type: %#v\n", typeType)
+	isDT, err := ep.isDataType(expr.Type)
+	if err != nil {
+		return nil, err
 	}
+	if !isDT {
+		return nil, fmt.Errorf("TypeAssertExpression is expected to be a data type, got %#v instead", expr.Type)
+	}
+
+	def, err := ep.TypeParser.Parse(expr.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	return def, nil
 }
 
 func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {

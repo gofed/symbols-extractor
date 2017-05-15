@@ -263,6 +263,9 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 	return nil
 }
 
+// Given a variable/const type can be undefined until its expression is parsed
+// the variables/consts need to be reprocessed iteratively as long as number
+// of unprocessed specs decreases
 func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
@@ -270,7 +273,8 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 		glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
 		if fileContext.Variables != nil {
 			payload := &fileparser.Payload{
-				Variables: fileContext.Variables,
+				Variables:    fileContext.Variables,
+				Reprocessing: true,
 			}
 			glog.Infof("Vars before processing: %#v\n", payload.Variables)
 			for _, spec := range fileContext.FileAST.Imports {
