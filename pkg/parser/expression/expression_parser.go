@@ -834,7 +834,7 @@ func (ep *Parser) parseStructType(expr *ast.StructType) (gotypes.DataType, error
 	return ep.TypeParser.Parse(expr)
 }
 
-func (ep *Parser) retrieveQidStruct(qidselector *gotypes.Selector) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
+func (ep *Parser) retrieveQidDataType(qidselector *gotypes.Selector) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
 	// qid.structtype expected
 	qid, ok := qidselector.Prefix.(*gotypes.Packagequalifier)
 	if !ok {
@@ -856,21 +856,25 @@ func (ep *Parser) retrieveQidStruct(qidselector *gotypes.Selector) (symboltable.
 // Get a struct's field.
 // Given a struct can embedded another struct from a different package, the method must be able to Accessing
 // symbol tables of other packages. Thus recursively process struct's definition up to all its embedded fields.
-func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookable, structDefsymbol *gotypes.SymbolDef, field string) (gotypes.DataType, error) {
-	glog.Infof("Retrieving data type field %q from %#v\n", field, structDefsymbol)
+func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookable, dataTypeDef *gotypes.SymbolDef, field string) (gotypes.DataType, error) {
+	glog.Infof("Retrieving data type field %q from %#v\n", field, dataTypeDef)
 	// Only data type declaration is known
-	if structDefsymbol.Def == nil {
-		return nil, fmt.Errorf("Data type definition of %q is not known", structDefsymbol.Name)
+	if dataTypeDef.Def == nil {
+		return nil, fmt.Errorf("Data type definition of %q is not known", dataTypeDef.Name)
 	}
 
 	// Any data type can have its own methods.
-	if structDefsymbol.Def.GetType() != gotypes.StructType {
+	// Or, a struct can embedded any data type with its own methods
+	if dataTypeDef.Def.GetType() != gotypes.StructType {
+		if dataTypeDef.Def.GetType() == gotypes.InterfaceType {
+			return ep.retrieveInterfaceMethod(pkgsymboltable, dataTypeDef, field)
+		}
 		// Check struct methods
-		glog.Infof("Retrieving method %q of data type %q", field, structDefsymbol.Name)
-		if method, err := pkgsymboltable.LookupMethod(structDefsymbol.Name, field); err == nil {
+		glog.Infof("Retrieving method %q of data type %q", field, dataTypeDef.Name)
+		if method, err := pkgsymboltable.LookupMethod(dataTypeDef.Name, field); err == nil {
 			return method.Def, nil
 		}
-		return nil, fmt.Errorf("Unable to find a field %v in data type %#v", field, structDefsymbol)
+		return nil, fmt.Errorf("Unable to find a field %v in data type %#v", field, dataTypeDef)
 	}
 
 	type embeddedStructsItem struct {
@@ -881,14 +885,16 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 
 	// Check struct field
 	var fieldItem *gotypes.StructFieldsItem
-	for _, item := range structDefsymbol.Def.(*gotypes.Struct).Fields {
+	for _, item := range dataTypeDef.Def.(*gotypes.Struct).Fields {
 		fieldName := item.Name
 		// anonymous field (can be embedded struct as well)
 		if fieldName == "" {
+			fmt.Printf("\n\n\titemExpr: %#v\n", item.Def)
 			itemExpr := item.Def
-			if pointerExpr, isPointer := item.Def.(*gotypes.Pointer); isPointer {
-				itemExpr = pointerExpr
+			if pointerExpr, isPointer := itemExpr.(*gotypes.Pointer); isPointer {
+				itemExpr = pointerExpr.Def
 			}
+			fmt.Printf("\n\n\titemExpr: %#v\n", item.Def)
 			switch fieldType := itemExpr.(type) {
 			case *gotypes.Identifier:
 				if fieldType.Def == field {
@@ -913,7 +919,7 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 					glog.Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
-				st, sd, err := ep.retrieveQidStruct(fieldType)
+				st, sd, err := ep.retrieveQidDataType(fieldType)
 				if err != nil {
 					return nil, err
 				}
@@ -921,7 +927,7 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 				embeddedStructs = append(embeddedStructs, embeddedStructsItem{symbolTable: st, symbolDef: sd})
 				continue
 			default:
-				panic(fmt.Errorf("Unknown anonymous field type %#v", item.Def))
+				panic(fmt.Errorf("Unknown anonymous field type %#v", itemExpr))
 			}
 		}
 		if fieldName == field {
@@ -931,8 +937,8 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 	}
 
 	if fieldItem != nil {
-		if structDefsymbol.Name != "" {
-			ep.AllocatedSymbolsTable.AddDataTypeField(structDefsymbol.Package, structDefsymbol.Name, field)
+		if dataTypeDef.Name != "" {
+			ep.AllocatedSymbolsTable.AddDataTypeField(dataTypeDef.Package, dataTypeDef.Name, field)
 		}
 		return fieldItem.Def, nil
 	}
@@ -940,8 +946,8 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 	// First, check methods, then embedded structs
 
 	// Check struct methods
-	glog.Infof("Retrieving method %q of data type %q", field, structDefsymbol.Name)
-	if method, err := pkgsymboltable.LookupMethod(structDefsymbol.Name, field); err == nil {
+	glog.Infof("Retrieving method %q of data type %q", field, dataTypeDef.Name)
+	if method, err := pkgsymboltable.LookupMethod(dataTypeDef.Name, field); err == nil {
 		return method.Def, nil
 	}
 
@@ -954,14 +960,20 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 		}
 	}
 
-	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", field, structDefsymbol)
+	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", field, dataTypeDef)
 }
 
-func (ep *Parser) retrieveInterfaceMethod(interfaceDefsymbol *gotypes.SymbolDef, method string) (gotypes.DataType, error) {
+func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLookable, interfaceDefsymbol *gotypes.SymbolDef, method string) (gotypes.DataType, error) {
 	glog.Infof("Retrieving Interface method %q from %#v\n", method, interfaceDefsymbol)
 	if interfaceDefsymbol.Def.GetType() != gotypes.InterfaceType {
 		return nil, fmt.Errorf("Trying to retrieve a %v method from a non-interface data type: %#v", method, interfaceDefsymbol.Def)
 	}
+
+	type embeddedInterfacesItem struct {
+		symbolTable symboltable.SymbolLookable
+		symbolDef   *gotypes.SymbolDef
+	}
+	var embeddedInterfaces []embeddedInterfacesItem
 
 	var methodItem *gotypes.InterfaceMethodsItem
 
@@ -969,13 +981,59 @@ func (ep *Parser) retrieveInterfaceMethod(interfaceDefsymbol *gotypes.SymbolDef,
 		methodName := item.Name
 		// anonymous field (can be embedded struct as well)
 		if methodName == "" {
-			// Given a data type implements an interface, there is no need to check embedded interface.
-			// Once we carry interface analysis, it will become relevant
-			panic("Embedded interface, not yet implemented")
+			// Given a variable can be of interface data type,
+			// embedded interface needs to be checked as well.
+			itemExpr := item.Def
+			if pointerExpr, isPointer := item.Def.(*gotypes.Pointer); isPointer {
+				itemExpr = pointerExpr.Def
+			}
+			switch fieldType := itemExpr.(type) {
+			case *gotypes.Identifier:
+				if fieldType.Def == method {
+					methodItem = &item
+					break
+				}
+				// check if the field is an embedded struct
+				def, err := pkgsymboltable.LookupDataType(fieldType.Def)
+				if err != nil {
+					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
+				}
+				if def.Def == nil {
+					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
+				}
+				if _, ok := def.Def.(*gotypes.Interface); ok {
+					embeddedInterfaces = append(embeddedInterfaces, embeddedInterfacesItem{symbolTable: pkgsymboltable, symbolDef: def})
+				}
+				continue
+			case *gotypes.Selector:
+				{
+					byteSlice, _ := json.Marshal(fieldType)
+					glog.Infof("++++%v\n", string(byteSlice))
+				}
+				// qid expected
+				st, sd, err := ep.retrieveQidDataType(fieldType)
+				if err != nil {
+					return nil, err
+				}
+
+				embeddedInterfaces = append(embeddedInterfaces, embeddedInterfacesItem{symbolTable: st, symbolDef: sd})
+				continue
+			default:
+				panic(fmt.Errorf("Unknown anonymous field type %#v", item.Def))
+			}
 		}
 		if methodName == method {
 			methodItem = &item
 			break
+		}
+	}
+
+	glog.Info("Retrieving methods from embedded interfaces")
+	if len(embeddedInterfaces) != 0 {
+		for _, item := range embeddedInterfaces {
+			if fieldDef, err := ep.retrieveInterfaceMethod(item.symbolTable, item.symbolDef, method); err == nil {
+				return fieldDef, nil
+			}
 		}
 	}
 
@@ -1068,7 +1126,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		case *gotypes.Struct:
 			return ep.retrieveDataTypeField(ep.SymbolTable, defSymbol, expr.Sel.Name)
 		case *gotypes.Interface:
-			return ep.retrieveInterfaceMethod(defSymbol, expr.Sel.Name)
+			return ep.retrieveInterfaceMethod(ep.SymbolTable, defSymbol, expr.Sel.Name)
 		default:
 			// check data types with receivers
 			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", expr.Sel.Name, xType)
@@ -1087,14 +1145,14 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		}, expr.Sel.Name)
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous
-		return ep.retrieveInterfaceMethod(&gotypes.SymbolDef{
+		return ep.retrieveInterfaceMethod(ep.SymbolTable, &gotypes.SymbolDef{
 			Name:    "",
 			Package: "",
 			Def:     xType,
 		}, expr.Sel.Name)
 	case *gotypes.Selector:
 		// qid.structtype expected
-		st, sd, err := ep.retrieveQidStruct(xType)
+		st, sd, err := ep.retrieveQidDataType(xType)
 		if err != nil {
 			return nil, err
 		}
