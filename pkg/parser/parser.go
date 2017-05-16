@@ -268,27 +268,41 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 // of unprocessed specs decreases
 func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	fLen := len(p.Files)
+	pkgPostponedCounter := 0
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
-		if fileContext.Variables != nil {
-			payload := &fileparser.Payload{
-				Variables:    fileContext.Variables,
-				Reprocessing: true,
-			}
-			glog.Infof("Vars before processing: %#v\n", payload.Variables)
-			for _, spec := range fileContext.FileAST.Imports {
-				payload.Imports = append(payload.Imports, spec)
-			}
-			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
-			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
-				return err
-			}
-			glog.Infof("Vars after processing: %#v\n", payload.Variables)
-			if payload.Variables != nil {
-				return fmt.Errorf("There are still some postponed variables to process after the second round: %v", p.PackagePath)
+		pkgPostponedCounter += len(fileContext.Variables)
+	}
+
+	for {
+		counter := 0
+		for i := 0; i < fLen; i++ {
+			fileContext := p.Files[i]
+			glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+			if fileContext.Variables != nil {
+				payload := &fileparser.Payload{
+					Variables:    fileContext.Variables,
+					Reprocessing: true,
+				}
+				glog.Infof("Vars before processing: %#v\n", payload.Variables)
+				for _, spec := range fileContext.FileAST.Imports {
+					payload.Imports = append(payload.Imports, spec)
+				}
+				p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+				if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
+					return err
+				}
+				glog.Infof("Vars after processing: %#v\n", payload.Variables)
+				fileContext.Variables = payload.Variables
+				counter += len(payload.Variables)
 			}
 		}
+		glog.Infof("len(postponed) before: %v, len(postponsed) after: %v\n", pkgPostponedCounter, counter)
+		if counter < pkgPostponedCounter {
+			pkgPostponedCounter = counter
+			continue
+		}
+		break
 	}
 	return nil
 }
@@ -395,6 +409,12 @@ PACKAGE_STACK:
 		// Process the package stack
 		p := pp.packageStack[0]
 		glog.Infof("\n\n\nPS processing %#v\n", p.PackageDir)
+		if _, err := pp.globalSymbolTable.Lookup(p.PackagePath); err == nil {
+			glog.Infof("\n\n\nPS %#v already processed\n", p.PackageDir)
+			// Pop the package from the package stack
+			pp.packageStack = pp.packageStack[1:]
+			continue
+		}
 		// Process the files
 		fLen := len(p.Files)
 		for i := p.FileIndex; i < fLen; i++ {
