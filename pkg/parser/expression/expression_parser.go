@@ -482,7 +482,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 
 	glog.Infof("Binaryexpr.x: %#v\nBinaryexpr.y: %#v\n", x[0], y[0])
 
-	// At least one of the type is an identifier
+	// At least one of the type is an identifier or a qualified identifier
 	xIdent, xOk := x[0].(*gotypes.Identifier)
 	yIdent, yOk := y[0].(*gotypes.Identifier)
 
@@ -601,9 +601,11 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 		return false, nil
 	case *ast.ChanType:
 		return true, nil
+	case *ast.MapType:
+		return true, nil
 	default:
 		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
-		panic(fmt.Errorf("Unrecognized isDataType expr: %#v", expr))
+		panic(fmt.Errorf("Unrecognized isDataType expr: %#v at %v", expr, expr.Pos()))
 	}
 	return false, nil
 }
@@ -877,11 +879,11 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 		return nil, fmt.Errorf("Unable to find a field %v in data type %#v", field, dataTypeDef)
 	}
 
-	type embeddedStructsItem struct {
+	type embeddedDataTypesItem struct {
 		symbolTable symboltable.SymbolLookable
 		symbolDef   *gotypes.SymbolDef
 	}
-	var embeddedStructs []embeddedStructsItem
+	var embeddedDataTypes []embeddedDataTypesItem
 
 	// Check struct field
 	var fieldItem *gotypes.StructFieldsItem
@@ -909,9 +911,7 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 				if def.Def == nil {
 					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
 				}
-				if _, ok := def.Def.(*gotypes.Struct); ok {
-					embeddedStructs = append(embeddedStructs, embeddedStructsItem{symbolTable: pkgsymboltable, symbolDef: def})
-				}
+				embeddedDataTypes = append(embeddedDataTypes, embeddedDataTypesItem{symbolTable: pkgsymboltable, symbolDef: def})
 				continue
 			case *gotypes.Selector:
 				{
@@ -924,7 +924,7 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 					return nil, err
 				}
 
-				embeddedStructs = append(embeddedStructs, embeddedStructsItem{symbolTable: st, symbolDef: sd})
+				embeddedDataTypes = append(embeddedDataTypes, embeddedDataTypesItem{symbolTable: st, symbolDef: sd})
 				continue
 			default:
 				panic(fmt.Errorf("Unknown anonymous field type %#v", itemExpr))
@@ -954,8 +954,8 @@ func (ep *Parser) retrieveDataTypeField(pkgsymboltable symboltable.SymbolLookabl
 	}
 
 	glog.Info("Retrieving fields from embedded structs")
-	if len(embeddedStructs) != 0 {
-		for _, item := range embeddedStructs {
+	if len(embeddedDataTypes) != 0 {
+		for _, item := range embeddedDataTypes {
 			if fieldDef, err := ep.retrieveDataTypeField(item.symbolTable, item.symbolDef, field, methodsOnly); err == nil {
 				return fieldDef, nil
 			}
@@ -1184,7 +1184,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", expr.Sel.Name, xType)
 			def, err := ep.Config.LookupMethod(xType, expr.Sel.Name)
 			if err != nil {
-				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v", defSymbol)
+				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v at %v: %v", defSymbol, expr.Pos(), err)
 			}
 			return def.Def, nil
 		}
