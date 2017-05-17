@@ -452,7 +452,10 @@ PACKAGE_STACK:
 			if err := p.Config.SymbolTable.Reset(); err != nil {
 				panic(err)
 			}
-			payload := fileparser.MakePayload(fileContext.FileAST)
+			payload, err := fileparser.MakePayload(fileContext.FileAST)
+			if err != nil {
+				return fmt.Errorf("Unable to create a payload: %v", err)
+			}
 			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err

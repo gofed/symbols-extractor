@@ -29,7 +29,10 @@ func parseBuiltin(config *parsertypes.Config) error {
 		return fmt.Errorf("AST Parse error: %v", err)
 	}
 
-	payload := MakePayload(f)
+	payload, err := MakePayload(f)
+	if err != nil {
+		return err
+	}
 	if err := NewParser(config).Parse(payload); err != nil {
 		return fmt.Errorf("Unable to parse file %v: %v", gofile, err)
 	}
@@ -86,7 +89,10 @@ func TestDataTypes(t *testing.T) {
 	config.ExprParser = exprparser.New(config)
 	config.StmtParser = stmtparser.New(config)
 
-	payload := MakePayload(f)
+	payload, err := MakePayload(f)
+	if err != nil {
+		t.Errorf("Unable to make a payload due to: %v", err)
+	}
 	if err := NewParser(config).Parse(payload); err != nil {
 		t.Errorf("Unable to parse file %v: %v", gofile, err)
 	}

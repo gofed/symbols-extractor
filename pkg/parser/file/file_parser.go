@@ -46,7 +46,7 @@ func MakePackagequalifier(spec *ast.ImportSpec) *gotypes.Packagequalifier {
 	return q
 }
 
-func MakePayload(f *ast.File) *Payload {
+func MakePayload(f *ast.File) (*Payload, error) {
 	payload := &Payload{}
 
 	for _, spec := range f.Imports {
@@ -56,11 +56,31 @@ func MakePayload(f *ast.File) *Payload {
 	for _, d := range f.Decls {
 		switch decl := d.(type) {
 		case *ast.GenDecl:
+			var lastValueSpecType ast.Expr
+			var lastValueSpecValue ast.Expr
 			for _, spec := range decl.Specs {
 				switch d := spec.(type) {
 				case *ast.TypeSpec:
 					payload.DataTypes = append(payload.DataTypes, d)
 				case *ast.ValueSpec:
+					// Either error or iota as a value
+					if d.Type == nil && d.Values == nil {
+						if lastValueSpecValue == nil {
+							return nil, fmt.Errorf("Missing Type and Value for ValueSpec %#v", d)
+						}
+						d.Values = []ast.Expr{lastValueSpecValue}
+						if lastValueSpecType != nil {
+							d.Type = lastValueSpecType
+						}
+					}
+
+					if len(d.Values) == 1 {
+						lastValueSpecValue = d.Values[0]
+						lastValueSpecType = d.Type
+					} else {
+						lastValueSpecValue = nil
+						lastValueSpecType = nil
+					}
 					payload.Variables = append(payload.Variables, d)
 				}
 			}
@@ -68,7 +88,7 @@ func MakePayload(f *ast.File) *Payload {
 			payload.Functions = append(payload.Functions, decl)
 		}
 	}
-	return payload
+	return payload, nil
 }
 
 func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
