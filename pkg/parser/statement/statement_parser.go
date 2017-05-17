@@ -167,7 +167,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 	for _, name := range spec.Names {
 		names = append(names, name.Name)
 	}
-	glog.Infof("Processing value spec: %#v\n\tNames: %#v\n", spec, strings.Join(names, ","))
+	glog.Infof("\n\nProcessing value spec: %#v\n\tNames: %#v\n", spec, strings.Join(names, ","))
 
 	nLen := len(spec.Names)
 	vLen := len(spec.Values)
@@ -197,11 +197,19 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 				if name.Name == "_" {
 					continue
 				}
-				symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
-					Name:    name.Name,
-					Package: sp.PackageName,
-					Def:     valueExpr[i],
-				})
+				if typeDef == nil {
+					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+						Name:    name.Name,
+						Package: sp.PackageName,
+						Def:     valueExpr[i],
+					})
+				} else {
+					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+						Name:    name.Name,
+						Package: sp.PackageName,
+						Def:     typeDef,
+					})
+				}
 			}
 			return symbolsDef, nil
 		}
