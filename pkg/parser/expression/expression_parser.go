@@ -611,16 +611,20 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 }
 
 func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error) {
+	glog.Infof("getFunctionDef of %#v", def)
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
 		// local definition
-		if typeDef.Package == "" {
+		if typeDef.Package == "" || typeDef.Package == ep.PackageName {
 			def, defType, err := ep.SymbolTable.Lookup(typeDef.Def)
 			if err != nil {
 				return nil, err
 			}
 			if defType.IsFunctionType() {
 				return def.Def, nil
+			}
+			if defType.IsDataType() {
+				return ep.getFunctionDef(def.Def)
 			}
 			if !defType.IsVariable() {
 				return nil, fmt.Errorf("Function call expression %#v is not expected to be a type", def)
