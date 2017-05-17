@@ -482,19 +482,52 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 
 	glog.Infof("Binaryexpr.x: %#v\nBinaryexpr.y: %#v\n", x[0], y[0])
 
-	// At least one of the type is an identifier or a qualified identifier
-	xIdent, xOk := x[0].(*gotypes.Identifier)
-	yIdent, yOk := y[0].(*gotypes.Identifier)
+	var xIdent *gotypes.Identifier
+	var xIsIdentifier bool
+	switch xExpr := x[0].(type) {
+	case *gotypes.Identifier:
+		xIdent = xExpr
+		xIsIdentifier = true
+	case *gotypes.Selector:
+		qid, ok := xExpr.Prefix.(*gotypes.Packagequalifier)
+		if !ok {
+			return nil, fmt.Errorf("Left operand of a binary expression is expected to be a qualified identifier, got %#v instead", xExpr)
+		}
+		xIdent = &gotypes.Identifier{
+			Def:     xExpr.Item,
+			Package: qid.Name,
+		}
+		xIsIdentifier = true
+	}
 
-	if !xOk && !yOk {
-		return nil, fmt.Errorf("At least one operand of a binary operator %v must be an identifier, at %v", expr.Op, expr.Pos())
+	var yIdent *gotypes.Identifier
+	var yIsIdentifier bool
+	switch yExpr := y[0].(type) {
+	case *gotypes.Identifier:
+		yIdent = yExpr
+		yIsIdentifier = true
+	case *gotypes.Selector:
+		qid, ok := yExpr.Prefix.(*gotypes.Packagequalifier)
+		if !ok {
+			return nil, fmt.Errorf("Right operand of a binary expression is expected to be a qualified identifier, got %#v instead", yExpr)
+		}
+		yIdent = &gotypes.Identifier{
+			Def:     yExpr.Item,
+			Package: qid.Name,
+		}
+		yIsIdentifier = true
+	}
+
+	if !xIsIdentifier && !yIsIdentifier {
+		return nil, fmt.Errorf("At least one operand of a binary expression has to be an identifier or a qualified identifier")
 	}
 
 	// Even here we assume existence of untyped constants.
 	// If there is only one identifier it means the other operand is a built-in type.
 	// Assuming the code is written correctly (it compiles), resulting data type of the operation
 	// is always the identifier.
-	if xOk {
+	// TODO(jchaloup): if an operand is a data type identifier, we need to return the data type itself, not its definition
+	if xIsIdentifier {
 		return xIdent, nil
 	}
 	return yIdent, nil
