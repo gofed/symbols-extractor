@@ -16,6 +16,7 @@ type SymbolLookable interface {
 	LookupDataType(key string) (*gotypes.SymbolDef, error)
 	LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error)
 	Lookup(key string) (*gotypes.SymbolDef, SymbolType, error)
+	Exists(name string) bool
 }
 
 // Participants:
@@ -236,6 +237,13 @@ func (t *Table) LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, e
 		return nil, fmt.Errorf("Method %q of data type %q not found", methodName, datatype)
 	}
 	return method, nil
+}
+
+func (t *Table) Exists(name string) bool {
+	if _, _, err := t.Lookup(name); err == nil {
+		return true
+	}
+	return false
 }
 
 func (t *Table) Lookup(key string) (*gotypes.SymbolDef, SymbolType, error) {
