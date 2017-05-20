@@ -1466,6 +1466,12 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 			return &gotypes.Builtin{Def: "uint8"}, nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
+	case *gotypes.Identifier:
+		if xType.Def == "string" && xType.Package == "builtin" {
+			// Checked at https://play.golang.org/
+			return &gotypes.Builtin{Def: "uint8"}, nil
+		}
+		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
 	case *gotypes.Ellipsis:
 		return xType.Def, nil
 	default:
