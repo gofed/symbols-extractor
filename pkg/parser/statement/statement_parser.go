@@ -139,6 +139,7 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 	// For each new block (including the body) push another level into the stack.
 	sp.SymbolTable.Push()
 	if err := sp.parseFuncHeadVariables(funcDecl); err != nil {
+		sp.SymbolTable.Pop()
 		return nil
 	}
 	sp.SymbolTable.Push()
@@ -681,22 +682,25 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 						return err
 					}
 				}
-				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-					Name:    rhsIdentifier.Def,
-					Package: "",
-					Def:     &gotypes.Interface{},
-				})
+				if rhsIdentifier != nil {
+					sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+						Name:    rhsIdentifier.Def,
+						Package: "",
+						Def:     &gotypes.Interface{},
+					})
+				}
 			} else {
 				rhsType, err := sp.TypeParser.Parse(caseStmt.List[0])
 				if err != nil {
 					return err
 				}
-
-				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
-					Name:    rhsIdentifier.Def,
-					Package: "",
-					Def:     rhsType,
-				})
+				if rhsIdentifier != nil {
+					sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+						Name:    rhsIdentifier.Def,
+						Package: "",
+						Def:     rhsType,
+					})
+				}
 			}
 
 			if caseStmt.Body != nil {
