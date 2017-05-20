@@ -906,10 +906,12 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			if !defType.IsDataType() {
 				return fmt.Errorf("Expecting identifier of a ata type, got %#v instead", defType)
 			}
+			if def.Def == nil {
+				return fmt.Errorf("Symbol %q not yet fully processed", def.Name)
+			}
 			rangeExpr = def.Def
 			// TODO(jchaloup): cover selector as well
 		}
-
 		var key, value gotypes.DataType
 		// From https://golang.org/ref/spec#For_range
 		//
