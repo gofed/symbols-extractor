@@ -1142,7 +1142,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 				embeddedInterfaces = append(embeddedInterfaces, embeddedInterfacesItem{symbolTable: st, symbolDef: sd})
 				continue
 			default:
-				panic(fmt.Errorf("Unknown anonymous field type %#v", item.Def))
+				panic(fmt.Errorf("Unknown anonymous field type %#v", item))
 			}
 		}
 		if methodName == method {

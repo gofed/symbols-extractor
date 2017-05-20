@@ -175,11 +175,11 @@
 				},
 				"package": {
 					"type": "string",
-					"description": "!!omit",
+					"description": "Symbol origin",
 					"minLength": 1
 				}
 			},
-			"required": ["type", "def"]
+			"required": ["type", "def", "package"]
 		},
 		"packagequalifier": {
 			"type": "object",
@@ -586,14 +586,16 @@
 						"properties": {
 							"name": {
 								"type": "string",
-								"description": "Method name",
-								"minLength": 1
+								"description": "Method name"
 							},
 							"def": {
 								"type": "object",
 								"description": "Function type definition",
 								"oneOf": [
-									{ "$ref": "#/definitions/function" }
+									{ "$ref": "#/definitions/function" },
+									{ "$ref": "#/definitions/identifier" },
+									{ "$ref": "#/definitions/selector" },
+									{ "$ref": "#/definitions/pointer" }
 								]
 							}
 						},

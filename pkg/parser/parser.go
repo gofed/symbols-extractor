@@ -108,7 +108,8 @@ type PackageContext struct {
 // - once all decls/defs are processed, clear the package and pick new package from the package stack
 
 type ProjectParser struct {
-	packagePath string
+	packagePath          string
+	symbolTableDirectory string
 	// Global symbol table
 	globalSymbolTable *global.Table
 	// For each package and its file store its alloc symbol table
@@ -117,9 +118,10 @@ type ProjectParser struct {
 	packageStack []*PackageContext
 }
 
-func New(packagePath string) *ProjectParser {
+func New(packagePath string, symbolTableDir string) *ProjectParser {
 	return &ProjectParser{
 		packagePath:            packagePath,
+		symbolTableDirectory:   symbolTableDir,
 		packageStack:           make([]*PackageContext, 0),
 		globalSymbolTable:      global.New(),
 		globalAllocSymbolTable: allocglobal.New(),
@@ -382,12 +384,21 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 }
 
 func (pp *ProjectParser) Parse() error {
+	// load symbol tables
+	if pp.symbolTableDirectory != "" {
+		if err := pp.globalSymbolTable.Load(pp.symbolTableDirectory); err != nil {
+			return nil
+		}
+	}
+
 	// process builtin package first
-	if err := pp.processPackage("builtin"); err != nil {
-		return err
+	if !pp.globalSymbolTable.Exists("builtin") {
+		if err := pp.processPackage("builtin"); err != nil {
+			return err
+		}
 	}
 	// check if the requested package is already provided
-	if _, err := pp.globalSymbolTable.Lookup(pp.packagePath); err == nil {
+	if pp.globalSymbolTable.Exists(pp.packagePath) {
 		return nil
 	}
 
@@ -507,7 +518,11 @@ PACKAGE_STACK:
 		pp.packageStack = pp.packageStack[1:]
 	}
 
+	if pp.symbolTableDirectory != "" {
+		return pp.globalSymbolTable.Save(pp.symbolTableDirectory)
+	}
 	return nil
+
 }
 
 func (pp *ProjectParser) GlobalSymbolTable() *global.Table {
