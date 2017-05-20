@@ -180,20 +180,32 @@ func skipGoFile(filename string) bool {
 
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
 
+	vendor := false
 	{
 		cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", packagePath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return nil, "", err
+			glog.Infof("go list -f {{.GoFiles}} %v failed. Trying vendor...", packagePath, err)
+			// check vendor as well
+			cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", path.Join("vendor", packagePath))
+			output, err = cmd.CombinedOutput()
+			if err != nil {
+				return nil, "", fmt.Errorf("go list -f {{.GoFiles}} [vendor/]%v failed: %v", packagePath, err)
+			}
+			vendor = true
 		}
 		lines := strings.Split(string(output), "\n")
 		files = strings.Split(lines[0][1:len(lines[0])-1], " ")
 	}
 	{
-		cmd := exec.Command("go", "list", "-f", "{{.Dir}}", packagePath)
+		ppath := packagePath
+		if vendor {
+			ppath = path.Join("vendor", packagePath)
+		}
+		cmd := exec.Command("go", "list", "-f", "{{.Dir}}", ppath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return nil, "", err
+			return nil, "", fmt.Errorf("go list -f {{.Dir}} %v failed: %v", ppath, err)
 		}
 		lines := strings.Split(string(output), "\n")
 		packageLocation = string(lines[0])
@@ -211,7 +223,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 
 	files, path, err := pp.getPackageFiles(packagePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Unable to get %q package files: %v", packagePath, err)
 	}
 	c.PackageDir = path
 	for _, file := range files {
