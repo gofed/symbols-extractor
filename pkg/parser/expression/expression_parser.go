@@ -57,7 +57,7 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
 	}
 }
 
-func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType ast.Expr) (gotypes.DataType, error) {
+func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType gotypes.DataType) (gotypes.DataType, error) {
 	var valueExpr ast.Expr
 	if kvExpr, ok := expr.(*ast.KeyValueExpr); ok {
 		_, err := ep.Parse(kvExpr.Key)
@@ -69,34 +69,31 @@ func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType ast.Expr) (gotype
 		valueExpr = expr
 	}
 
-	if _, ok := valueExpr.(*ast.CompositeLit); ok {
-		var valueType ast.Expr
+	if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
+		var valueType gotypes.DataType
 		switch elmExpr := litType.(type) {
-		case *ast.SliceExpr:
-			valueType = elmExpr.X
-		case *ast.ArrayType:
-			valueType = elmExpr.Elt
-		case *ast.MapType:
-			valueType = elmExpr.Value
-		case *ast.Ident:
-			valueType = elmExpr
+		case *gotypes.Slice:
+			valueType = elmExpr.Elmtype
+		case *gotypes.Array:
+			valueType = elmExpr.Elmtype
+		case *gotypes.Map:
+			valueType = elmExpr.Valuetype
 		default:
 			return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
 		}
 
+		var typeDef gotypes.DataType
 		// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
-		if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
-			if clExpr.Type == nil {
-				pointer, ok := valueType.(*ast.StarExpr)
-				if ok {
-					clExpr.Type = pointer.X
-					// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
-				} else {
-					clExpr.Type = valueType
-				}
+		if clExpr.Type == nil {
+			if pointer, ok := valueType.(*gotypes.Pointer); ok {
+				typeDef = pointer.Def
+				// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
+			} else {
+				typeDef = valueType
 			}
 		}
 
+		return ep.parseCompositeLit(clExpr, typeDef)
 	}
 
 	def, err := ep.Parse(valueExpr)
@@ -107,16 +104,6 @@ func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType ast.Expr) (gotype
 		return nil, fmt.Errorf("Expected single expression for KV value, got %#v", def)
 	}
 	return def[0], nil
-}
-
-func (ep *Parser) parseCompositeLitArrayLikeElements(lit *ast.CompositeLit) error {
-	for _, litElement := range lit.Elts {
-		_, err := ep.parseKeyValueLikeExpr(litElement, lit.Type)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *gotypes.SymbolDef) error {
@@ -158,40 +145,31 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 	return nil
 }
 
-func (ep *Parser) parseCompositeLitElements(lit *ast.CompositeLit, symbolDef *gotypes.SymbolDef) error {
-	glog.Infof("Processing parseCompositeLitElements symbolDef: %#v", symbolDef)
-	switch clTypeDataType := symbolDef.Def.(type) {
-	case *gotypes.Struct:
-		if err := ep.parseCompositeLitStructElements(lit, clTypeDataType, symbolDef); err != nil {
-			return err
-		}
-	case *gotypes.Array:
-		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-			return err
-		}
-	case *gotypes.Slice:
-		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-			return err
-		}
-	case *gotypes.Map:
-		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-			return err
-		}
-	case *gotypes.Identifier:
-		ClTypeIdentifierDef, _, err := ep.Config.Lookup(clTypeDataType)
+func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (gotypes.DataType, error) {
+	var symbolDef *gotypes.SymbolDef
+	switch typeDefType := typeDef.(type) {
+	case *gotypes.Selector:
+		_, def, err := ep.retrieveQidDataType(typeDefType)
 		if err != nil {
-			return fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", clTypeDataType)
+			return nil, err
 		}
-		if err := ep.parseCompositeLitElements(lit, ClTypeIdentifierDef); err != nil {
-			return err
+		symbolDef = def
+	case *gotypes.Identifier:
+		def, _, err := ep.Config.Lookup(typeDefType)
+		if err != nil {
+			return nil, err
 		}
+		symbolDef = def
 	default:
-		return fmt.Errorf("Unsupported 2 type %#v in ClTypeIdentifierDef of %#v\n", symbolDef.Def, symbolDef)
+		return typeDef, nil
 	}
-	return nil
+	if symbolDef.Def == nil {
+		return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
+	}
+	return ep.findFirstNonidDataType(symbolDef.Def)
 }
 
-func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, error) {
+func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (gotypes.DataType, error) {
 	glog.Infof("Processing CompositeLit: %#v\n", lit)
 	// https://golang.org/ref/spec#Composite_literals
 	// The LiteralType's underlying type must be a struct, array, slice, or map
@@ -226,64 +204,39 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit) (gotypes.DataType, er
 	// If it is not and the CL type is still set to nil, it is a semantic error.
 
 	// The CL type can be processed independently of the CL elements
-	litTypedef, err := ep.TypeParser.Parse(lit.Type)
+	var litTypedef gotypes.DataType
+	if typeDef != nil {
+		litTypedef = typeDef
+	} else {
+		def, err := ep.TypeParser.Parse(lit.Type)
+		if err != nil {
+			return nil, err
+		}
+		litTypedef = def
+	}
+
+	glog.Infof("litTypedef: %#v", litTypedef)
+	nonIdentLitTypeDef, err := ep.findFirstNonidDataType(litTypedef)
 	if err != nil {
 		return nil, err
 	}
-
+	glog.Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
-	switch litTypeExpr := litTypedef.(type) {
+	switch litTypeExpr := nonIdentLitTypeDef.(type) {
 	case *gotypes.Struct:
 		// anonymous structure -> we can ignore field's allocation
 		if err := ep.parseCompositeLitStructElements(lit, litTypeExpr, nil); err != nil {
 			return nil, err
 		}
-	case *gotypes.Array:
-		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-			return nil, err
-		}
-	case *gotypes.Slice:
-		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-			return nil, err
-		}
-	case *gotypes.Map:
-		if err := ep.parseCompositeLitArrayLikeElements(lit); err != nil {
-			return nil, err
-		}
-	case *gotypes.Selector:
-		// If it is a selector, it must be qui.id (as the litTypeExpr is a type)
-		qid, ok := litTypeExpr.Prefix.(*gotypes.Packagequalifier)
-		if !ok {
-			return nil, fmt.Errorf("Expecting package qualifier in CL selector: %#v", litTypeExpr)
-		}
-
-		st, err := ep.GlobalSymbolTable.Lookup(qid.Path)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid, err)
-		}
-
-		symbolDef, _, piErr := st.Lookup(litTypeExpr.Item)
-		if piErr != nil {
-			return nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", litTypeExpr.Item, qid.Path, piErr)
-		}
-
-		ep.AllocatedSymbolsTable.AddSymbol(qid.Path, litTypeExpr.Item)
-
-		if err := ep.parseCompositeLitElements(lit, symbolDef); err != nil {
-			return nil, err
-		}
-	case *gotypes.Identifier:
-		// If the LC type is an identifier, determine a type which is defined by the identifier
-		ClTypeIdentifierDef, _, err := ep.Config.Lookup(litTypeExpr)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to find definition of CL type of identifier %#v\n", litTypeExpr)
-		}
-
-		if err := ep.parseCompositeLitElements(lit, ClTypeIdentifierDef); err != nil {
-			return nil, err
+	case *gotypes.Array, *gotypes.Slice, *gotypes.Map:
+		glog.Infof("parseCompositeLitArrayLikeElements: %#v\n", lit)
+		for _, litElement := range lit.Elts {
+			if _, err := ep.parseKeyValueLikeExpr(litElement, nonIdentLitTypeDef); err != nil {
+				return nil, err
+			}
 		}
 	default:
-		panic(fmt.Errorf("Unsupported CL type: %#v", litTypedef))
+		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef))
 	}
 
 	return litTypedef, nil
@@ -644,6 +597,8 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 		return true, nil
 	case *ast.MapType:
 		return true, nil
+	case *ast.CallExpr:
+		return false, nil
 	default:
 		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
 		panic(fmt.Errorf("Unrecognized isDataType expr: %#v at %v", expr, expr.Pos()))
@@ -656,23 +611,38 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error)
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
 		// local definition
+		var def *gotypes.SymbolDef
+		var defType symboltable.SymbolType
+		var err error
+
 		if typeDef.Package == "" || typeDef.Package == ep.PackageName {
-			def, defType, err := ep.SymbolTable.Lookup(typeDef.Def)
-			if err != nil {
-				return nil, err
+			def, defType, err = ep.SymbolTable.Lookup(typeDef.Def)
+		} else {
+			table, tErr := ep.GlobalSymbolTable.Lookup(typeDef.Package)
+			if tErr != nil {
+				return nil, tErr
 			}
-			if defType.IsFunctionType() {
-				return def.Def, nil
-			}
-			if defType.IsDataType() {
-				return ep.getFunctionDef(def.Def)
-			}
-			if !defType.IsVariable() {
-				return nil, fmt.Errorf("Function call expression %#v is not expected to be a type", def)
-			}
+			def, defType, err = table.Lookup(typeDef.Def)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if defType.IsFunctionType() {
+			return def.Def, nil
+		}
+		if defType.IsDataType() {
 			return ep.getFunctionDef(def.Def)
 		}
-		panic("typeDef.Package != \"\"")
+		if !defType.IsVariable() {
+			return nil, fmt.Errorf("Function call expression %#v is not expected to be a type", def)
+		}
+		return ep.getFunctionDef(def.Def)
+	case *gotypes.Selector:
+		_, sd, err := ep.retrieveQidDataType(typeDef)
+		if err != nil {
+			return nil, err
+		}
+		return ep.getFunctionDef(sd.Def)
 	case *gotypes.Function:
 		return def, nil
 	case *gotypes.Method:
@@ -724,6 +694,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	}
 
 	// data type => explicit type casting
+	// TODO(jchaloup): if len(expr.Args) != 1 => not a data type
 	isType, err := ep.isDataType(expr.Fun)
 	if err != nil {
 		return nil, err
@@ -897,6 +868,7 @@ func (ep *Parser) retrieveQidDataType(qidselector *gotypes.Selector) (symboltabl
 	if piErr != nil {
 		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", qidselector.Item, qid.Path, piErr)
 	}
+	ep.AllocatedSymbolsTable.AddSymbol(qid.Path, qidselector.Item)
 	return qidst, structDef, nil
 }
 
@@ -999,13 +971,31 @@ ITEMS_LOOP:
 		fieldName := item.Name
 		// anonymous field (can be embedded struct as well)
 		if fieldName == "" {
-			fmt.Printf("\n\n\titemExpr: %#v\n", item.Def)
 			itemExpr := item.Def
 			if itemExpr.GetType() == gotypes.PointerType {
 				itemExpr = itemExpr.(*gotypes.Pointer).Def
 			}
-			fmt.Printf("\n\n\titemExpr: %#v\n", item.Def)
 			switch fieldType := itemExpr.(type) {
+			case *gotypes.Builtin:
+				if !accessor.methodsOnly && fieldType.Def == accessor.field {
+					fieldItem = &item
+					break ITEMS_LOOP
+				}
+				table, err := ep.GlobalSymbolTable.Lookup("builtin")
+				if err != nil {
+					return nil, fmt.Errorf("Unable to retrieve a symbol table for 'builtin' package: %v", err)
+				}
+
+				// check if the field is an embedded struct
+				def, err := table.LookupDataType(fieldType.Def)
+				if err != nil {
+					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
+				}
+				if def.Def == nil {
+					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
+				}
+				embeddedDataTypes = append(embeddedDataTypes, embeddedDataTypesItem{symbolTable: table, symbolDef: def})
+				continue
 			case *gotypes.Identifier:
 				if !accessor.methodsOnly && fieldType.Def == accessor.field {
 					fieldItem = &item
@@ -1039,7 +1029,7 @@ ITEMS_LOOP:
 				embeddedDataTypes = append(embeddedDataTypes, embeddedDataTypesItem{symbolTable: st, symbolDef: sd})
 				continue
 			default:
-				panic(fmt.Errorf("Unknown anonymous field type %#v", itemExpr))
+				panic(fmt.Errorf("Unknown data type anonymous field type %#v", itemExpr))
 			}
 		}
 		if !accessor.methodsOnly && fieldName == accessor.field {
@@ -1114,6 +1104,20 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 			if pointerExpr, isPointer := item.Def.(*gotypes.Pointer); isPointer {
 				itemExpr = pointerExpr.Def
 			}
+
+			itemSymbolTable := pkgsymboltable
+			if itemExpr.GetType() == gotypes.BuiltinType {
+				itemExpr = &gotypes.Identifier{
+					Def:     itemExpr.(*gotypes.Builtin).Def,
+					Package: "builtin",
+				}
+				table, err := ep.GlobalSymbolTable.Lookup("builtin")
+				if err != nil {
+					return nil, fmt.Errorf("Unable to retrieve a symbol table for 'builtin' package: %v", err)
+				}
+				itemSymbolTable = table
+			}
+
 			switch fieldType := itemExpr.(type) {
 			case *gotypes.Identifier:
 				if fieldType.Def == method {
@@ -1121,7 +1125,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 					break
 				}
 				// check if the field is an embedded struct
-				def, err := pkgsymboltable.LookupDataType(fieldType.Def)
+				def, err := itemSymbolTable.LookupDataType(fieldType.Def)
 				if err != nil {
 					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
 				}
@@ -1129,7 +1133,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
 				}
 				if _, ok := def.Def.(*gotypes.Interface); ok {
-					embeddedInterfaces = append(embeddedInterfaces, embeddedInterfacesItem{symbolTable: pkgsymboltable, symbolDef: def})
+					embeddedInterfaces = append(embeddedInterfaces, embeddedInterfacesItem{symbolTable: itemSymbolTable, symbolDef: def})
 				}
 				continue
 			case *gotypes.Selector:
@@ -1146,7 +1150,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 				embeddedInterfaces = append(embeddedInterfaces, embeddedInterfacesItem{symbolTable: st, symbolDef: sd})
 				continue
 			default:
-				panic(fmt.Errorf("Unknown anonymous field type %#v", item))
+				panic(fmt.Errorf("Unknown interface anonymous field type %#v", item))
 			}
 		}
 		if methodName == method {
@@ -1190,7 +1194,6 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 			return false, nil, fmt.Errorf("Symbol %v not found", dtExpr.Name)
 		}
 		if def, err := ep.SymbolTable.LookupDataType(dtExpr.Name); err == nil {
-			fmt.Printf("\n\tdataTypeIdentDef: %#v\n", def)
 
 			methodDef, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: ep.SymbolTable,
@@ -1238,7 +1241,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 	byteSlice, _ := json.Marshal(xDef[0])
-	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\t\t%v\n", xDef[0], expr.Sel, string(byteSlice))
+	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\t\t%v at %v\n", xDef[0], expr.Sel, string(byteSlice), expr.Pos())
 
 	// The struct and an interface are the only data type from which a field/method is retriveable
 	switch xType := xDef[0].(type) {
@@ -1368,17 +1371,22 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 			dataTypeDef: sd,
 			field:       expr.Sel.Name,
 		})
-	// case *gotypes.Builtin:
-	// 	// Check if the built-in type has some methods
-	// 	table, err := ep.GlobalSymbolTable.Lookup("builtin")
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	//
-	// 	def, err := ep.SymbolTable.LookupMethod(xType.Def, expr.Sel.Name)
-	// 	fmt.Printf("def: %#v, err: %v\n", def, err)
-	//
-	// 	panic("JJJ")
+	case *gotypes.Builtin:
+		// Check if the built-in type has some methods
+		table, err := ep.GlobalSymbolTable.Lookup("builtin")
+		if err != nil {
+			return nil, err
+		}
+		def, err := table.LookupDataType(xType.Def)
+		if err != nil {
+			return nil, err
+		}
+		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			symbolTable: table,
+			dataTypeDef: def,
+			field:       expr.Sel.Name,
+			methodsOnly: true,
+		})
 	default:
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v at %v", expr.Sel.Name, xDef[0], expr.Pos())
 	}
@@ -1518,7 +1526,7 @@ func (ep *Parser) Parse(expr ast.Expr) ([]gotypes.DataType, error) {
 		def, err := ep.parseBasicLit(exprType)
 		return []gotypes.DataType{def}, err
 	case *ast.CompositeLit:
-		def, err := ep.parseCompositeLit(exprType)
+		def, err := ep.parseCompositeLit(exprType, nil)
 		return []gotypes.DataType{def}, err
 	case *ast.Ident:
 		def, err := ep.parseIdentifier(exprType)
