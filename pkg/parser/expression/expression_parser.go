@@ -1022,6 +1022,10 @@ ITEMS_LOOP:
 				embeddedDataTypes = append(embeddedDataTypes, embeddedDataTypesItem{symbolTable: accessor.symbolTable, symbolDef: def})
 				continue
 			case *gotypes.Selector:
+				if !accessor.methodsOnly && fieldType.Item == accessor.field {
+					fieldItem = &item
+					break ITEMS_LOOP
+				}
 				{
 					byteSlice, _ := json.Marshal(fieldType)
 					glog.Infof("++++%v\n", string(byteSlice))
