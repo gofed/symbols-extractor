@@ -196,6 +196,30 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 		}
 		lines := strings.Split(string(output), "\n")
 		files = strings.Split(lines[0][1:len(lines[0])-1], " ")
+		// cgo files enabled?
+		// TODO(jchaloup): make a flag for cgo-enabled (true by default)
+		if !vendor {
+			cmd := exec.Command("go", "list", "-f", "{{.CgoFiles}}", packagePath)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", packagePath, err)
+			}
+			lines := strings.Split(string(output), "\n")
+			if strings.Compare(lines[0], "[]") != 0 {
+				files = append(files, strings.Split(lines[0][1:len(lines[0])-1], " ")...)
+			}
+		} else {
+			// check vendor as well
+			cmd := exec.Command("go", "list", "-f", "{{.CgoFiles}}", path.Join("vendor", packagePath))
+			output, err = cmd.CombinedOutput()
+			if err != nil {
+				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", path.Join("vendor", packagePath), err)
+			}
+			lines := strings.Split(string(output), "\n")
+			if strings.Compare(lines[0], "[]") != 0 {
+				files = append(files, strings.Split(lines[0][1:len(lines[0])-1], " ")...)
+			}
+		}
 	}
 	{
 		ppath := packagePath

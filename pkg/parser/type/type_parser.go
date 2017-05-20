@@ -54,11 +54,10 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 		if err != nil {
 			return nil, err
 		}
-		def, err := table.LookupDataType(typedExpr.Name)
-		if err != nil {
+		if _, err := table.LookupDataType(typedExpr.Name); err != nil {
 			return nil, err
 		}
-		return def.Def, nil
+		return &gotypes.Builtin{Def: typedExpr.Name}, nil
 	}
 
 	// Check if the identifier is available in the symbol table
@@ -170,6 +169,7 @@ func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error)
 
 	for _, field := range typedExpr.Fields.List {
 		// anonymous field?
+		glog.Infof("Processing StructType.field: %#v\n", field)
 		if field.Names == nil {
 			def, err := p.Parse(field.Type)
 			if err != nil {
@@ -180,6 +180,7 @@ func (p *Parser) parseStruct(typedExpr *ast.StructType) (*gotypes.Struct, error)
 				Name: "",
 				Def:  def,
 			}
+			glog.Infof("Processing StructType.item: %#v\n", item)
 
 			structType.Fields = append(structType.Fields, item)
 			// named fields

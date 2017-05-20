@@ -1779,6 +1779,10 @@ func (o *SymbolDef) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
+	if err := json.Unmarshal(*objMap["package"], &o.Package); err != nil {
+		return err
+	}
+
 	var m map[string]interface{}
 	if err := json.Unmarshal(*objMap["def"], &m); err != nil {
 		return err
