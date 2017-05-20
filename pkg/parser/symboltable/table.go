@@ -83,6 +83,8 @@ func (t *Table) UnmarshalJSON(b []byte) error {
 		DataTypeSymbol: make(map[string]*gotypes.SymbolDef, 0),
 	}
 
+	t.methods = make(map[string]map[string]*gotypes.SymbolDef)
+
 	for _, symbolType := range SymbolTypes {
 		if objMap[symbolType] != nil {
 			var m []*gotypes.SymbolDef
@@ -93,7 +95,13 @@ func (t *Table) UnmarshalJSON(b []byte) error {
 			t.Symbols[symbolType] = m
 
 			for _, item := range m {
-				t.symbols[symbolType][item.Name] = item
+				if symbolType == FunctionSymbol {
+					if err := t.AddFunction(item); err != nil {
+						return err
+					}
+				} else {
+					t.symbols[symbolType][item.Name] = item
+				}
 			}
 		}
 	}

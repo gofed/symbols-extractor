@@ -50,7 +50,6 @@ func (o *Function) UnmarshalJSON(b []byte) error {
 				if err := json.Unmarshal(*item, &m); err != nil {
 					return err
 				}
-
 				switch dataType := m["type"]; dataType {
 
 				case IdentifierType:
@@ -163,7 +162,6 @@ func (o *Function) UnmarshalJSON(b []byte) error {
 				if err := json.Unmarshal(*item, &m); err != nil {
 					return err
 				}
-
 				switch dataType := m["type"]; dataType {
 
 				case IdentifierType:
@@ -793,8 +791,14 @@ func (o *Struct) UnmarshalJSON(b []byte) error {
 				if err := json.Unmarshal(*item, &m); err != nil {
 					return err
 				}
-
 				switch dataType := m["type"]; dataType {
+
+				case StructFieldsItemType:
+					r := &StructFieldsItem{}
+					if err := json.Unmarshal(*item, &r); err != nil {
+						return err
+					}
+					o.Fields = append(o.Fields, *r)
 
 				}
 			}
@@ -1093,6 +1097,27 @@ func (o *InterfaceMethodsItem) UnmarshalJSON(b []byte) error {
 				}
 				o.Def = r
 
+			case IdentifierType:
+				r := &Identifier{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
+			case SelectorType:
+				r := &Selector{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
+			case PointerType:
+				r := &Pointer{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
 			}
 		}
 	}
@@ -1142,8 +1167,14 @@ func (o *Interface) UnmarshalJSON(b []byte) error {
 				if err := json.Unmarshal(*item, &m); err != nil {
 					return err
 				}
-
 				switch dataType := m["type"]; dataType {
+
+				case InterfaceMethodsItemType:
+					r := &InterfaceMethodsItem{}
+					if err := json.Unmarshal(*item, &r); err != nil {
+						return err
+					}
+					o.Methods = append(o.Methods, *r)
 
 				}
 			}
@@ -1415,7 +1446,7 @@ const IdentifierType = "identifier"
 
 type Identifier struct {
 	Def     string `json:"def"`
-	Package string `json:"-"`
+	Package string `json:"package"`
 }
 
 func (o *Identifier) GetType() string {
@@ -1442,6 +1473,11 @@ func (o *Identifier) UnmarshalJSON(b []byte) error {
 
 	// TODO(jchaloup): check the objMap["def"] actually exists
 	if err := json.Unmarshal(*objMap["def"], &o.Def); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["package"] actually exists
+	if err := json.Unmarshal(*objMap["package"], &o.Package); err != nil {
 		return err
 	}
 

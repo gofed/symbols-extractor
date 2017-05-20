@@ -647,7 +647,8 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 
 		if ident.Name != "_" {
 			rhsIdentifier = &gotypes.Identifier{
-				Def: ident.Name,
+				Def:     ident.Name,
+				Package: sp.PackageName,
 			}
 		}
 	case *ast.ExprStmt:
@@ -959,7 +960,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			if keyIdent.Name != "_" {
 				if err := sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 					Name:    keyIdent.Name,
-					Package: "",
+					Package: sp.PackageName,
 					Def:     key,
 				}); err != nil {
 					return err
@@ -976,7 +977,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			if valueIdent.Name != "_" && value != nil {
 				if err := sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 					Name:    valueIdent.Name,
-					Package: "",
+					Package: sp.PackageName,
 					Def:     value,
 				}); err != nil {
 					return err

@@ -21,11 +21,12 @@ class ObjectDefinition:
             "constraint": constraint,
             "omit": omit,
         }
-    def addArrayField(self, name, type, constraint = [], omit=False):
+    def addArrayField(self, name, type, constraint = [], omit=False, useValue=False):
         self._array_fields[name] = {
             "type": type,
             "constraint": constraint,
             "omit": omit,
+            "useValue": useValue,
         }
 
     def __str__(self):
@@ -114,15 +115,18 @@ func (o *{{ Name }}) UnmarshalJSON(b []byte) error {
                 if err := json.Unmarshal(*item, &m); err != nil {
                     return err
                 }
-
                 switch dataType := m["type"]; dataType {
                 {% for recursiveType in ArrayFields[item]["constraint"] %}
-                case {{ recursiveType|capitalize }}Type:
-                    r := &{{ recursiveType|capitalize }}{}
+                case {{ recursiveType }}Type:
+                    r := &{{ recursiveType }}{}
                     if err := json.Unmarshal(*item, &r); err != nil {
                         return err
                     }
+                    {% if ArrayFields[item]["useValue"] -%}
+                    o.{{ item }} = append(o.{{ item }}, *r)
+                    {% else -%}
                     o.{{ item }} = append(o.{{ item }}, r)
+                    {% endif %}
                 {% endfor %}
                 }
             }
@@ -150,7 +154,7 @@ def getConstraints(items):
         if "$ref" not in recType:
             logging.error("Item %s is not '$ref'" % (recType))
             continue
-        c = recType["$ref"].split("/")[-1]
+        c = recType["$ref"].split("/")[-1].capitalize()
         #if c not in ["struct", "identifier", "channel", "slice"]:
         #    continue
         constraints.append( c )
@@ -201,7 +205,7 @@ def parseDefinition(dataType, definition):
                     for keyOf in ["oneOf", "anyOf"]:
                         if keyOf in items:
                             constraints = getConstraints(items[keyOf])
-                            obj.addArrayField(property.capitalize(), "DataType", constraints)
+                            obj.addArrayField(property.capitalize(), "DataType", constraints )
                             ok = True
                             break
                     if not ok:
@@ -210,7 +214,7 @@ def parseDefinition(dataType, definition):
                 else:
                     # parse items first
                     itemDef = parseDefinition("%s%sItem" % (dataType.capitalize(), property.capitalize()), definition["properties"][property]["items"])
-                    obj.addArrayField(property.capitalize(), "%s%sItem" % (dataType.capitalize(), property.capitalize()))
+                    obj.addArrayField(property.capitalize(), "%s%sItem" % (dataType.capitalize(), property.capitalize()), ["%s%sItem" % (dataType.capitalize(), property.capitalize())], useValue=True)
             else:
                 logging.error("Unrecognized type: %s" % itemType)
                 exit(1)
