@@ -1417,21 +1417,36 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 	// type C B
 	// c := (C)([]int{1,2,3})
 	// c[1]
-	if indexExpr.GetType() == gotypes.IdentifierType {
-		xType := indexExpr.(*gotypes.Identifier)
+	if indexExpr.GetType() == gotypes.IdentifierType || indexExpr.GetType() == gotypes.SelectorType {
 		for {
-			if xType.Package == "builtin" {
-				break
+			var symbolDef *gotypes.SymbolDef
+			if indexExpr.GetType() == gotypes.IdentifierType {
+				xType := indexExpr.(*gotypes.Identifier)
+
+				if xType.Package == "builtin" {
+					break
+				}
+				def, _, err := ep.Config.LookupDataType(xType)
+				if err != nil {
+					return nil, err
+				}
+				symbolDef = def
+			} else {
+				_, sd, err := ep.retrieveQidDataType(indexExpr.(*gotypes.Selector))
+				if err != nil {
+					return nil, err
+				}
+				symbolDef = sd
 			}
-			def, _, err := ep.Config.LookupDataType(xType)
-			if err != nil {
-				return nil, err
+
+			if symbolDef.Def == nil {
+				return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
 			}
-			if def.Def.GetType() == gotypes.IdentifierType {
-				xType = def.Def.(*gotypes.Identifier)
+
+			indexExpr = symbolDef.Def
+			if symbolDef.Def.GetType() == gotypes.IdentifierType || symbolDef.Def.GetType() == gotypes.SelectorType {
 				continue
 			}
-			indexExpr = def.Def
 			break
 		}
 	}
@@ -1439,8 +1454,6 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
 	switch xType := indexExpr.(type) {
-	case *gotypes.Identifier:
-		return xType, nil
 	case *gotypes.Map:
 		return xType.Valuetype, nil
 	case *gotypes.Array:
@@ -1456,7 +1469,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 	case *gotypes.Ellipsis:
 		return xType.Def, nil
 	default:
-		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDef[0]))
+		panic(fmt.Errorf("Unrecognized indexExpr type: %#v at %v", xDef[0], expr.Pos()))
 	}
 }
 
