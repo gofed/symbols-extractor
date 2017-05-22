@@ -92,6 +92,26 @@ func builtinOrIdent(config *types.Config, str string, untyped bool) gotypes.Data
   return &gotypes.Identifier{Def: str, Package: gopkg, }
 }
 
+func parseTypes(config *types.Config, strTypes ...string) ([]gotypes.DataType, error) {
+	parsedTypes := []gotypes.DataType{}
+
+	for _, str := range strTypes {
+		astType, err := parser.ParseExpr(str)
+		if err != nil {
+			return nil, err
+		}
+
+		parsedType, err := config.TypeParser.Parse(astType)
+		if err != nil {
+			return nil, err
+		}
+
+		parsedTypes = append(parsedTypes, parsedType)
+	}
+
+	return parsedTypes, nil
+}
+
 const gopkg string = "github.com/gofed/symbols-extractor/pkg/parser/testdata/valid"
 const gocode string = `
 package exprtest
@@ -155,12 +175,37 @@ func initExprTest(expr_str string) (*types.Config, ast.Expr, error) {
 func parseBinaryExprTest(expr_str, expected string, untyped bool) error {
     config, expr, errE := initExprTest(expr_str)
     if errE != nil {
-       return errE
+        return errE
     }
     expected_type := builtinOrIdent(config , expected, untyped)
     current_type, err := config.ExprParser.(*Parser).parseBinaryExpr(expr.(*ast.BinaryExpr))
     if err != nil {
         return fmt .Errorf("Unexpected error for expr '%s': %v\n", expr_str, err)
+    }
+
+    if !reflect.DeepEqual(current_type, expected_type) {
+        msgf := "Expected type '%#v', received '%#v'. Expr: '%s' "
+        return fmt.Errorf(msgf, expected_type, current_type, expr_str)
+    }
+
+    return nil
+}
+
+func parseCallExprTest(expr_str string, expected ...string) error {
+    config, expr, errE := initExprTest(expr_str)
+    if errE != nil {
+        return errE
+    }
+
+    expected_type, err := parseTypes(config, expected...)
+    if err != nil {
+        return fmt.Errorf("Unexpected error: Cannot get/parse expected types: %v\n",  err)
+    }
+
+    current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
+    if err != nil {
+        msgf := "Unexpected error for expr '%s': %v\n"
+        return fmt.Errorf(msgf, expr_str, err)
     }
 
     if !reflect.DeepEqual(current_type, expected_type) {
@@ -198,32 +243,10 @@ func parseBinaryExprTest(expr_str, expected string, untyped bool) error {
 
   {{if eq $target "parseCallExpr"}}{{range $i, $elem := .Tests}}
     func Test{{tittle $target}}{{$i}} (t *testing.T) {
-        //TODO: extend to support other data types (map, ...)
-        expr_str := "{{.Code}}"
-        config, expr, errE := initExprTest(expr_str)
-        if errE != nil {
-          t.Errorf("%v", errE)
-          return
+        if err := parseCallExprTest("{{.Code}}"{{range .Expected -}}, "{{.}}"{{end}}); err != nil {
+            t.Error(err)
         }
 
-        //fmt.Printf("===================\n%# v\n", pretty.Formatter(expr))
-        expected_type := []gotypes.DataType{
-          {{range .Expected -}}
-            builtinOrIdent(config , "{{.}}", false),
-          {{end}}
-        }
-        current_type, err := config.ExprParser.(*Parser).parseCallExpr(expr.(*ast.CallExpr))
-        if err != nil {
-          msgf := "Unexpected error for expr '%s': %v\n"
-          t.Errorf(msgf, expr_str, err)
-          return
-        }
-
-        //fmt.Printf("-------------------\n%# v\n", pretty.Formatter(current_type))
-        if !reflect.DeepEqual(current_type, expected_type) {
-            msgf := "Expected type '%#v', received '%#v'. Expr: '%s' "
-            t.Errorf(msgf, expected_type, current_type, expr_str)
-        }
   }{{template "nlspace"}}{{end}}{{end}}
 {{end}}
 

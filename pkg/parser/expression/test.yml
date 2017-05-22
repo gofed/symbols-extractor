@@ -44,7 +44,7 @@ targets:
         expected: [int, true]
       -
         code: "8 * 3.1"
-        expected: [float64, true]
+        expected: [float, true]
       -
         code: "3 * 4 * 5"
         expected: [int, true]
