@@ -842,14 +842,14 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 
 							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 								Name:    ident1.Name,
-								Package: "",
-								Def:     rhsChannel,
+								Package: sp.PackageName,
+								Def:     rhsChannel.Value,
 							})
 
 							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
 								Name:    ident2.Name,
-								Package: "",
-								Def:     &gotypes.Builtin{},
+								Package: sp.PackageName,
+								Def:     &gotypes.Builtin{Def: "bool"},
 							})
 						}
 					default:
