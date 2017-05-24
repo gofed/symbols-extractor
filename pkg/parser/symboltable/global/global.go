@@ -13,10 +13,10 @@ import (
 )
 
 type Table struct {
-	tables map[string]*symboltable.Table
+	tables map[string]symboltable.SymbolTable
 }
 
-func (t *Table) Lookup(pkg string) (*symboltable.Table, error) {
+func (t *Table) Lookup(pkg string) (symboltable.SymbolTable, error) {
 	table, ok := t.tables[pkg]
 	if !ok {
 		return nil, fmt.Errorf("Unable to find symbol table for %q", pkg)
@@ -29,7 +29,7 @@ func (t *Table) Exists(pkg string) bool {
 	return ok
 }
 
-func (t *Table) Add(pkg string, st *symboltable.Table) error {
+func (t *Table) Add(pkg string, st symboltable.SymbolTable) error {
 	if _, ok := t.tables[pkg]; ok {
 		return fmt.Errorf("Symbol table for %q already exist in the global symbol table", pkg)
 	}
@@ -48,7 +48,7 @@ func (t *Table) Packages() []string {
 
 func New() *Table {
 	return &Table{
-		tables: make(map[string]*symboltable.Table, 0),
+		tables: make(map[string]symboltable.SymbolTable, 0),
 	}
 }
 
@@ -58,7 +58,11 @@ func (t *Table) Save(symboltabledir string) error {
 		if _, err := os.Stat(file); err == nil {
 			continue
 		}
-		byteSlice, err := json.Marshal(symbolTable)
+		st, ok := symbolTable.(*symboltable.Table)
+		if !ok {
+			continue
+		}
+		byteSlice, err := json.Marshal(st)
 		if err != nil {
 			return fmt.Errorf("Unable to save %q symbol table: %v", key, err)
 		}
@@ -71,7 +75,7 @@ func (t *Table) Save(symboltabledir string) error {
 }
 
 func (t *Table) Load(symboltabledir string) error {
-	t.tables = make(map[string]*symboltable.Table, 0)
+	t.tables = make(map[string]symboltable.SymbolTable, 0)
 
 	files, err := ioutil.ReadDir(symboltabledir)
 	if err != nil {

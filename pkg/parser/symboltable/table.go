@@ -9,45 +9,11 @@ import (
 	"github.com/golang/glog"
 )
 
-type SymbolLookable interface {
-	LookupVariable(key string) (*gotypes.SymbolDef, error)
-	LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error)
-	LookupFunction(key string) (*gotypes.SymbolDef, error)
-	LookupDataType(key string) (*gotypes.SymbolDef, error)
-	LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error)
-	Lookup(key string) (*gotypes.SymbolDef, SymbolType, error)
-	Exists(name string) bool
-}
-
 // Participants:
 // - symbol table (global per package, one-level table)
 // - multi-level symbol table (one symbol table for each block)
 // - allocated symbol table (global per package)
 //   - RFE: store file:line:column as well (possible generate a link to symbol's location)
-
-type SymbolType string
-
-const (
-	VariableSymbol = "variables"
-	FunctionSymbol = "functions"
-	DataTypeSymbol = "datatypes"
-)
-
-func (s SymbolType) IsVariable() bool {
-	return s == VariableSymbol
-}
-
-func (s SymbolType) IsDataType() bool {
-	return s == DataTypeSymbol
-}
-
-func (s SymbolType) IsFunctionType() bool {
-	return s == FunctionSymbol
-}
-
-var (
-	SymbolTypes = []string{VariableSymbol, FunctionSymbol, DataTypeSymbol}
-)
 
 type Table struct {
 	symbols map[string]map[string]*gotypes.SymbolDef
