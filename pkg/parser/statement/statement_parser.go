@@ -386,7 +386,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	rhsIndexer := func(i int) (gotypes.DataType, error) {
 		def, err := sp.ExprParser.Parse(statement.Rhs[i])
 		if err != nil {
-			return nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v", i, statement, err)
+			return nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
 		}
 		if len(def) != 1 {
 			return nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, def)
@@ -407,14 +407,38 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		// function call or key reading?
 		switch typeExpr := statement.Rhs[0].(type) {
 		case *ast.CallExpr:
+			var isCgo bool
+			if sel, isSel := typeExpr.Fun.(*ast.SelectorExpr); isSel {
+				if ident, isIdent := sel.X.(*ast.Ident); isIdent {
+					if ident.String() == "C" {
+						isCgo = true
+					}
+				}
+			}
+
 			callExprDef, err := sp.ExprParser.Parse(typeExpr)
 			if err != nil {
 				return err
 			}
-			if exprsSize != len(callExprDef) {
-				return fmt.Errorf("Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v", statement.Lhs, callExprDef)
+			callExprDefLen := len(callExprDef)
+
+			if exprsSize != callExprDefLen {
+				if isCgo {
+					if exprsSize != callExprDefLen+1 {
+						return fmt.Errorf("CGO: Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v at %v", statement.Lhs, callExprDef, statement.Pos())
+					}
+				} else {
+					return fmt.Errorf("Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v", statement.Lhs, callExprDef)
+				}
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, error) {
+				if i < callExprDefLen {
+					return callExprDef[i], nil
+				}
+				if i == callExprDefLen && isCgo {
+					return &gotypes.Builtin{Def: "error"}, nil
+				}
+				// This will panic
 				return callExprDef[i], nil
 			}
 			rExprSize = len(callExprDef)
