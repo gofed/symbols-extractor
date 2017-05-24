@@ -15,6 +15,7 @@ import (
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
@@ -110,27 +111,39 @@ type PackageContext struct {
 type ProjectParser struct {
 	packagePath          string
 	symbolTableDirectory string
+	cgoSymbolsPath       string
 	// Global symbol table
 	globalSymbolTable *global.Table
+	cgoSymbolTable    *symboltable.CGOTable
 	// For each package and its file store its alloc symbol table
 	globalAllocSymbolTable *allocglobal.Table
 	// package stack
 	packageStack []*PackageContext
 }
 
-func New(packagePath string, symbolTableDir string) *ProjectParser {
+func New(packagePath string, symbolTableDir string, cgoSymbolsPath string) *ProjectParser {
 	return &ProjectParser{
 		packagePath:            packagePath,
 		symbolTableDirectory:   symbolTableDir,
+		cgoSymbolsPath:         cgoSymbolsPath,
 		packageStack:           make([]*PackageContext, 0),
 		globalSymbolTable:      global.New(),
 		globalAllocSymbolTable: allocglobal.New(),
 	}
 }
 
-func (pp *ProjectParser) processImports(imports []*ast.ImportSpec) (missingImports []*gotypes.Packagequalifier) {
+func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) (missingImports []*gotypes.Packagequalifier) {
 	for _, spec := range imports {
 		q := fileparser.MakePackagequalifier(spec)
+		// 'C' is a pseudo-package
+		// See https://golang.org/cmd/cgo/
+		if q.Path == "C" {
+			pp.cgoSymbolTable.Flush()
+			if err := pp.cgoSymbolTable.LoadFromFile(pp.cgoSymbolsPath); err != nil {
+				panic(err)
+			}
+			continue
+		}
 		// Check if the imported package is already processed
 		_, err := pp.globalSymbolTable.Lookup(q.Path)
 		if err != nil {
@@ -205,7 +218,7 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", packagePath, err)
 			}
 			lines := strings.Split(string(output), "\n")
-			if strings.Compare(lines[0], "[]") != 0 {
+			if lines[0] != "[]" {
 				files = append(files, strings.Split(lines[0][1:len(lines[0])-1], " ")...)
 			}
 		} else {
@@ -216,7 +229,7 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", path.Join("vendor", packagePath), err)
 			}
 			lines := strings.Split(string(output), "\n")
-			if strings.Compare(lines[0], "[]") != 0 {
+			if lines[0] != "[]" {
 				files = append(files, strings.Split(lines[0][1:len(lines[0])-1], " ")...)
 			}
 		}
@@ -427,6 +440,12 @@ func (pp *ProjectParser) Parse() error {
 		}
 	}
 
+	// set C pseudo-package
+	pp.cgoSymbolTable = symboltable.NewCGOTable()
+	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable); err != nil {
+		return fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
+	}
+
 	// process builtin package first
 	if !pp.globalSymbolTable.Exists("builtin") {
 		if err := pp.processPackage("builtin"); err != nil {
@@ -476,7 +495,7 @@ PACKAGE_STACK:
 			}
 			// processed imported packages
 			if !fileContext.ImportsProcessed {
-				missingImports := pp.processImports(fileContext.FileAST.Imports)
+				missingImports := pp.processImports(path.Join(p.PackagePath, fileContext.Filename), fileContext.FileAST.Imports)
 				glog.Infof("Unknown imports:\t\t%#v\n\n", missingImports)
 				if len(missingImports) > 0 {
 					for _, spec := range missingImports {
