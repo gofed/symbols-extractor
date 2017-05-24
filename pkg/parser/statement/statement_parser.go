@@ -466,9 +466,19 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 						fmt.Printf("\n\tHHHH: %v\n", string(byteSlice))
 					}
 					var indexedObject gotypes.DataType
-					switch xDef[0].(type) {
+					switch typeExpr := xDef[0].(type) {
 					case *gotypes.Identifier:
-						panic("Ident")
+						def, defType, err := sp.Lookup(typeExpr)
+						if err != nil {
+							return nil, err
+						}
+						if !defType.IsDataType() {
+							return nil, fmt.Errorf("Expecting identifier of a data type, got %#v instead", defType)
+						}
+						if def.Def == nil {
+							return nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
+						}
+						indexedObject = def.Def
 					case *gotypes.Selector:
 						panic("Selector")
 					default:
