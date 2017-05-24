@@ -599,6 +599,8 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 		return true, nil
 	case *ast.CallExpr:
 		return false, nil
+	case *ast.StructType:
+		return true, nil
 	default:
 		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
 		panic(fmt.Errorf("Unrecognized isDataType expr: %#v at %v", expr, expr.Pos()))
@@ -626,6 +628,9 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error)
 		}
 		if err != nil {
 			return nil, err
+		}
+		if def.Def == nil {
+			return nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
 		}
 		if defType.IsFunctionType() {
 			return def.Def, nil
