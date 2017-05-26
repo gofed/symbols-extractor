@@ -480,7 +480,14 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 						}
 						indexedObject = def.Def
 					case *gotypes.Selector:
-						panic("Selector")
+						_, sd, err := sp.Config.RetrieveQidDataType(typeExpr)
+						if err != nil {
+							return nil, err
+						}
+						if sd.Def == nil {
+							return nil, fmt.Errorf("Symbol %q of %q not fully processed", sd.Name, sd.Package)
+						}
+						indexedObject = sd.Def
 					default:
 						indexedObject = xDef[0]
 					}
