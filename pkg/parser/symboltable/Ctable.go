@@ -6,7 +6,7 @@ import (
 	"log"
 
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 // TODO:
@@ -78,6 +78,9 @@ func processDataType(m map[interface{}]interface{}) gotypes.DataType {
 	}
 	if structType, ok := m["struct"]; ok {
 		var fields []gotypes.StructFieldsItem
+		if structType == nil {
+			return &gotypes.Struct{}
+		}
 		for _, field := range structType.([]interface{}) {
 			fieldExpr := field.(map[interface{}]interface{})
 			item := gotypes.StructFieldsItem{

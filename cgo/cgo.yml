@@ -1,0 +1,261 @@
+name: hand written cgo symbols
+files:
+  - net/cgo_linux.go
+  - net/cgo_resnew.go
+  - net/cgo_stub.go
+  - net/cgo_unix.go
+  - os/user/getgrouplist_unix.go
+  - os/user/lookup_unix.go
+# only the variable data type is needed
+# all constants defined via #DEFINE are untyped
+variables:
+- name: AI_CANONNAME
+  type:
+    identifier: C.int
+- name: AI_V4MAPPED
+  type:
+    identifier: C.int
+- name: AI_ALL
+  type:
+    identifier: C.int
+- name: NI_NAMEREQD
+  type:
+    identifier: C.int
+- name: EAI_AGAIN
+  type:
+    identifier: C.int
+- name: SOCK_STREAM
+  type:
+    identifier: C.int
+- name: IPPROTO_TCP
+  type:
+    identifier: C.int
+- name: SOCK_DGRAM
+  type:
+    identifier: C.int
+- name: IPPROTO_UDP
+  type:
+    identifier: C.int
+- name: AF_INET
+  type:
+    identifier: C.int
+- name: AF_INET6
+  type:
+    identifier: C.int
+- name: EAI_SYSTEM
+  type:
+    identifier: C.int
+- name: EAI_NONAME
+  type:
+    identifier: C.int
+- name: EAI_OVERFLOW
+  type:
+    identifier: C.int
+- name: _SC_GETPW_R_SIZE_MAX
+  type:
+    identifier: C.int
+- name: _SC_GETGR_R_SIZE_MAX
+  type:
+    identifier: C.int
+- name: PATH_MAX
+  type:
+    identifier: C.int
+# no need to know definition of the data type, just its name
+types:
+- name: struct_sockaddr
+  type:
+    identifier: C.struct_sockaddr
+- name: socklen_t
+  type:
+    identifier: C.socklen_t
+- name: char
+  type:
+    identifier: C.char
+- name: int
+  type:
+    identifier: C.int
+- name: struct_addrinfo
+  type:
+    struct:
+    - name: ai_socktype
+      identifier: C.int
+    - name: ai_protocol
+      identifier: C.int
+    - name: ai_canonname
+      pointer:
+        identifier: C.char
+    - name: ai_family
+      identifier: C.int
+    - name: ai_addr
+      pointer:
+        identifier: C.int
+- name: gid_t
+  type:
+    struct:
+- name: struct_passwd
+  type:
+    struct:
+    - name: pw_uid
+      identifier: C.int
+    - name: pw_gid
+      identifier: C.int
+    - name: pw_name
+      pointer:
+        identifier: C.char
+    - name: pw_gecos
+      pointer:
+        identifier: C.char
+    - name: pw_dir
+      pointer:
+        identifier: C.char
+- name: size_t
+  type:
+    identifier: C.size_t
+- name: struct_group
+  type:
+    struct:
+    - name: gr_gid
+      identifier: C.int
+    - name: gr_name
+      pointer:
+        identifier: C.char
+# ???
+functions:
+- name: getnameinfo
+  params:
+  - pointer:
+      identifier: C.struct_sockaddr
+  - identifier: C.socklen_t
+  - pointer:
+      identifier: C.char
+  - identifier: C.socklen_t
+  - pointer:
+      identifier: C.char
+  - identifier: C.socklen_t
+  - identifier: C.int
+  result:
+  - identifier: C.int
+- name: GoString
+  result:
+  - identifier: string
+- name: CString
+  result:
+  - pointer:
+      identifier: string
+- name: gai_strerror
+  result:
+  - pointer:
+      identifier: C.char
+- name: free
+  result:
+- name: getaddrinfo
+  result:
+  - pointer:
+      identifier: C.int
+- name: freeaddrinfo
+  result:
+- name: mygetgrouplist
+  params:
+  - pointer:
+      identifier: C.char
+  - identifier: C.gid_t
+  - pointer:
+      identifier: C.int
+- name: mygetpwnam_r
+  params:
+  - pointer:
+      identifier: C.char
+  - pointer:
+      identifier: C.struct_passwd
+  - pointer:
+      identifier: C.char
+  - identifier: C.size_t
+  - pointer:
+      pointer:
+        identifier: C.struct_passwd
+  result:
+  - identifier: C.int
+- name: mygetpwuid_r
+  params:
+  - identifier: C.int
+  - pointer:
+      identifier: C.struct_passwd
+  - pointer:
+      identifier: C.char
+  - identifier: C.size_t
+  - pointer:
+      pointer:
+        identifier: C.struct_passwd
+  result:
+  - identifier: C.int
+- name: mygetgrnam_r
+  params:
+  - pointer:
+      identifier: C.char
+  - pointer:
+      identifier: C.struct_group
+  - pointer:
+      identifier: C.char
+  - identifier: C.size_t
+  - pointer:
+      pointer:
+        identifier: C.struct_group
+  result:
+  - identifier: C.int
+- name: mygetgrgid_r
+  params:
+  - identifier: C.int
+  - pointer:
+      identifier: C.struct_group
+  - pointer:
+      identifier: C.char
+  - identifier: C.size_t
+  - pointer:
+      pointer:
+        identifier: C.struct_group
+  result:
+  - identifier: C.int
+- name: sysconf
+  params:
+  - identifier: C.int
+  result:
+  - identifier: C.long
+- name: malloc
+  params:
+  - identifier: C.size_t
+  result:
+  - identifier: unsafe.Pointer
+- name: realloc
+  params:
+  - identifier: unsage.Pointer
+  - identifier: C.size_t
+  result:
+  - identifier: unsafe.Pointer
+- name: realpath
+  params:
+  - pointer:
+      identifier: C.char
+  - pointer:
+      identifier: C.char
+  result:
+  - pointer:
+      identifier: C.char
+- name: pluginOpen
+  params:
+  - pointer:
+      identifier: C.char
+  - pointer:
+      pointer:
+        identifier: C.char
+  result:
+  - identifier: C.uintptr_t
+- name: pluginLookup
+  params:
+  - identifier: C.uintptr_t
+  - pointer:
+      identifier: C.char
+  - pointer:
+      pointer:
+        identifier: C.char
+  result:
+  - identifier: unsafe.Pointer
