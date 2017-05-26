@@ -545,6 +545,13 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		glog.Infof("Assignment LHs[%v]: %#v\n", i, statement.Lhs[i])
 		glog.Infof("Assignment RHs[%v]: %#v\n", i, rhsExpr)
 
+		// Skip parenthesis
+		parExpr, ok := statement.Lhs[i].(*ast.ParenExpr)
+		for ok {
+			statement.Lhs[i] = parExpr.X
+			parExpr, ok = statement.Lhs[i].(*ast.ParenExpr)
+		}
+
 		switch lhsExpr := statement.Lhs[i].(type) {
 		case *ast.Ident:
 			// skip the anonymous variables
