@@ -935,21 +935,11 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 		}
 
 		// Identifier or a qid.Identifier
-		switch typeExpr := rangeExpr.(type) {
-		case *gotypes.Identifier:
-			def, defType, err := sp.Lookup(typeExpr)
-			if err != nil {
-				return err
-			}
-			if !defType.IsDataType() {
-				return fmt.Errorf("Expecting identifier of a ata type, got %#v instead", defType)
-			}
-			if def.Def == nil {
-				return fmt.Errorf("Symbol %q not yet fully processed", def.Name)
-			}
-			rangeExpr = def.Def
-			// TODO(jchaloup): cover selector as well
+		rangeExpr, err := sp.Config.FindFirstNonidDataType(rangeExpr)
+		if err != nil {
+			return err
 		}
+
 		var key, value gotypes.DataType
 		// From https://golang.org/ref/spec#For_range
 		//
@@ -987,7 +977,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			key = &gotypes.Builtin{Def: "int"}
 			value = xExprType.Def
 		default:
-			panic(fmt.Errorf("Unknown type of range expression: %#v", rangeExpr))
+			panic(fmt.Errorf("Unknown type of range expression: %#v at %v", rangeExpr, statement.Pos()))
 		}
 
 		if statement.Key != nil {

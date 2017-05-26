@@ -320,10 +320,14 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 		}, nil
 	// channel
 	case token.ARROW:
-		if def[0].GetType() != gotypes.ChannelType {
-			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead", def[0].GetType())
+		nonIdentDef, err := ep.findFirstNonidDataType(def[0])
+		if err != nil {
+			return nil, err
 		}
-		return def[0].(*gotypes.Channel).Value, nil
+		if nonIdentDef.GetType() != gotypes.ChannelType {
+			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead at %v", nonIdentDef.GetType(), expr.Pos())
+		}
+		return nonIdentDef.(*gotypes.Channel).Value, nil
 		// other
 	case token.XOR, token.OR, token.SUB, token.NOT, token.ADD:
 		return def[0], nil
@@ -524,7 +528,7 @@ func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
 }
 
 func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
-	glog.Infof("Detecting isDataType for %#v", expr)
+	glog.Infof("Detecting isDataType for %#v at %v", expr, expr.Pos())
 	switch exprType := expr.(type) {
 	case *ast.Ident:
 		// user defined type
@@ -601,6 +605,8 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 		return false, nil
 	case *ast.StructType:
 		return true, nil
+	case *ast.IndexExpr:
+		return false, nil
 	default:
 		// TODO(jchaloup): yes? As now it is anonymous data type. Or should we check for each such type?
 		panic(fmt.Errorf("Unrecognized isDataType expr: %#v at %v", expr, expr.Pos()))
@@ -944,6 +950,29 @@ func (ep *Parser) retrieveDataTypeField(accessor *dataTypeFieldAccessor) (gotype
 			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable:    pkgST,
 				dataTypeDef:    def,
+				field:          accessor.field,
+				fieldsOnly:     true,
+				dropFieldsOnly: true,
+			})
+		}
+
+		if accessor.dataTypeDef.Def.GetType() == gotypes.SelectorType {
+			// check methods of the type itself if there is any match
+			glog.Infof("Retrieving method %q of data type %q", accessor.field, accessor.dataTypeDef.Name)
+			if method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field); err == nil {
+				return method.Def, nil
+			}
+
+			selector := accessor.dataTypeDef.Def.(*gotypes.Selector)
+			// qid?
+			st, sd, err := ep.Config.RetrieveQidDataType(selector)
+			if err != nil {
+				return nil, err
+			}
+
+			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+				symbolTable:    st,
+				dataTypeDef:    sd,
 				field:          accessor.field,
 				fieldsOnly:     true,
 				dropFieldsOnly: true,
