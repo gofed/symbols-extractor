@@ -1134,6 +1134,9 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 		if methodName == "" {
 			// Given a variable can be of interface data type,
 			// embedded interface needs to be checked as well.
+			if item.Def == nil {
+				return nil, fmt.Errorf("Symbol of embedded interface not fully processed")
+			}
 			itemExpr := item.Def
 			if pointerExpr, isPointer := item.Def.(*gotypes.Pointer); isPointer {
 				itemExpr = pointerExpr.Def
@@ -1254,7 +1257,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 }
 
 func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, error) {
-	glog.Infof("Processing SelectorExpr: %#v\n", expr)
+	glog.Infof("Processing SelectorExpr: %#v at %v\n", expr, expr.Pos())
 	// Check for data type method cases
 	// (*Receiver).method: use method of a data type as a value to store to a variable
 	// (Receiver).method: the same, just the receiver is a data type itself

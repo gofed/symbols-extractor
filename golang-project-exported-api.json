@@ -594,6 +594,7 @@
 								"oneOf": [
 									{ "$ref": "#/definitions/function" },
 									{ "$ref": "#/definitions/identifier" },
+									{ "$ref": "#/definitions/builtin" },
 									{ "$ref": "#/definitions/selector" },
 									{ "$ref": "#/definitions/pointer" }
 								]

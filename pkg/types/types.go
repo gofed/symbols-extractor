@@ -1104,6 +1104,13 @@ func (o *InterfaceMethodsItem) UnmarshalJSON(b []byte) error {
 				}
 				o.Def = r
 
+			case BuiltinType:
+				r := &Builtin{}
+				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+					return err
+				}
+				o.Def = r
+
 			case SelectorType:
 				r := &Selector{}
 				if err := json.Unmarshal(*objMap["def"], &r); err != nil {
