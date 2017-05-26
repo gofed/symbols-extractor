@@ -198,11 +198,17 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 		cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", packagePath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			glog.Infof("go list -f {{.GoFiles}} %v failed. Trying vendor...", packagePath, err)
+			glog.Infof("go list -f {{.GoFiles}} %q failed due to %q with stdout %q. Trying vendor...", packagePath, err, output)
+			if strings.Contains(string(output), "no buildable Go source files in") {
+				return nil, "", nil
+			}
 			// check vendor as well
 			cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", path.Join("vendor", packagePath))
 			output, err = cmd.CombinedOutput()
 			if err != nil {
+				if strings.Contains(string(output), "no buildable Go source files in") {
+					return nil, "", nil
+				}
 				return nil, "", fmt.Errorf("go list -f {{.GoFiles}} [vendor/]%v failed: %v", packagePath, err)
 			}
 			vendor = true
@@ -474,6 +480,12 @@ PACKAGE_STACK:
 	for len(pp.packageStack) > 0 {
 		// Process the package stack
 		p := pp.packageStack[0]
+		if p.PackageDir == "" {
+			// Pop the package from the package stack
+			pp.packageStack = pp.packageStack[1:]
+			continue
+		}
+
 		glog.Infof("\n\n\nPS processing %#v\n", p.PackageDir)
 		if _, err := pp.globalSymbolTable.Lookup(p.PackagePath); err == nil {
 			glog.Infof("\n\n\nPS %#v already processed\n", p.PackageDir)
