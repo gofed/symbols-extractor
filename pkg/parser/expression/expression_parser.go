@@ -1225,35 +1225,65 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 	if ok {
 		dataTypeIdent = pointer.X
 	}
+
+	var typeSymbolTable symboltable.SymbolLookable
+	var typeSymbolDef *gotypes.SymbolDef
+
 	switch dtExpr := dataTypeIdent.(type) {
 	case *ast.Ident:
 		if !ep.SymbolTable.Exists(dtExpr.Name) {
 			return false, nil, fmt.Errorf("Symbol %v not found", dtExpr.Name)
 		}
-		if def, err := ep.SymbolTable.LookupDataType(dtExpr.Name); err == nil {
-
-			methodDef, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
-				symbolTable: ep.SymbolTable,
-				dataTypeDef: def,
-				field:       expr.Sel.Name,
-				methodsOnly: true,
-			})
-			if err != nil {
-				return false, nil, fmt.Errorf("Unable to find method %q of data type %v", expr.Sel.Name, dtExpr.Name)
-			}
-			method, ok := methodDef.(*gotypes.Method)
-			if !ok {
-				return false, nil, fmt.Errorf("Expected a method %q of data type %v, got %#v instead", expr.Sel.Name, dtExpr.Name, def)
-			}
-			return true, method.Def.(*gotypes.Function), nil
+		def, err := ep.SymbolTable.LookupDataType(dtExpr.Name)
+		if err != nil {
+			return false, nil, nil
 		}
-		return false, nil, nil
+
+		typeSymbolTable = ep.SymbolTable
+		typeSymbolDef = def
 	case *ast.SelectorExpr:
-		fmt.Printf("\n\tSelector: %#v\n", dtExpr)
-		panic("SSSS")
+		// qid assumed
+		ident, ok := dtExpr.X.(*ast.Ident)
+		if !ok {
+			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the qid instead", dtExpr.X)
+		}
+
+		qid, err := ep.parseIdentifier(ident)
+		if err != nil {
+			return false, nil, err
+		}
+		if _, isQid := qid.(*gotypes.Packagequalifier); !isQid {
+			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the qid instead", qid)
+		}
+
+		st, sd, err := ep.retrieveQidDataType(&gotypes.Selector{
+			Prefix: qid,
+			Item:   dtExpr.Sel.String(),
+		})
+		if err != nil {
+			return false, nil, err
+		}
+
+		typeSymbolTable = st
+		typeSymbolDef = sd
 	default:
 		return false, nil, nil
 	}
+
+	methodDef, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		symbolTable: typeSymbolTable,
+		dataTypeDef: typeSymbolDef,
+		field:       expr.Sel.Name,
+		methodsOnly: true,
+	})
+	if err != nil {
+		return false, nil, fmt.Errorf("Unable to find method %q of data type %v", expr.Sel.Name, typeSymbolDef.Name)
+	}
+	method, ok := methodDef.(*gotypes.Method)
+	if !ok {
+		return false, nil, fmt.Errorf("Expected a method %q of data type %v, got %#v instead", expr.Sel.Name, typeSymbolDef.Name, methodDef)
+	}
+	return true, method.Def.(*gotypes.Function), nil
 }
 
 func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, error) {
