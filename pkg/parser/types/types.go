@@ -118,3 +118,47 @@ func (c *Config) LookupDataType(ident *gotypes.Identifier) (*gotypes.SymbolDef, 
 	def, err := table.LookupDataType(ident.Def)
 	return def, table, err
 }
+
+func (c *Config) RetrieveQidDataType(qidselector *gotypes.Selector) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
+	// qid.structtype expected
+	qid, ok := qidselector.Prefix.(*gotypes.Packagequalifier)
+	if !ok {
+		return nil, nil, fmt.Errorf("Expecting a qid.structtype when retrieving a struct from a selector expression")
+	}
+	glog.Infof("Trying to retrieve a symbol %#v from package %v\n", qidselector.Item, qid.Path)
+	qidst, err := c.GlobalSymbolTable.Lookup(qid.Path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
+	}
+
+	dataTypeDef, piErr := qidst.LookupDataType(qidselector.Item)
+	if piErr != nil {
+		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", qidselector.Item, qid.Path, piErr)
+	}
+	c.AllocatedSymbolsTable.AddSymbol(qid.Path, qidselector.Item)
+	return qidst, dataTypeDef, nil
+}
+
+func (c *Config) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.DataType, error) {
+	var symbolDef *gotypes.SymbolDef
+	switch typeDefType := typeDef.(type) {
+	case *gotypes.Selector:
+		_, def, err := c.RetrieveQidDataType(typeDefType)
+		if err != nil {
+			return nil, err
+		}
+		symbolDef = def
+	case *gotypes.Identifier:
+		def, _, err := c.LookupDataType(typeDefType)
+		if err != nil {
+			return nil, err
+		}
+		symbolDef = def
+	default:
+		return typeDef, nil
+	}
+	if symbolDef.Def == nil {
+		return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
+	}
+	return c.FindFirstNonidDataType(symbolDef.Def)
+}
