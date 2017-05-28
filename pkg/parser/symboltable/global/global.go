@@ -13,14 +13,48 @@ import (
 )
 
 type Table struct {
-	tables map[string]symboltable.SymbolTable
+	symbolTableDir string
+	tables         map[string]symboltable.SymbolTable
+}
+
+func (t *Table) loadFromFile(pkg string) (symboltable.SymbolTable, error) {
+	if t.symbolTableDir == "" {
+		return nil, fmt.Errorf("Symbol table dir not set")
+	}
+	// check if the symbol table is available locally
+	parts := strings.Split(pkg, "/")
+	parts = append(parts, "json")
+	filename := strings.Join(parts, ".")
+	file := path.Join(t.symbolTableDir, filename)
+	glog.Infof("Global symbol table %q loading", file)
+
+	raw, err := ioutil.ReadFile(file)
+	if err != nil {
+		glog.Infof("Global symbol table %q loading failed: %v", file, err)
+		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
+	}
+
+	var table symboltable.Table
+	if err := json.Unmarshal(raw, &table); err != nil {
+		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
+	}
+	return &table, nil
 }
 
 func (t *Table) Lookup(pkg string) (symboltable.SymbolTable, error) {
-	table, ok := t.tables[pkg]
-	if !ok {
-		return nil, fmt.Errorf("Unable to find symbol table for %q", pkg)
+	if table, ok := t.tables[pkg]; ok {
+		glog.Infof("Global symbol table %q found", pkg)
+		return table, nil
 	}
+
+	table, err := t.loadFromFile(pkg)
+	if err != nil {
+		return nil, err
+	}
+
+	t.tables[pkg] = table
+	glog.Infof("Global symbol table %q loaded", pkg)
+
 	return table, nil
 }
 
@@ -46,9 +80,10 @@ func (t *Table) Packages() []string {
 	return keys
 }
 
-func New() *Table {
+func New(symbolTableDir string) *Table {
 	return &Table{
-		tables: make(map[string]symboltable.SymbolTable, 0),
+		symbolTableDir: symbolTableDir,
+		tables:         make(map[string]symboltable.SymbolTable, 0),
 	}
 }
 

@@ -127,7 +127,7 @@ func New(packagePath string, symbolTableDir string, cgoSymbolsPath string) *Proj
 		symbolTableDirectory:   symbolTableDir,
 		cgoSymbolsPath:         cgoSymbolsPath,
 		packageStack:           make([]*PackageContext, 0),
-		globalSymbolTable:      global.New(),
+		globalSymbolTable:      global.New(symbolTableDir),
 		globalAllocSymbolTable: allocglobal.New(),
 	}
 }
@@ -439,14 +439,8 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 }
 
 func (pp *ProjectParser) Parse() error {
-	// load symbol tables
-	if pp.symbolTableDirectory != "" {
-		if err := pp.globalSymbolTable.Load(pp.symbolTableDirectory); err != nil {
-			return nil
-		}
-	}
-
 	// set C pseudo-package
+	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
 	pp.cgoSymbolTable = symboltable.NewCGOTable()
 	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable); err != nil {
 		return fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
