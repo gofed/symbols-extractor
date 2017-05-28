@@ -19,7 +19,7 @@ func prepareParser(pkgName string) *types.Config {
 		PackageName:           pkgName,
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
-		GlobalSymbolTable:     global.New(),
+		GlobalSymbolTable:     global.New(""),
 	}
 
 	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())
