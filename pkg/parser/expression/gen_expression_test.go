@@ -61,7 +61,7 @@ func prepareParser(pkgName string) (*types.Config, error) {
 		PackageName:           pkgName,
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
-		GlobalSymbolTable:     global.New(),
+		GlobalSymbolTable:     global.New(pkgName),
 	}
 
 	c.SymbolTable.Push()
