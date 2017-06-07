@@ -47,7 +47,7 @@ func parseBuiltin(config *parsertypes.Config) error {
 
     payload, err := fileparser.MakePayload(f)
     if err != nil {
-      return fmt.Errorf("Cannot make payload: %v", err)
+      return fmt.Errorf("Cannot make a payload: %v", err)
     }
     if err := fileparser.NewParser(config).Parse(payload); err != nil {
         return fmt.Errorf("Unable to parse file %v: %v", gofile, err)
@@ -68,7 +68,7 @@ func prepareParser(pkgName string) (*types.Config, error) {
         PackageName:           pkgName,
         SymbolTable:           stack.New(),
         AllocatedSymbolsTable: alloctable.New(),
-        GlobalSymbolTable:     global.New(pkgName),
+        GlobalSymbolTable:     global.New(""),
     }
 
     c.SymbolTable.Push()

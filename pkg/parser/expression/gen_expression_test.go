@@ -40,7 +40,7 @@ func parseBuiltin(config *parsertypes.Config) error {
 
 	payload, err := fileparser.MakePayload(f)
 	if err != nil {
-		return fmt.Errorf("Cannot make payload: %v", err)
+		return fmt.Errorf("Cannot make a payload: %v", err)
 	}
 	if err := fileparser.NewParser(config).Parse(payload); err != nil {
 		return fmt.Errorf("Unable to parse file %v: %v", gofile, err)
@@ -61,7 +61,7 @@ func prepareParser(pkgName string) (*types.Config, error) {
 		PackageName:           pkgName,
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
-		GlobalSymbolTable:     global.New(pkgName),
+		GlobalSymbolTable:     global.New(""),
 	}
 
 	c.SymbolTable.Push()
@@ -118,6 +118,11 @@ func MyFunc(MyInt) MyInt
 func MyFuncStr(MyInt) string
 func (i *MyInt) Inc(increment MyInt)
 func (i MyInt) GetAbs() uint
+type iFace interface {}
+var iFaceVarFloat iFace = float64(15.1)
+var iFaceVarMyInt iFace = MyInt(15)
+var mapStrInt map[string]int = map[string]int { "foo": 10}
+var arrUint []uint = []uint{1,2,3,4,5,}
 func Sum(a, b int) int
 func SumEllipsis(i ...int) int
 func Difference(a int, b int) int
@@ -221,7 +226,7 @@ func TestParseBinaryExpr0(t *testing.T) {
 }
 
 func TestParseBinaryExpr1(t *testing.T) {
-	if err := parseBinaryExprTest("8 * 3.1", "float", true); err != nil {
+	if err := parseBinaryExprTest("8 * 3.1", "float64", true); err != nil {
 		t.Error(err)
 	}
 }
@@ -372,6 +377,42 @@ func TestParseBinaryExpr25(t *testing.T) {
 
 func TestParseBinaryExpr26(t *testing.T) {
 	if err := parseBinaryExprTest("(5 + 1) + (10 * 1)", "int", true); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseBinaryExpr27(t *testing.T) {
+	if err := parseBinaryExprTest("iota + iota", "int", false); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseBinaryExpr28(t *testing.T) {
+	if err := parseBinaryExprTest("*pFooMyInt + 10", "MyInt", false); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseBinaryExpr29(t *testing.T) {
+	if err := parseBinaryExprTest("iFaceVarFloat.(float64) - 10", "float64", false); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseBinaryExpr30(t *testing.T) {
+	if err := parseBinaryExprTest("iFaceVarMyInt.(MyInt) * 1", "MyInt", false); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseBinaryExpr31(t *testing.T) {
+	if err := parseBinaryExprTest("mapStrInt[\"foo\"] * 10", "int", false); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseBinaryExpr32(t *testing.T) {
+	if err := parseBinaryExprTest("arrUint[2] + 1", "uint", false); err != nil {
 		t.Error(err)
 	}
 }

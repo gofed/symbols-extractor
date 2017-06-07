@@ -19,10 +19,17 @@ symboltable:
   - "var FooMyInt MyInt"
   - "var pFooMyInt *MyInt"
   - "var FooMyStruct MyStruct"
+  # constants are not supported because of another requirements on processing
+  #- "const ( Aconst = 1 + iota *2; Bconst = iota; Cconst )"
   - "func MyFunc(MyInt) MyInt"
   - "func MyFuncStr(MyInt) string"
   - "func (i *MyInt) Inc(increment MyInt)"
   - "func (i MyInt) GetAbs() uint"
+  - "type iFace interface {}"
+  - "var iFaceVarFloat iFace = float64(15.1)"
+  - "var iFaceVarMyInt iFace = MyInt(15)"
+  - "var mapStrInt map[string]int = map[string]int { \"foo\": 10}"
+  - "var arrUint []uint = []uint{1,2,3,4,5,}" 
   # various funcs for parseCallExpr and others
   - "func Sum(a, b int) int"
   - "func SumEllipsis(i ...int) int"
@@ -44,7 +51,7 @@ targets:
         expected: [int, true]
       -
         code: "8 * 3.1"
-        expected: [float, true]
+        expected: [float64, true]
       -
         code: "3 * 4 * 5"
         expected: [int, true]
@@ -120,6 +127,26 @@ targets:
       -
         code: "(5 + 1) + (10 * 1)"
         expected: [int, true]
+      -
+        # just test that iota is found and parsed as int
+        # - this is not full test of iota and constants
+        code: "iota + iota"
+        expected: [int, false]
+      -
+        code: "*pFooMyInt + 10"
+        expected: [MyInt, false]
+      -
+        code: "iFaceVarFloat.(float64) - 10"
+        expected: [float64, false]
+      -
+        code: "iFaceVarMyInt.(MyInt) * 1"
+        expected: [MyInt, false]
+      -
+        code: "mapStrInt[\\\"foo\\\"] * 10"
+        expected: [int, false]
+      -
+        code: "arrUint[2] + 1"
+        expected: [uint, false]
   -
     target: parseCallExpr
     tests:
