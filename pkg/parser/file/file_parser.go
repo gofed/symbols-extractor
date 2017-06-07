@@ -1,7 +1,7 @@
 package file
 
 import (
-	"fmt"
+    "fmt"
 	"go/ast"
 	"path"
 	"strings"
@@ -351,7 +351,7 @@ func (fp *FileParser) Parse(p *Payload) error {
 		glog.Infof("\n\nAfter parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 	}
 
-	fmt.Printf("AllocST for %q\n", fp.PackageName)
+	glog.Infof("AllocST for %q\n", fp.PackageName)
 	fp.AllocatedSymbolsTable.Print()
 	//fp.SymbolTable.Json()
 

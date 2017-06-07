@@ -1,0 +1,181 @@
+---
+# TODO(pstodulk): Missing tests with
+#  - interfaces
+#  - use of methods
+#  - exported/private symbols
+#  - pointers
+#  - anonymous types
+#  - try maps and channels!
+#  - - find simple way how to assemble various DataTypes, including
+#      maps, slices, .... - think about '@type' format, e.g.:
+#         '@map[string]int'
+#      Such string should be parsed by ast in suitable way and then can be
+#      used some function which creates from this expected data type
+#  --- parse special format @type to q
+#  - user dict for symboltable to create ST representing other files
+symboltable:
+  - "type MyInt int"
+  - "type MyStruct struct { Foo int }"
+  - "var FooMyInt MyInt"
+  - "var pFooMyInt *MyInt"
+  - "var FooMyStruct MyStruct"
+  # constants are not supported because of another requirements on processing
+  #- "const ( Aconst = 1 + iota *2; Bconst = iota; Cconst )"
+  - "func MyFunc(MyInt) MyInt"
+  - "func MyFuncStr(MyInt) string"
+  - "func (i *MyInt) Inc(increment MyInt)"
+  - "func (i MyInt) GetAbs() uint"
+  - "type iFace interface {}"
+  - "var iFaceVarFloat iFace = float64(15.1)"
+  - "var iFaceVarMyInt iFace = MyInt(15)"
+  - "var mapStrInt map[string]int = map[string]int { \"foo\": 10}"
+  - "var arrUint []uint = []uint{1,2,3,4,5,}" 
+  # various funcs for parseCallExpr and others
+  - "func Sum(a, b int) int"
+  - "func SumEllipsis(i ...int) int"
+  - "func Difference(a int, b int) int"
+  - "func Div(a,b int32) (int, error)"
+  - "func TransformMyStruct (a MyStruct) MyStruct"
+  - "func Mapping() map[string]MyStruct"
+  - "func fibonacci() func() int"
+  - "func (s *MyStruct) getFoo() int"
+  - "func (i *MyInt) Op(fce func (MyInt, MyInt) MyInt)"
+  - "func Closure(s string, i int) func(int) (string, error)"
+  - "func DClosure(fn func(int) uint, s string) (func(string) (int,error), func(int) uint)"
+targets:
+  -
+    target: parseBinaryExpr
+    tests:
+      -
+        code: "2 + 4"
+        expected: [int, true]
+      -
+        code: "8 * 3.1"
+        expected: [float64, true]
+      -
+        code: "3 * 4 * 5"
+        expected: [int, true]
+      -
+        code: "float32(4) - float32(3)"
+        expected: [float32, false]
+      -
+        code: "MyInt(2) + 3"
+        expected: [MyInt, false]
+      -
+        code: "MyFunc(2) + 3"
+        expected: [MyInt, false]
+      -
+        code: "2 + MyFunc(3)"
+        expected: [MyInt, false]
+      -
+        code: "FooMyInt + 5"
+        expected: [MyInt, false]
+      -
+        code: "MyFunc(MyInt(3)) + MyFunc(MyInt(3))"
+        expected: [MyInt, false]
+      -
+        code: "MyInt(MyFunc(MyInt(3))) + MyFunc(MyInt(3))"
+        expected: [MyInt, false]
+      -
+        code: '\"Hello\" + \" Johnny!\"'
+        expected: [string, true]
+      -
+        code: "2 + int(MyFunc(3))"
+        expected: [int, false]
+      -
+        code: "2 - 4"
+        expected: [int, true]
+      -
+        code: "2 / 4"
+        expected: [int, true]
+      -
+        code: "2 % 4"
+        expected: [int, true]
+      -
+        code: "false || true"
+        expected: [bool, true]
+      -
+        code: "false && true"
+        expected: [bool, true]
+      -
+        code: "!bool(false) && bool(true)"
+        expected: [bool, false]
+      -
+        code: "5 > 1"
+        expected: [bool, true]
+      -
+        code: "5 < 1"
+        expected: [bool, true]
+      -
+        code: "5 <= 1"
+        expected: [bool, true]
+      -
+        code: "5 >= 1"
+        expected: [bool, true]
+      -
+        code: "MyFunc(15) == 15 "
+        expected: [bool, false]
+      -
+        code: "5 != 1"
+        expected: [bool, true]
+      -
+        code: "!bool(true) ==  (1 != 5)"
+        expected: [bool, false]
+      -
+        code: "true || ((5+1) * (MyFunc(11) / MyInt(14))) > 0"
+        expected: [bool, false]
+      -
+        code: "(5 + 1) + (10 * 1)"
+        expected: [int, true]
+      -
+        # just test that iota is found and parsed as int
+        # - this is not full test of iota and constants
+        code: "iota + iota"
+        expected: [int, false]
+      -
+        code: "*pFooMyInt + 10"
+        expected: [MyInt, false]
+      -
+        code: "iFaceVarFloat.(float64) - 10"
+        expected: [float64, false]
+      -
+        code: "iFaceVarMyInt.(MyInt) * 1"
+        expected: [MyInt, false]
+      -
+        code: "mapStrInt[\\\"foo\\\"] * 10"
+        expected: [int, false]
+      -
+        code: "arrUint[2] + 1"
+        expected: [uint, false]
+  -
+    target: parseCallExpr
+    tests:
+      -
+        code: "Sum(5, 3)"
+        expected: [int]
+      -
+        code: "Div(5, 3)"
+        expected: [int, error]
+      -
+        code: "SumEllipsis(5, 3, 4)"
+        expected: [int]
+      -
+        code: "MyFunc(MyInt(3))"
+        expected: [MyInt]
+      -
+        code: "MyFuncStr(MyInt(2))"
+        expected: [string]
+      -
+        code: "TransformMyStruct(FooMyStruct)"
+        expected: [MyStruct]
+      -
+        code: FooMyStruct.GetAbs()
+        expected: [uint]
+      -
+        code: FooMyStruct.Inc(4)
+        expected: []
+      #-
+      #  #TODO
+      #  code: "Mapping()"
+      #  expected: ["@map[string]MyStruct"]
+...
