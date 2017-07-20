@@ -149,7 +149,7 @@ func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (gotypes.Data
 	var symbolDef *gotypes.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
-		_, def, err := ep.retrieveQidDataType(typeDefType)
+		_, def, err := ep.retrieveQidDataType(typeDefType.Prefix, &ast.Ident{Name: typeDefType.Item})
 		if err != nil {
 			return nil, err
 		}
@@ -649,7 +649,7 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error)
 		}
 		return ep.getFunctionDef(def.Def)
 	case *gotypes.Selector:
-		_, sd, err := ep.retrieveQidDataType(typeDef)
+		_, sd, err := ep.retrieveQidDataType(typeDef.Prefix, &ast.Ident{Name: typeDef.Item})
 		if err != nil {
 			return nil, err
 		}
@@ -863,23 +863,23 @@ func (ep *Parser) parseStructType(expr *ast.StructType) (gotypes.DataType, error
 	return ep.TypeParser.Parse(expr)
 }
 
-func (ep *Parser) retrieveQidDataType(qidselector *gotypes.Selector) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
+func (ep *Parser) retrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ident) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
 	// qid.structtype expected
-	qid, ok := qidselector.Prefix.(*gotypes.Packagequalifier)
+	qid, ok := qidprefix.(*gotypes.Packagequalifier)
 	if !ok {
 		return nil, nil, fmt.Errorf("Expecting a qid.structtype when retrieving a struct from a selector expression")
 	}
-	glog.Infof("Trying to retrieve a symbol %#v from package %v\n", qidselector.Item, qid.Path)
+	glog.Infof("Trying to retrieve a symbol %#v from package %v\n", item.String(), qid.Path)
 	qidst, err := ep.GlobalSymbolTable.Lookup(qid.Path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
 	}
 
-	structDef, piErr := qidst.LookupDataType(qidselector.Item)
+	structDef, piErr := qidst.LookupDataType(item.Name)
 	if piErr != nil {
-		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", qidselector.Item, qid.Path, piErr)
+		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", item.String(), qid.Path, piErr)
 	}
-	ep.AllocatedSymbolsTable.AddSymbol(qid.Path, qidselector.Item)
+	ep.AllocatedSymbolsTable.AddSymbol(qid.Path, item.Name)
 	return qidst, structDef, nil
 }
 
@@ -1055,7 +1055,7 @@ ITEMS_LOOP:
 					glog.Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
-				st, sd, err := ep.retrieveQidDataType(fieldType)
+				st, sd, err := ep.retrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
 				if err != nil {
 					return nil, err
 				}
@@ -1179,7 +1179,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 					glog.Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
-				st, sd, err := ep.retrieveQidDataType(fieldType)
+				st, sd, err := ep.retrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
 				if err != nil {
 					return nil, err
 				}
@@ -1256,10 +1256,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the qid instead", qid)
 		}
 
-		st, sd, err := ep.retrieveQidDataType(&gotypes.Selector{
-			Prefix: qid,
-			Item:   dtExpr.Sel.String(),
-		})
+		st, sd, err := ep.retrieveQidDataType(qid, &ast.Ident{Name: dtExpr.Sel.String()})
 		if err != nil {
 			return false, nil, err
 		}
@@ -1429,7 +1426,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		}, expr.Sel.Name)
 	case *gotypes.Selector:
 		// qid.structtype expected
-		st, sd, err := ep.retrieveQidDataType(xType)
+		st, sd, err := ep.retrieveQidDataType(xType.Prefix, &ast.Ident{Name: xType.Item})
 		if err != nil {
 			return nil, err
 		}
@@ -1507,7 +1504,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 				}
 				symbolDef = def
 			} else {
-				_, sd, err := ep.retrieveQidDataType(indexExpr.(*gotypes.Selector))
+				_, sd, err := ep.retrieveQidDataType(indexExpr.(*gotypes.Selector).Prefix, &ast.Ident{Name: indexExpr.(*gotypes.Selector).Item})
 				if err != nil {
 					return nil, err
 				}
