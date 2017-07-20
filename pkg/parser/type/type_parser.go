@@ -49,7 +49,11 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 
 	// Check if the identifier is a built-in type
 	if typedExpr.Name != "Type" && p.Config.IsBuiltin(typedExpr.Name) {
-		p.AllocatedSymbolsTable.AddSymbol("builtin", typedExpr.Name)
+		p.AllocatedSymbolsTable.AddSymbol(
+			"builtin",
+			typedExpr.Name,
+			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
+		)
 		table, err := p.GlobalSymbolTable.Lookup("builtin")
 		if err != nil {
 			return nil, err
@@ -67,7 +71,12 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	}
 
 	// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
-	p.AllocatedSymbolsTable.AddSymbol(def.Package, def.Name)
+	p.AllocatedSymbolsTable.AddSymbol(
+		def.Package,
+		typedExpr.Name,
+		fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
+	)
+
 	return &gotypes.Identifier{
 		Def:     typedExpr.Name,
 		Package: def.Package,
@@ -141,7 +150,11 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 		if !ok {
 			return nil, fmt.Errorf("Qualified id %q does not correspond to an import path", id.Name)
 		}
-		p.AllocatedSymbolsTable.AddSymbol(qid.Path, typedExpr.Sel.Name)
+		p.AllocatedSymbolsTable.AddSymbol(
+			qid.Path,
+			typedExpr.Sel.Name,
+			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
+		)
 		return &gotypes.Selector{
 			Item:   typedExpr.Sel.Name,
 			Prefix: qid,
@@ -278,7 +291,7 @@ func (p *Parser) parseInterface(typedExpr *ast.InterfaceType) (*gotypes.Interfac
 
 func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, error) {
 	glog.Infof("Processing FuncType: %#v\n", typedExpr)
-	functionType := &gotypes.Function{}
+	functionType := &gotypes.Function{Package: p.PackageName}
 
 	var params []gotypes.DataType
 	var results []gotypes.DataType

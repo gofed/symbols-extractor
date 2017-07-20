@@ -1,27 +1,50 @@
 package alloctable
 
-import (
-	"fmt"
-
-	"github.com/golang/glog"
-)
+import "fmt"
 
 // - count a number of each symbol used (to watch how intensively is a given symbol used)
 // - each AS table is per file, AS package is a union of file AS tables
 //
+type Datatype struct {
+	Name string `json:"name"`
+	Pos  string `json:"pos"`
+}
+
+type Function struct {
+	Name string `json:"name"`
+	Pos  string `json:"pos"`
+}
+
+type Method struct {
+	Name   string `json:"name"`
+	Parent string `json:"parent"`
+	Pos    string `json:"pos"`
+}
+
+type StructField struct {
+	Parent string   `json:"parent"`
+	Field  string   `json:"field"`
+	Chain  []string `json:"chain"`
+	Pos    string   `json:"pos"`
+}
+
+type Package struct {
+	Datatypes    []Datatype    `json:"datatypes"`
+	Functions    []Function    `json:"functions"`
+	Methods      []Method      `json:"methods"`
+	Structfields []StructField `json:"structfields"`
+}
 
 type Table struct {
-	File    string `json:"file"`
-	Package string `json:"package"`
-	// symbol's name is in a PACKAGE.ID form
-	// if the PACKAGE is empty, the ID is considired as the embedded symbol
-	Symbols map[string]int `json:"symbols"`
+	File    string              `json:"file"`
+	Package string              `json:"package"`
+	Symbols map[string]*Package `json:"symbols"`
 	locked  bool
 }
 
 func New() *Table {
 	return &Table{
-		Symbols: make(map[string]int),
+		Symbols: make(map[string]*Package),
 	}
 }
 
@@ -33,28 +56,63 @@ func (ast *Table) Unlock() {
 	ast.locked = false
 }
 
-func (ast *Table) AddDataTypeField(origin, dataType, field string) {
-	ast.AddSymbol(origin, fmt.Sprintf("%v.%v", dataType, field))
+func (ast *Table) AddDataType(pkg, name, pos string) {
+	items, exists := ast.Symbols[pkg]
+	if !exists {
+		ast.Symbols[pkg] = &Package{}
+		items = ast.Symbols[pkg]
+	}
+	items.Datatypes = append(items.Datatypes, Datatype{
+		Name: name,
+		Pos:  pos,
+	})
 }
 
-func (ast *Table) AddSymbol(origin, id string) {
-	if ast.locked {
-		return
+func (ast *Table) AddFunction(pkg, name, pos string) {
+	items, exists := ast.Symbols[pkg]
+	if !exists {
+		ast.Symbols[pkg] = &Package{}
+		items = ast.Symbols[pkg]
 	}
-	glog.Infof("Adding symbol into alloc table: origin=%q\tid=%q", origin, id)
-	var key string
-	if origin != "" {
-		key = fmt.Sprintf("%v.%v", origin, id)
-	} else {
-		key = id
-	}
+	items.Functions = append(items.Functions, Function{
+		Name: name,
+		Pos:  pos,
+	})
+}
 
-	count, ok := ast.Symbols[key]
-	if !ok {
-		ast.Symbols[key] = 1
-	} else {
-		ast.Symbols[key] = count + 1
+func (ast *Table) AddStructField(pkg, parent, field string, chain []string, pos string) {
+	items, exists := ast.Symbols[pkg]
+	if !exists {
+		ast.Symbols[pkg] = &Package{}
+		items = ast.Symbols[pkg]
 	}
+	items.Structfields = append(items.Structfields, StructField{
+		Parent: parent,
+		Field:  field,
+		Chain:  chain,
+		Pos:    pos,
+	})
+}
+
+func (ast *Table) AddMethod(pkg, parent, name, pos string) {
+	items, exists := ast.Symbols[pkg]
+	if !exists {
+		ast.Symbols[pkg] = &Package{}
+		items = ast.Symbols[pkg]
+	}
+	items.Methods = append(items.Methods, Method{
+		Parent: parent,
+		Name:   name,
+		Pos:    pos,
+	})
+}
+
+func (ast *Table) AddDataTypeField(origin, dataType, field string) {
+	ast.AddSymbol(origin, fmt.Sprintf("%v.%v", dataType, field), "")
+}
+
+func (ast *Table) AddSymbol(origin, id, pos string) {
+
 }
 
 func (ast *Table) Print() {

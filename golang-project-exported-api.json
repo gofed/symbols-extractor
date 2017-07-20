@@ -528,10 +528,12 @@
 							{ "$ref": "#/definitions/interface" },
 							{ "$ref": "#/definitions/struct" }
 						]
-
 					}
+				},
+				"package": {
+					"type": "string",
+					"description": "Symbol origin"
 				}
-
 			},
 			"required": ["type", "params", "results"]
 		},

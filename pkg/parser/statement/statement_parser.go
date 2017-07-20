@@ -40,7 +40,7 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 		}
 
 		if !skip_allocated {
-			ep.AllocatedSymbolsTable.AddSymbol(def.Package, typedExpr.Name)
+			ep.AllocatedSymbolsTable.AddDataType(def.Package, typedExpr.Name, ep.Config.SymbolPos(typedExpr.Pos()))
 		}
 
 		return &gotypes.Identifier{
@@ -60,7 +60,7 @@ func (ep *Parser) parseReceiver(receiver ast.Expr, skip_allocated bool) (gotypes
 			}
 
 			if !skip_allocated {
-				ep.AllocatedSymbolsTable.AddSymbol(def.Package, idExpr.Name)
+				ep.AllocatedSymbolsTable.AddDataType(def.Package, idExpr.Name, ep.Config.SymbolPos(idExpr.Pos()))
 			}
 
 			return &gotypes.Pointer{

@@ -10,6 +10,8 @@ type DataType interface {
 const FunctionType = "function"
 
 type Function struct {
+	Package string `json:"package"`
+
 	Params  []DataType `json:"params"`
 	Results []DataType `json:"results"`
 }
@@ -33,6 +35,11 @@ func (o *Function) UnmarshalJSON(b []byte) error {
 	var objMap map[string]*json.RawMessage
 
 	if err := json.Unmarshal(b, &objMap); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["package"] actually exists
+	if err := json.Unmarshal(*objMap["package"], &o.Package); err != nil {
 		return err
 	}
 

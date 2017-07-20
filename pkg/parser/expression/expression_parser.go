@@ -614,7 +614,7 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 	return false, nil
 }
 
-func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error) {
+func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, []string, error) {
 	glog.Infof("getFunctionDef of %#v", def)
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
@@ -628,42 +628,42 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, error)
 		} else {
 			table, tErr := ep.GlobalSymbolTable.Lookup(typeDef.Package)
 			if tErr != nil {
-				return nil, tErr
+				return nil, nil, tErr
 			}
 			def, defType, err = table.Lookup(typeDef.Def)
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if def.Def == nil {
-			return nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
+			return nil, nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
 		}
 		if defType.IsFunctionType() {
-			return def.Def, nil
+			return def.Def, nil, nil
 		}
 		if defType.IsDataType() {
 			return ep.getFunctionDef(def.Def)
 		}
 		if !defType.IsVariable() {
-			return nil, fmt.Errorf("Function call expression %#v is not expected to be a type", def)
+			return nil, nil, fmt.Errorf("Function call expression %#v is not expected to be a type", def)
 		}
 		return ep.getFunctionDef(def.Def)
 	case *gotypes.Selector:
 		_, sd, err := ep.retrieveQidDataType(typeDef.Prefix, &ast.Ident{Name: typeDef.Item})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		return ep.getFunctionDef(sd.Def)
 	case *gotypes.Function:
-		return def, nil
+		return def, nil, nil
 	case *gotypes.Method:
-		return def, nil
+		return def, nil, nil
 	case *gotypes.Pointer:
-		return nil, fmt.Errorf("Can not invoke non-function expression: %#v", def)
+		return nil, nil, fmt.Errorf("Can not invoke non-function expression: %#v", def)
 	default:
 		panic(fmt.Errorf("Unrecognized getFunctionDef def: %#v", def))
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) {
@@ -729,7 +729,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 		return nil, err
 	}
 
-	funcDef, err := ep.getFunctionDef(def[0])
+	funcDef, _, err := ep.getFunctionDef(def[0])
 	if err != nil {
 		return nil, err
 	}
@@ -875,11 +875,11 @@ func (ep *Parser) retrieveQidDataType(qidprefix gotypes.DataType, item *ast.Iden
 		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
 	}
 
-	structDef, piErr := qidst.LookupDataType(item.Name)
+	structDef, piErr := qidst.LookupDataType(item.String())
 	if piErr != nil {
 		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", item.String(), qid.Path, piErr)
 	}
-	ep.AllocatedSymbolsTable.AddSymbol(qid.Path, item.Name)
+	ep.AllocatedSymbolsTable.AddDataType(qid.Path, item.Name, ep.Config.SymbolPos(item.Pos()))
 	return qidst, structDef, nil
 }
 
@@ -1323,7 +1323,9 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 		}
 		byteSlice, _ := json.Marshal(packageIdent)
 		glog.Infof("packageIdent: %v\n", string(byteSlice))
-		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name)
+		// TODO(jchaloup): check if the packageIdent is a global variable, method, function or a data type
+		//                 based on that, use the corresponding Add method
+		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name, "")
 		return packageIdent.Def, nil
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {
