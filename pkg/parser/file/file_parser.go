@@ -122,6 +122,7 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 		if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
 			Name:    spec.Name.Name,
 			Package: fp.PackageName,
+			Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
 			Def:     nil,
 		}); err != nil {
 			return nil, err
@@ -140,6 +141,7 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 		if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
 			Name:    spec.Name.Name,
 			Package: fp.PackageName,
+			Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
 			Def:     typeDef,
 		}); err != nil {
 			return nil, err
@@ -227,6 +229,7 @@ func (fp *FileParser) parseFuncDeclaration(spec *ast.FuncDecl) (bool, error) {
 	if err := fp.SymbolTable.AddFunction(&gotypes.SymbolDef{
 		Name:    spec.Name.Name,
 		Package: fp.PackageName,
+		Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
 		Def:     funcDef,
 	}); err != nil {
 		glog.Info("Error during parsing of function %q declaration: %v", spec.Name.Name, err)

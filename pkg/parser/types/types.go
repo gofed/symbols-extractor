@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
@@ -15,6 +16,11 @@ import (
 // TypeParser implementation is responsible for Go data type parsing/processing
 type TypeParser interface {
 	Parse(d ast.Expr) (gotypes.DataType, error)
+}
+
+type ExprAttribute struct {
+	SymbolDefs []*gotypes.SymbolDef
+	// PropagationSequence []string
 }
 
 // ExpressionParser implemenation is responsible for Go expression parsing/processing
@@ -40,6 +46,8 @@ type StatementParser interface {
 type Config struct {
 	// package name
 	PackageName string
+	// file
+	FileName string
 	// per file symbol table
 	SymbolTable *stack.Stack
 	// per subset of packages symbol table
@@ -52,6 +60,10 @@ type Config struct {
 	ExprParser ExpressionParser
 	// statement parser
 	StmtParser StatementParser
+}
+
+func (c *Config) SymbolPos(pos token.Pos) string {
+	return fmt.Sprintf("%v:%v", c.FileName, pos)
 }
 
 func (c *Config) GetBuiltin(name string) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
@@ -135,7 +147,6 @@ func (c *Config) RetrieveQidDataType(qidselector *gotypes.Selector) (symboltable
 	if piErr != nil {
 		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", qidselector.Item, qid.Path, piErr)
 	}
-	c.AllocatedSymbolsTable.AddSymbol(qid.Path, qidselector.Item)
 	return qidst, dataTypeDef, nil
 }
 

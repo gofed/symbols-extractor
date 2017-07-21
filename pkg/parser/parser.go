@@ -308,6 +308,7 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 				payload.Imports = append(payload.Imports, spec)
 			}
 			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+			p.Config.FileName = fileContext.Filename
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -346,6 +347,7 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 					payload.Imports = append(payload.Imports, spec)
 				}
 				p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+				p.Config.FileName = fileContext.Filename
 				if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 					return err
 				}
@@ -387,6 +389,7 @@ func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error 
 				payload.Imports = append(payload.Imports, spec)
 			}
 			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+			p.Config.FileName = fileContext.Filename
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -423,6 +426,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 				payload.Imports = append(payload.Imports, spec)
 			}
 			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+			p.Config.FileName = fileContext.Filename
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
@@ -529,6 +533,7 @@ PACKAGE_STACK:
 				return fmt.Errorf("Unable to create a payload: %v", err)
 			}
 			p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+			p.Config.FileName = fileContext.Filename
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
