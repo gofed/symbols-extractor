@@ -39,6 +39,7 @@ type Parser struct {
 	*types.Config
 }
 
+// parseBasicLit consumes *ast.BasicLit and produces Builtin
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (gotypes.DataType, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
 	switch lit.Kind {
@@ -169,6 +170,8 @@ func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (gotypes.Data
 	return ep.findFirstNonidDataType(symbolDef.Def)
 }
 
+// parseCompositeLit consumes ast.CompositeLit and produces data type of the root composite literal
+// TODO(jchaloup): for each composite literal generate a data type contract
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (gotypes.DataType, error) {
 	glog.Infof("Processing CompositeLit: %#v\n", lit)
 	// https://golang.org/ref/spec#Composite_literals
@@ -242,21 +245,25 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 	return litTypedef, nil
 }
 
-// Identifier is always a variable.
-// It is either a qid, local variable or global variable of the current package.
-// It can be also an identifier of a function.
-// In all cases data type of the variable/function/qid is returned
+// parseIdentifier consumes ast.Ident and produces:
+// - if the identifier is qid, qid definition is returned
+// - if the identifier is a function, function definition is returned
+// - if the identifier is a local/global variable, data type of the variable is returned
+//   (e.g. the data type can be a method/function definition)
+// Unless origin of a data type is part of the data type definition itself, it is not propagated.
+// Assumptions:
+// - the identifier is either a qid, a local/global variable or a function of the current package.
+//   identifiers of other packages are handled differently (TODO(jchaloup): describe where and how)
+// - the identifier can not be a method (though, it can be a value of a local/global variable)
 func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	glog.Infof("Processing variable-like identifier: %#v\n", ident)
-
-	// TODO(jchaloup): check for variables/functions first
-	// E.g. user can define
-	//    make := func() {}
-	// which overwrites the builtin.make function
 
 	// Does the local symbol exists at all?
 	var postponedErr error
 	if !ep.SymbolTable.Exists(ident.Name) {
+		// E.g. user can define
+		//    make := func() {}
+		// which overwrites the builtin.make function
 		postponedErr = fmt.Errorf("parseIdentifier: Symbol %q not yet processed", ident.Name)
 	} else {
 		// If it is a variable, return its definition
@@ -299,6 +306,11 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (gotypes.DataType, error) {
 	return nil, postponedErr
 }
 
+// parseUnaryExpr consumes ast.UnaryExpr and produces:
+// - token.AND is understood as a dereference operator
+// - token.ARROW is understood as a channel operator
+// - token.XOR, token.OR, token.SUB, token.NOT, token.ADD are understood as
+//   their unary equivalents (^OP, |OP, -OP, ~OP, +OP)
 func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing UnaryExpr: %#v\n", expr)
 	def, err := ep.Parse(expr.X)
@@ -336,6 +348,16 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (gotypes.DataType, error) 
 	}
 }
 
+// parseBinaryExpr consumes ast.BinaryExpr and produces:
+// - if the operator results in boolean data type, the boolean is returned (without checking data type of operands)
+// - if both operands are untyped, their result data type is untyped
+// - if any of the operands is typed, their result data type is typed
+// - if one of the operands is of byte and the other one of uint8(3), their result data type is uint8
+// - if both operands are non-builtin typed data types, data type of the first operand is returned
+// - if exactly one of the operands is non-builtin typed data type, the non-builtin typed data type is returned
+// Facts::
+// - result data type is always another identifier, not data type definition itself
+//   i.e. MyInt + int = MyInt, not MyInt definition
 func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing Binaryexpr: %#v\n", expr)
 	if !isBinaryOperator(expr.Op) {
@@ -498,6 +520,10 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (gotypes.DataType, error
 	return yIdent, nil
 }
 
+// parseStarExpr consumes ast.StarExpr and produces:
+// - if the expression is a pointer, pointed data type is returned
+// Errors:
+// - if the expression is non-pointer data type
 func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing StarExpr: %#v\n", expr)
 	def, err := ep.Parse(expr.X)
@@ -516,6 +542,7 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (gotypes.DataType, error) {
 	return val.Def, nil
 }
 
+// parseParenExpr consumes ast.Expr and drops direct sequence of parenthesis
 func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
 	e = expr
 	for {
@@ -666,6 +693,14 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (gotypes.DataType, []stri
 	return nil, nil, nil
 }
 
+// parseCallExpr consumes ast.CallExpr and produces:
+// - if the call expression is a data type, the data type itself is returned
+// - if the call expression is a function/method, result data type of the function/method is returned
+// Assumptions:
+// - type assertion is always valid (checked during compilation)
+// - all arguments are always assignable to function/method parameters
+// Errors:
+// - number of arguments is different from a number of parameters (including variable length of parameters)
 func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) {
 	glog.Infof("Processing CallExpr: %#v\n", expr)
 	defer glog.Infof("Leaving CallExpr: %#v\n", expr)
@@ -673,6 +708,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
 	processArgs := func(args []ast.Expr, params []gotypes.DataType) error {
+		// TODO(jchaloup): check the arguments can be assigned to the parameters
+		// TODO(jchaloup): generate type contract for each argument
 		if params != nil {
 			if len(args) == 1 {
 				def, err := ep.Parse(args[0])
@@ -793,6 +830,9 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) ([]gotypes.DataType, error) 
 	}
 }
 
+// parseSliceExpr consumes ast.SliceExpr and produces a data type of its slice value
+// Assumptions:
+// - All Low, High, Max expression are valid slice indexes
 func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (gotypes.DataType, error) {
 	if expr.Low != nil {
 		if _, err := ep.Parse(expr.Low); err != nil {
@@ -822,6 +862,9 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (gotypes.DataType, error) 
 	return exprDef[0], nil
 }
 
+// parseChanType consumes ast.ChanType and produces a data type corresponding to channel definition
+// Example:
+// - (<-chan int)(varible) // type casting to a channel type
 func (ep *Parser) parseChanType(expr *ast.ChanType) (gotypes.DataType, error) {
 	valueDef, err := ep.Parse(expr.Value)
 	if err != nil {
@@ -846,6 +889,9 @@ func (ep *Parser) parseChanType(expr *ast.ChanType) (gotypes.DataType, error) {
 	return channel, nil
 }
 
+// parseFuncLit consumes ast.FuncLit and produces a data type corresponding to a function signature
+// Example:
+// - a := func(...) (...) {...}
 func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (gotypes.DataType, error) {
 	glog.Infof("Processing FuncLit: %#v\n", expr)
 	if err := ep.StmtParser.ParseFuncBody(&ast.FuncDecl{
@@ -858,6 +904,9 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (gotypes.DataType, error) {
 	return ep.TypeParser.Parse(expr.Type)
 }
 
+// parseStructType consumes ast.StructType and produces data type corresponding to struct definition
+// Example:
+// -  (struct{int a})(variable)	// type casting to a struct type
 func (ep *Parser) parseStructType(expr *ast.StructType) (gotypes.DataType, error) {
 	glog.Infof("Processing StructType: %#v\n", expr)
 	return ep.TypeParser.Parse(expr)
@@ -1283,6 +1332,16 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 	return true, method.Def.(*gotypes.Function), nil
 }
 
+// parseSelectorExpr consumes ast.SelectorExpr and produces:
+// - if the prefix is a data type receiver, data type's method (by selector item) definition is returned
+// - if the prefix is a pointer to a data type receiver, data type's method (by selector item) definition is returned
+// - if the prefix is a package quialifier, data type of a symbol pointed by selector item of the package is returned
+// - if the prefix is a pointer to a package quialifier, data type of a symbol pointed by selector item of the package is returned
+// - if the prefix is a struct, data type of a field/method pointed by the selector item is returned
+// - if the prefix is a pointer to a struct, data type of a field/method pointed by the selector item is returned
+// - if the prefix is an identifier of a data type, data type of a method pointed by the selector item is returned
+// - if the prefix is pointer to identifier of a data type, data type of a method pointed by the selector item is returned
+// - if the prefix is an interface data type, data type of a method pointed by the selector item is returned
 func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing SelectorExpr: %#v at %v\n", expr, expr.Pos())
 	// Check for data type method cases
@@ -1458,6 +1517,12 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (gotypes.DataType, e
 	}
 }
 
+// parseIndexExpr consumes ast.IndexExpr and produces:
+// - if the expression is a map, data type of the map values is returned
+// - if the expression is an array, data type of the array value is returned
+// - if the expression is a slice, data type of the slice value is returned
+// - if the expression as a string, uint8 data type is returned
+// - if the expression as an ellipsis, data type of the ellipsis value is returned
 func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing IndexExpr: %#v\n", expr)
 	// X[Index]
@@ -1553,6 +1618,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (gotypes.DataType, error) 
 	}
 }
 
+// parseTypeAssertExpr consumes ast.TypeAssertExpr and produces asserted data type
 func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (gotypes.DataType, error) {
 	glog.Infof("Processing TypeAssertExpr: %#v\n", expr)
 	// X.(Type)
@@ -1564,7 +1630,7 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (gotypes.DataTyp
 	// We should check if the data type really implements all methods of the interface.
 	// Or we can assume it does and just return the Type itself
 	// TODO(jchaloup): check the data type Type really implements interface of X (if it is an interface)
-
+	// TODO(jchaloup): generate a data type contract
 	isDT, err := ep.isDataType(expr.Type)
 	if err != nil {
 		return nil, err
