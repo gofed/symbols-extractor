@@ -19,13 +19,19 @@ type TypeParser interface {
 }
 
 type ExprAttribute struct {
-	SymbolDefs []*gotypes.SymbolDef
+	DataTypeList []gotypes.DataType
 	// PropagationSequence []string
+}
+
+func ExprAttributeFromDataType(list ...gotypes.DataType) *ExprAttribute {
+	return &ExprAttribute{
+		DataTypeList: list,
+	}
 }
 
 // ExpressionParser implemenation is responsible for Go expression parsing/processing
 type ExpressionParser interface {
-	Parse(expr ast.Expr) ([]gotypes.DataType, error)
+	Parse(expr ast.Expr) (*ExprAttribute, error)
 }
 
 // StatementParser implemenation is responsible for:
