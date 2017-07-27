@@ -306,6 +306,11 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		}
 	}
 
+	// if postponedErr is nil, something is wrong
+	if postponedErr == nil {
+		panic("postponedErr can not be nil here")
+	}
+
 	return nil, postponedErr
 }
 
