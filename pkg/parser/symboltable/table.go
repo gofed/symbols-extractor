@@ -177,9 +177,6 @@ func (t *Table) LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error)
 			continue
 		}
 		if sym, ok := t.symbols[symbolType][key]; ok {
-			if _, ok := sym.Def.(*gotypes.Method); ok {
-				continue
-			}
 			return sym, nil
 		}
 	}
