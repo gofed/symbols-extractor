@@ -185,14 +185,14 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 	var symbolsDef = make([]*gotypes.SymbolDef, 0)
 
 	if vLen == 1 {
-		valueExpr, err := sp.ExprParser.Parse(spec.Values[0])
+		valueExprAttr, err := sp.ExprParser.Parse(spec.Values[0])
 		if err != nil {
 			return nil, err
 		}
 
-		if builtin, ok := valueExpr[0].(*gotypes.Builtin); !ok || builtin.Def != "iota" {
-			if nLen != len(valueExpr) {
-				return nil, fmt.Errorf("ValueSpec %#v has different number of identifiers on LHS (%v) than a number of results of invocation on RHS (%v)", spec, nLen, len(valueExpr))
+		if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); !ok || builtin.Def != "iota" {
+			if nLen != len(valueExprAttr.DataTypeList) {
+				return nil, fmt.Errorf("ValueSpec %#v has different number of identifiers on LHS (%v) than a number of results of invocation on RHS (%v)", spec, nLen, len(valueExprAttr.DataTypeList))
 			}
 			for i, name := range spec.Names {
 				if name.Name == "_" {
@@ -202,7 +202,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
-						Def:     valueExpr[i],
+						Def:     valueExprAttr.DataTypeList[i],
 					})
 				} else {
 					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
@@ -227,26 +227,26 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		}
 		// TODO(jchaloup): if the variable type is an interface and the variable value type is a concrete type
 		//                 note somewhere the concrete type must implemented the interface
-		valueExpr, err := sp.ExprParser.Parse(spec.Values[i])
+		valueExprAttr, err := sp.ExprParser.Parse(spec.Values[i])
 		if err != nil {
 			return nil, err
 		}
 
-		if len(valueExpr) != 1 {
-			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExpr)
+		if len(valueExprAttr.DataTypeList) != 1 {
+			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExprAttr.DataTypeList)
 		}
 		// Put the variables/consts into the symbol table
 		if spec.Names[i].Name == "_" {
 			continue
 		}
-		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExpr, typeDef)
+		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExprAttr.DataTypeList, typeDef)
 		if typeDef != nil {
 			symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     typeDef,
 			})
-			if builtin, ok := valueExpr[0].(*gotypes.Builtin); ok {
+			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				if builtin.Def == "iota" {
 					// https://splice.com/blog/iota-elegant-constants-golang/
 					sp.lastConstType = typeDef
@@ -254,7 +254,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 			}
 		} else {
 			// If the iota is used, the data type must be known
-			if builtin, ok := valueExpr[0].(*gotypes.Builtin); ok {
+			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				// if an untyped const is iota, it defaults to int
 				if builtin.Def == "iota" {
 					builtin.Def = "int"
@@ -265,7 +265,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 			symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
-				Def:     valueExpr[0],
+				Def:     valueExprAttr.DataTypeList[0],
 			})
 		}
 	}
@@ -384,14 +384,14 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 
 	// define general Rhs index function
 	rhsIndexer := func(i int) (gotypes.DataType, error) {
-		def, err := sp.ExprParser.Parse(statement.Rhs[i])
+		defAttr, err := sp.ExprParser.Parse(statement.Rhs[i])
 		if err != nil {
 			return nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
 		}
-		if len(def) != 1 {
-			return nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, def)
+		if len(defAttr.DataTypeList) != 1 {
+			return nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, defAttr.DataTypeList)
 		}
-		return def[0], err
+		return defAttr.DataTypeList[0], err
 	}
 
 	exprsSize := len(statement.Lhs)
@@ -416,42 +416,42 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				}
 			}
 
-			callExprDef, err := sp.ExprParser.Parse(typeExpr)
+			callExprDefAttr, err := sp.ExprParser.Parse(typeExpr)
 			if err != nil {
 				return err
 			}
-			callExprDefLen := len(callExprDef)
+			callExprDefLen := len(callExprDefAttr.DataTypeList)
 
 			if exprsSize != callExprDefLen {
 				if isCgo {
 					if exprsSize != callExprDefLen+1 {
-						return fmt.Errorf("CGO: Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v at %v", statement.Lhs, callExprDef, statement.Pos())
+						return fmt.Errorf("CGO: Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v at %v", statement.Lhs, callExprDefAttr.DataTypeList, statement.Pos())
 					}
 				} else {
-					return fmt.Errorf("Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v", statement.Lhs, callExprDef)
+					return fmt.Errorf("Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v", statement.Lhs, callExprDefAttr.DataTypeList)
 				}
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, error) {
 				if i < callExprDefLen {
-					return callExprDef[i], nil
+					return callExprDefAttr.DataTypeList[i], nil
 				}
 				if i == callExprDefLen && isCgo {
 					return &gotypes.Builtin{Def: "error"}, nil
 				}
 				// This will panic
-				return callExprDef[i], nil
+				return callExprDefAttr.DataTypeList[i], nil
 			}
-			rExprSize = len(callExprDef)
+			rExprSize = len(callExprDefAttr.DataTypeList)
 		case *ast.IndexExpr:
 			if exprsSize != 2 {
 				return fmt.Errorf("Expecting two expression on the RHS when accessing an index expression for val, ok = indexexpr[key], got %#v instead", statement.Lhs)
 			}
-			xDef, err := sp.ExprParser.Parse(typeExpr.X)
+			xDefAttr, err := sp.ExprParser.Parse(typeExpr.X)
 			if err != nil {
 				return err
 			}
-			if len(xDef) != 1 {
-				return fmt.Errorf("Index expression is not a single expression: %#v", xDef)
+			if len(xDefAttr.DataTypeList) != 1 {
+				return fmt.Errorf("Index expression is not a single expression: %#v", xDefAttr.DataTypeList)
 			}
 			if _, err := sp.ExprParser.Parse(typeExpr.Index); err != nil {
 				return err
@@ -462,11 +462,11 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					// - identifier of map
 					// - qid.id of map
 					{
-						byteSlice, _ := json.Marshal(xDef[0])
+						byteSlice, _ := json.Marshal(xDefAttr.DataTypeList[0])
 						fmt.Printf("\n\tHHHH: %v\n", string(byteSlice))
 					}
 					var indexedObject gotypes.DataType
-					switch typeExpr := xDef[0].(type) {
+					switch typeExpr := xDefAttr.DataTypeList[0].(type) {
 					case *gotypes.Identifier:
 						def, defType, err := sp.Lookup(typeExpr)
 						if err != nil {
@@ -489,7 +489,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 						}
 						indexedObject = sd.Def
 					default:
-						indexedObject = xDef[0]
+						indexedObject = xDefAttr.DataTypeList[0]
 					}
 
 					switch indexedObjectDef := indexedObject.(type) {
@@ -509,12 +509,12 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			if exprsSize != 2 {
 				return fmt.Errorf("Expecting two expression on the RHS when type-asserting an expression for val, ok = expr.(datatype), got %#v instead", statement.Lhs)
 			}
-			xDef, err := sp.ExprParser.Parse(typeExpr.X)
+			xDefAttr, err := sp.ExprParser.Parse(typeExpr.X)
 			if err != nil {
 				return err
 			}
-			if len(xDef) != 1 {
-				return fmt.Errorf("Index expression is not a single expression: %#v", xDef)
+			if len(xDefAttr.DataTypeList) != 1 {
+				return fmt.Errorf("Index expression is not a single expression: %#v", xDefAttr.DataTypeList)
 			}
 			typeDef, err := sp.TypeParser.Parse(typeExpr.Type)
 			if err != nil {
@@ -816,18 +816,18 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", chExpr)
 					}
 
-					rhsExpr, err := sp.ExprParser.Parse(chExpr.X)
+					rhsExprAttr, err := sp.ExprParser.Parse(chExpr.X)
 					if err != nil {
 						return err
 					}
 
-					if len(rhsExpr) != 1 {
-						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr)
+					if len(rhsExprAttr.DataTypeList) != 1 {
+						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExprAttr.DataTypeList)
 					}
 
-					rhsChannel, ok := rhsExpr[0].(*gotypes.Channel)
+					rhsChannel, ok := rhsExprAttr.DataTypeList[0].(*gotypes.Channel)
 					if !ok {
-						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExpr[0])
+						return fmt.Errorf("Expecting unary expression in a form of <-chan. Got %#v instead", rhsExprAttr.DataTypeList[0])
 					}
 
 					switch lhsLen := len(clause.Lhs); lhsLen {
@@ -928,7 +928,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 	glog.Infof("Processing range statement  %#v with token %v\n", statement, token.DEFINE)
 	// If the assignment is = all expression on the LHS are already defined.
 	// If the assignment is := all expression on the LHS are identifiers
-	xExpr, err := sp.ExprParser.Parse(statement.X)
+	xExprAttr, err := sp.ExprParser.Parse(statement.X)
 	if err != nil {
 		return err
 	}
@@ -941,11 +941,11 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 		var rangeExpr gotypes.DataType
 		// over-approximation but given we run the go build before the procesing
 		// this is a valid processing
-		pointer, ok := xExpr[0].(*gotypes.Pointer)
+		pointer, ok := xExprAttr.DataTypeList[0].(*gotypes.Pointer)
 		if ok {
 			rangeExpr = pointer.Def
 		} else {
-			rangeExpr = xExpr[0]
+			rangeExpr = xExprAttr.DataTypeList[0]
 		}
 
 		// Identifier or a qid.Identifier
@@ -972,13 +972,13 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			value = xExprType.Elmtype
 		case *gotypes.Builtin:
 			if xExprType.Def != "string" {
-				fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xExpr[0])
+				fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xExprAttr.DataTypeList[0])
 			}
 			key = &gotypes.Builtin{Def: "int"}
 			value = &gotypes.Builtin{Def: "rune"}
 		case *gotypes.Identifier:
 			if xExprType.Def != "string" {
-				fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xExpr[0])
+				fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xExprAttr.DataTypeList[0])
 			}
 			key = &gotypes.Builtin{Def: "int"}
 			value = &gotypes.Builtin{Def: "rune"}

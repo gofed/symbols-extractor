@@ -92,10 +92,10 @@ func TestBinaryExpr(t *testing.T) {
 
 		if !testExpr[i].expectedError && err == nil {
 			// compare returned and expected value
-			if testExpr[i].expRes.GetType() != res.GetType() {
+			if testExpr[i].expRes.GetType() != res.DataTypeList[0].GetType() {
 				t.Errorf("Expected '%s' type, got '%s' instead. Line: '%s'",
 					testExpr[i].expRes.GetType(),
-					res.GetType(),
+					res.DataTypeList[0].GetType(),
 					testExpr[i].expr,
 				)
 				failed = true
