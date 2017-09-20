@@ -17,16 +17,15 @@ GO_TEST        := $(GO_CMD) test
 GO_TEST_FLAGS  :=
 GLOG_FLAGS     :=
 ECHO           := echo
+PASS           := true
 RM             := rm
 RM_FLAGS       := -f
 
 # Params:
+# - verbocity level:
 ifeq (not$(V)set, notset)
 V := 0
 endif
-
-# Apply params:
-# - verbocity level:
 V_AUX := $(V)
 ifeq ($(V_AUX), 2)
 GLOG_FLAGS += -stderrthreshold=INFO
@@ -36,6 +35,14 @@ ifeq ($(V_AUX), 1)
 GO_BUILD_FLAGS += -v
 GO_TEST_FLAGS  += -v
 V_AUX := 0
+endif
+# - logging:
+ifeq (not$(L)set, notset)
+WLOG :=
+RMLOG := $(PASS)
+else
+WLOG := >>$(L) 2>&1
+RMLOG := $(RM) $(RM_FLAGS) $(L)
 endif
 
 # Setup Go's environment:
@@ -71,7 +78,7 @@ $(eval $(call AddProduct, SYMBOLTABLES, symboltables/* ))
 .PHONY: all help goenv build test gen clean
 
 all:
-	$(MAKE) build V=$(V)
+	$(MAKE) build V=$(V) L=$(L)
 
 help:
 	@$(ECHO) "Usage: $(MAKE) <target> [params]"
@@ -91,8 +98,8 @@ help:
 	@$(ECHO) "                    0 - be quite (default);"
 	@$(ECHO) "                    1 - be verbose, no logging;"
 	@$(ECHO) "                    2 - be verbose, log info messages."
-	@$(ECHO) "                  This parameter takes its influence to"
-	@$(ECHO) "                  'build' and 'test' targets only;"
+	@$(ECHO) "    L=logfile   - if logfile is given, stderr and stdout are"
+	@$(ECHO) "                  redirected to it;"
 	@$(ECHO) "    GOROOT=path - set the Go's GOROOT; the default value is"
 	@$(ECHO) "                  taken from '$(GO_ENV) GOROOT';"
 	@$(ECHO) "    GOPATH=path - set the Go's GOPATH; the default value is"
@@ -100,20 +107,24 @@ help:
 	@$(ECHO) ""
 
 goenv:
-	@$(GO_ENV)
+	@$(RMLOG)
+	@$(GO_ENV) $(WLOG)
 
 build:
-	$(GO_BUILD) $(GO_BUILD_FLAGS) -o $(EXTRACT) $(PROJECT_ROOT)/cmd
+	$(RMLOG)
+	$(GO_BUILD) $(GO_BUILD_FLAGS) -o $(EXTRACT) $(PROJECT_ROOT)/cmd $(WLOG)
 
 test:
-	#$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser $(GLOG_FLAGS)
+	$(RMLOG)
+#	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser $(GLOG_FLAGS) \
+#            $(WLOG)
 	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/file \
-            $(GLOG_FLAGS)
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/types
+            $(GLOG_FLAGS) $(WLOG)
+	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/types $(WLOG)
 	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/expression \
-            $(GLOG_FLAGS)
+            $(GLOG_FLAGS) $(WLOG)
 	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/statement \
-            $(GLOG_FLAGS)
+            $(GLOG_FLAGS) $(WLOG)
 
 gen:
 	./gentypes.sh
