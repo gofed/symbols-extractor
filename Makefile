@@ -39,16 +39,19 @@ V_AUX := 0
 endif
 
 # Setup Go's environment:
-# - bump up GOROOT:
+# - if not set, get GOROOT from `go env GOROOT`:
 ifeq (not$(GOROOT)set, notset)
 GOROOT := $(shell $(GO_ENV) GOROOT)
-export GOROOT
 endif
-# - set GOPATH to be the current working directory; GOPATH must be absolute:
+# - if not set, GOPATH will be the current working directory:
 ifeq (not$(GOPATH)set, notset)
 GOPATH := $(CURDIR)
-export GOPATH
 endif
+# GOPATH must be absolute
+override GOPATH := $(abspath $(GOPATH))
+
+export GOROOT
+export GOPATH
 
 # Locations:
 PROJECT_ROOT   := github.com/gofed/symbols-extractor
@@ -81,16 +84,19 @@ help:
 	@$(ECHO) "    clean - remove built products"
 	@$(ECHO) ""
 	@$(ECHO) "[params] refers to a list of space separated parameters"
-	@$(ECHO) "of the form KEY=VALUE. The list of so far supported"
-	@$(ECHO) "parameters is"
+	@$(ECHO) "of the form KEY=VALUE. The so far supported parameters are"
 	@$(ECHO) ""
-	@$(ECHO) "    V=n   - set the verbocity level; possible values of"
-	@$(ECHO) "            verbocity level ('n') are:"
-	@$(ECHO) "              0 - be quite (default);"
-	@$(ECHO) "              1 - be verbose, no logging;"
-	@$(ECHO) "              2 - be verbose, log info messages."
-	@$(ECHO) "            This parameter takes its influence to 'build'"
-	@$(ECHO) "            and 'test' targets only."
+	@$(ECHO) "    V=number    - set the verbocity level; possible values"
+	@$(ECHO) "                  of verbocity level are:"
+	@$(ECHO) "                    0 - be quite (default);"
+	@$(ECHO) "                    1 - be verbose, no logging;"
+	@$(ECHO) "                    2 - be verbose, log info messages."
+	@$(ECHO) "                  This parameter takes its influence to"
+	@$(ECHO) "                  'build' and 'test' targets only;"
+	@$(ECHO) "    GOROOT=path - set the Go's GOROOT; the default value is"
+	@$(ECHO) "                  taken from '$(GO_ENV) GOROOT';"
+	@$(ECHO) "    GOPATH=path - set the Go's GOPATH; the default value is"
+	@$(ECHO) "                  the current working directory."
 	@$(ECHO) ""
 
 goenv:
