@@ -198,7 +198,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 	// - The same holds for "&(&struct {field1 string; field2 int}{field1: "", field2: 3})"
 
 	// Based on the Composite Literal grammar, if the CL type is omitted,
-	// it must be reconstructuble from the context. Thus, if the is ommited,
+	// it must be reconstructuble from the context. Thus, if the CL is ommited,
 	// i.e. the CL type expr is set to nil, the type is constructed from the parent CL type
 	// ast.
 	//
