@@ -354,10 +354,10 @@ Function type:
 
 Grammar for function type:
 ```
-FunctionType = "func" Signature .
-Signature = Parameters [ Result ] .
-Result = Parameters | Type .
-Parameters = "(" [ ParameterList [ "," ] ] ")" .
+FunctionType  = "func" Signature .
+Signature     = Parameters [ Result ] .
+Result        = Parameters | Type .
+Parameters    = "(" [ ParameterList [ "," ] ] ")" .
 ParameterList = ParameterDecl { "," ParameterDecl } .
 ParameterDecl = [ IdentifierList ] [ "..." ] Type .
 ```
