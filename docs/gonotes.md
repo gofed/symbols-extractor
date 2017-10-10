@@ -1757,3 +1757,611 @@ func sqr(x int) int { return x*x }
 // functions u and v are independent of all other variables and functions. The
 // function calls happen in the order u(), sqr(), v(), f(), v(), and g().
 ```
+
+## Statements
+
+Grammar for statement:
+```
+Statement =
+	Declaration | LabeledStmt | SimpleStmt |
+	GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt |
+	FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt |
+	DeferStmt .
+
+SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment |
+             ShortVarDecl .
+```
+
+### Terminating statements
+
+A terminating statement is one of the following:
+* a `return` or `goto` statement
+* a call to the built-in function `panic`
+* a block in which
+  * the statement list ends in a terminating statement
+* an `if` statement in which
+  * the `else` branch is present
+  * both branches are terminating statements
+* a `for` statement in which
+  * there are no `break` statements referring to the `for` statement
+  * the loop condition is absent
+* a `switch` statement in which
+  * there are no `break` statements referring to the `switch` statement
+  * there is a default case
+  * the statement lists in each case, including the default, end in a
+    terminating statement, or a possibly labeled `fallthrough` statement
+* a `select` statement in which
+  * there are no `break` statements referring to the `select` statement
+  * the statement lists in each case, including the default if present, end in
+    a terminating statement
+* a labeled statement labeling a terminating statement
+
+All other statements are not terminating.
+
+A statement list ends in a terminating statement if
+* the list is not empty
+* its final non-empty statement is terminating
+
+### Empty statements
+
+The empty statement does nothing.
+
+Grammar for empty statement:
+```
+EmptyStmt = .
+```
+
+### Labeled statements
+
+A labeled statement:
+* may be the target of a `goto`, `break` or `continue` statement
+
+Grammar for labeled statement:
+```
+LabeledStmt = Label ":" Statement .
+Label       = identifier .
+```
+
+### Expression statements
+
+In statement context can appear:
+* function (except specific built-in functions) and method calls
+* receive operations
+
+The following built-in functions are not permitted in statement context:
+```
+append cap complex imag len make new real
+unsafe.Alignof unsafe.Offsetof unsafe.Sizeof
+```
+
+Grammar for expression statement:
+```
+ExpressionStmt = Expression .
+```
+
+### Send statements
+
+A send statement:
+* sends a value on a channel
+* the channel expression must be of channel type
+* the channel direction must permit send operations
+* the type of the value to be sent must be assignable to the channel's element
+  type
+* both the channel and the value expression are evaluated before communication
+  begins
+* communication blocks until the send can proceed
+* a send on an unbuffered channel can proceed if a receiver is ready
+* a send on a buffered channel can proceed if there is room in the buffer
+* a send on a closed channel proceeds by causing a run-time panic
+* a send on a `nil` channel blocks forever
+
+Grammar for send statement:
+```
+SendStmt = Channel "<-" Expression .
+Channel  = Expression .
+```
+
+### IncDec statements
+
+The `++` and `--` statements:
+* increment or decrement their operands by the untyped constant 1, respectively
+* the operand must be addressable or a map index expression
+
+The following is semantically equivalent:
+```
+x++    <===>    x += 1
+x--    <===>    x -= 1
+```
+
+Grammar for inc and dec statements:
+```
+IncDecStmt = Expression ( "++" | "--" ) .
+```
+
+### Assignments
+
+Rules for operands:
+* each left-hand side operand must be
+  * addressable
+  * a map index expression
+  * the blank identifier (for `=` assignments only)
+
+Assignment operation:
+* an *assignment operation* `x op= y` where `op` is a binary arithmetic
+  operator is equivalent to `x = x op (y)` but evaluates `x` only once
+* each value must be assignable to the type of the operand to which it is
+  assigned, with the following special cases
+  * any typed value may be assigned to the blank identifier
+  * if an untyped constant is assigned to a variable of interface type or the
+    blank identifier
+    * the constant is first converted to its default type
+  * if an untyped boolean value is assigned to a variable of interface type or
+    the blank identifier
+    * it is first converted to type `bool`
+* both the left- and right-hand expression lists must contain exactly one
+  single-valued expression
+  * the left-hand expression must not be the blank identifier
+* the blank identifier provides a way to ignore right-hand side values in an
+  assignment
+* the assignment proceeds in two phases
+  * first, the operands of index expressions and pointer indirections
+    (including implicit pointer indirections in selectors) on the left and the
+    expressions on the right are all evaluated in the usual order
+  * second, the assignments are carried out in left-to-right order
+
+Tuple assignment:
+* assigns the individual elements of a multi-valued operation to a list of
+  variables
+* there are two forms
+  * the right hand operand is a single multi-valued expression such as a
+    function call, a channel or map operation, or a type assertion
+    * the number of operands on the left hand side must match the number of
+      values
+  * the number of operands on the left must equal the number of expressions on
+    the right, each of which must be single-valued, and the nth expression on
+    the right is assigned to the nth operand on the left
+
+Grammar for assignment:
+```
+Assignment = ExpressionList assign_op ExpressionList .
+
+assign_op = [ add_op | mul_op ] "=" .
+```
+
+### If statements
+
+If statement:
+* specify the conditional execution of two branches according to the value of a
+  boolean expression
+* if the expression evaluates to true, the `if` branch is executed
+* otherwise, if present, the `else` branch is executed
+* the expression may be preceded by a simple statement, which executes before
+  the expression is evaluated
+
+Grammar for `if` statement:
+```
+IfStmt = "if" [ SimpleStmt ";" ] Expression Block
+         [ "else" ( IfStmt | Block ) ] .
+```
+
+### Switch statements
+
+Switch statement:
+* provide multi-way execution
+* an expression or type specifier is compared to the *cases* inside the
+  *switch* to determine which branch to execute
+* expression switch
+  * the cases contain expressions that are compared against the value of the
+    switch expression
+* type switch
+  * the cases contain types that are compared against the type of a specially
+    annotated switch expression
+* the switch expression is evaluated exactly once in a switch statement
+
+Grammar for `switch` statement:
+```
+SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
+```
+
+#### Expression switches
+
+Expression switch:
+* the switch expression is evaluated and the case expressions are evaluated
+  left-to-right and top-to-bottom
+* the case expressions need not to be constants
+* the first one of the case expressions that equals the switch expression
+  triggers execution of the statements of the associated case; the other cases
+  are skipped
+* if no case matches and there is a `default` case, its statements are executed
+* there can be at most one default case
+
+Switch expression and case expression:
+* switch expression
+  * may be preceded by a simple statement, which executes before the expression
+    is evaluated
+  * missing switch expression is equivalent to the boolean value `true`
+  * if the switch expression evaluates to an untyped constant
+    * it is first converted to its default type
+  * if it is an untyped boolean value
+    * it is first converted to type `bool`
+  * the predeclared untyped value `nil` cannot be used as a switch expression
+* case expression
+  * if a case expression is untyped
+    * it is first converted to the type of the switch expression
+  * for each (possibly converted) case expression `x` and the value `t` of the
+    switch expression
+    * `x == t` must be a valid comparison
+* shortly, the switch expression is treated as if it were used to declare and
+  initialize a temporary variable `t` without explicit type
+  * it is that value of `t` against which each case expression `x` is tested
+    for equality
+
+`fallthrough` statement:
+* may be the (possibly labeled) last non-empty statement in a case clause or
+  default clause
+* indicates that control should flow from the end of clause in which it is used
+  to the first statement of the next clause
+  * otherwise control flows to the end of the `switch` statement
+* may appear as the last statement of all but the last clause of an expression
+  switch
+
+Grammar for expression switch:
+```
+ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] "{"
+	{ ExprCaseClause }
+"}" .
+ExprCaseClause = ExprSwitchCase ":" StatementList .
+ExprSwitchCase = "case" ExpressionList | "default" .
+```
+
+Implementation restriction:
+* a compiler may disallow multiple case expressions evaluating to the same
+  constant.
+
+#### Type switches
+
+A type switch:
+* compares types rather then values
+* it is otherwise similar to an expression switch
+* the `fallthrough` statement is forbidden
+
+The TypeSwitchGuard:
+* may include a short variable declaration
+  * in this case, the variable is declared at the end of the TypeSwitchCase in
+    the implicit block of each clause
+    * in clauses with a case listing exactly one type, the variable has that
+      type
+    * otherwise, the variable has the type of the expression in the
+      TypeSwitchGuard
+* may be preceded by a simple statement, which executes before the guard is
+  evaluated
+
+A type switch cases:
+* match actual types `T` against the dynamic type of the expression `x`
+* `x` must be of interface type
+* each non-interface type `T` listed in a case must implement the type of `x`
+* the types listed in the cases of a type switch must all be different
+* the type in a case may be `nil`
+  * that case is used when the expression in the TypeSwitchGuard is a `nil`
+    interface value
+  * there may be at most one `nil` case
+
+Grammar for type switch:
+```
+TypeSwitchStmt  = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{"
+	{ TypeCaseClause }
+"}" .
+TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
+TypeCaseClause  = TypeSwitchCase ":" StatementList .
+TypeSwitchCase  = "case" TypeList | "default" .
+TypeList        = Type { "," Type } .
+```
+
+### For statements
+
+A `for` statement:
+* specifies repeated execution of a block
+* has three forms: single condition, `for` clause, and `range` clause
+
+Grammar for `for` statement:
+```
+ForStmt   = "for" [ Condition | ForClause | RangeClause ] Block .
+Condition = Expression .
+```
+
+#### For statements with single condition
+
+In this form:
+* a `for` statement specifies the repeated execution of a block as long as a
+  boolean condition evaluates to true
+* the condition is evaluated before each iteration
+* if the condition is absent, it is equivalent to the boolean value `true`
+
+#### For statements with `for` clause
+
+In this form:
+* a `for` statement is also controlled by its condition, but additionally it
+  may specify an *init* and a *post* statement, such as an assignment, an
+  increment or decrement statement
+* if the condition is absent, it is equivalent to the boolean value `true`
+* the init statement
+  * may be a short variable declaration
+  * variables declared here are re-used in each iteration
+  * if non-empty
+    * it is executed once before evaluating the condition for the first
+      iteration
+* the post statement
+  * must not be a short variable declaration
+  * is executed after each execution of the block (and only if the block was
+    executed)
+
+Grammar for `for` clause:
+```
+ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
+InitStmt  = SimpleStmt .
+PostStmt  = SimpleStmt .
+```
+
+#### For statements with `range` clause
+
+In this form:
+* a `for` statement iterates through all entries of an array, slice, string or
+  map, or values received on a channel
+* for each entry it assigns iteration values to corresponding iteration
+  variables if present and then executes the block
+* the expression on the right in the `range` clause is called the
+  *range expression*
+  * it may be an array, pointer to an array, slice, string, map, or channel
+    permitting receive operations
+  * it is evaluated once before beginning the loop, with one exception:
+    * if it is an array or a pointer to an array and at most one iteration
+      variable is present
+      * only the range expression's length is evaluated
+        * if that length is constant
+          * by definition the range expression itself will not be evaluated
+* the operands one the left, if present
+  * denote the iteration variables
+    * there may be up to two
+  * must be addressable or map index expressions
+  * if there are function calls
+    * they are evaluated once per iteration
+* if the range expression is a channel
+  * at most one iteration variable is permitted
+* if the last iteration variable is the blank identifier
+  * the range clause is equivalent to the same clause without that identifier
+* if the iteration variables are declared using a form of short variable
+  declaration (`:=`)
+  * their types are set to the types of the respective iteration values
+  * their scope is the block of the `for` statement
+  * they are re-used in each iteration
+* if the iteration variables are declared outside the `for` statement
+  * after execution their values will be those of the last iteration
+
+Rules of producing an iteration values:
+* applied for each iteration
+* for an array, pointer to array, or slice value `a`
+  * the index iteration values are produced in increasing order, starting at
+    element index 0
+  * if at most one iteration variable is present
+    * the range loop produces iteration values from 0 up to `len(a)-1` and does
+      not index into the array or slice itself
+  * for a `nil` slice, the number of iterations is 0
+* for a string value
+  * the `range` clause iterates over the Unicode code points in the string
+    starting at byte index 0
+  * on successive iterations
+    * the index value will be the index of the first byte of successive
+      UTF-8-encoded code points in the string
+    * the second value, of type rune, will be the value of the corresponding
+      code point
+    * if the iteration encounters an invalid UTF-8 sequence
+      * the second value will be `0xFFFD`, the Unicode replacement character,
+        and the next iteration will advance a single byte in the string
+* for a map
+  * the iteration order is not specified and is not guaranteed to be the same
+    from one iteration to the next
+  * if a map entry that has not yet been reached is removed during iteration
+    * the corresponding iteration value will not be produced
+  * if a map entry is created during iteration
+    * that entry may be produced during the iteration or may be skipped
+      * the choice may vary for each entry created and from one iteration to
+        the next
+  * if the map is `nil`, the number of iterations is 0
+* for channels
+  * the iteration values produced are the successive values sent on the channel
+    until the channel is closed
+  * if the channel is `nil`, the range expression blocks forever
+* the iteration values are assigned to the respective iteration variables as in
+  an assignment statement
+
+Grammar for `range` clause:
+```
+RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
+```
+
+### Go statements
+
+A `go` statement:
+* starts the execution of a function call as an independent concurrent thread
+  of control, or *goroutine*, within the same address space
+* the expression must be a function or method call
+  * it cannot be parenthesized
+  * calls of built-in functions are restricted as for expression statements
+  * the function value and parameters are evaluated as usual in the calling
+    goroutine, but unlike with a regular call, program execution does not wait
+    for the invoked function to complete
+    * instead, the function begins executing independently in a new goroutine
+  * when the function terminates
+    * its goroutine also terminates
+  * if the function has any return values
+    * they are discarded when the function completes
+
+Grammar for `go` statement:
+```
+GoStmt = "go" Expression .
+```
+
+### Select statements
+
+A `select` statement:
+* chooses which of a set of possible send or receive operations will proceed
+* a case with a RecvStmt may assign the result of a RecvExpr to one or two
+  variables, which may be declared using a short variable declaration
+* the RecvExpr must be a receive operation
+* there can be at most one default case and it may appear anywhere in the list
+  of cases
+* a select with only `nil` channels and no default case blocks forever
+
+Execution of a `select` statement:
+* for all the cases in the statement
+  * the channel operands of receive operations and the channel and
+    right-hand-side expressions of send statements are evaluated exactly once,
+    in source order, upon entering the `select` statement
+  * the result is a set of channels to receive from or send to, and the
+    corresponding values to send
+  * any side effects in that evaluation will occur irrespective of which (if
+    any) communication operation is selected to proceed
+  * expressions on the left-hand side of a RecvStmt with a short variable
+    declaration or assignment are not yet evaluated
+* if one or more of the communications can proceed
+  * a single one that can proceed is chosen via a uniform pseudo-random
+    selection
+  * otherwise, if there is a default case, that case is chosen
+    * if there is no default case
+      * the `select` statement blocks until at least one of the communications
+        can proceed
+* unless the selected case is the default case, the respective communication
+  operation is executed
+* if the selected case is a RecvStmt with a short variable declaration or an
+  assignment
+  * the left-hand side expressions are evaluated and the received value (or
+    values) are assigned
+* the statement list of the selected case is executed
+
+Grammar for `select` statement:
+```
+SelectStmt = "select" "{" { CommClause } "}" .
+CommClause = CommCase ":" StatementList .
+CommCase   = "case" ( SendStmt | RecvStmt ) | "default" .
+RecvStmt   = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
+RecvExpr   = Expression .
+```
+
+### Return statements
+
+A `return` statement:
+* in a function `F` terminates the execution of `F`
+  * optionally provides one or more result values
+* any functions deferred by `F` are executed before `F` returns to its caller
+* in a function without a result type
+  * a `return` statement must not specify any result values
+* in a function with a result type
+  * the return value or values may be explicitly listed in the `return`
+    statement
+    * each expression must be single-valued and assignable to the corresponding
+      element of the function's result type
+  * the expression list in the `return` statement may be a single call to a
+    multi-valued function
+    * the effect is as if each value returned from that function were assigned
+      to a temporary variable with the type of the respective value, followed
+      by a `return` statement listing these variables, at which point the rules
+      of the previous case apply
+  * the expression list may be empty if the function's result type specifies
+    names for its result parameters
+    * the result parameters act as ordinary local variables and the function
+      may assign values to them as necessary
+      * the `return` statement returns the values of these variables
+* regardless of how they are declared, all the result values are initialized to
+  the zero values for their type upon entry to the function
+* a `return` statement that specifies results sets the result parameters before
+  any deferred functions are executed
+
+Grammar for `return` statement:
+```
+ReturnStmt = "return" [ ExpressionList ] .
+```
+
+Implementation restriction:
+* a compiler may disallow an empty expression list in a `return` statement if a
+  different entity (constant, type, or variable) with the same name as a result
+  parameter is in scope at the place of the return
+
+### Break statements
+
+A `break` statement:
+* terminates execution of the innermost `for`, `switch`, or `select` statement
+  within the same function
+* if there is a label
+  * it must be that of an enclosing `for`, `switch`, or `select` statement, and
+    that is the one whose execution terminates
+
+Grammar for `break` statement:
+```
+BreakStmt = "break" [ Label ] .
+```
+
+### Continue statements
+
+A `continue` statement:
+* begins the next iteration of the innermost `for` loop at its post statement
+* the `for` loop must be within the same function
+* if there is a label
+  * it must be that of an enclosing `for` statement, and that is the one whose
+    execution advances
+
+Grammar for `continue` statement:
+```
+ContinueStmt = "continue" [ Label ] .
+```
+
+### Goto statements
+
+A `goto` statement:
+* transfers control to the statement with the corresponding label within the
+  same function
+* executing the `goto` statement must not cause any variables to come into
+  scope that were not already in scope at the point of the goto
+* a `goto` statement outside a block cannot jump to a label inside that block
+
+Grammar for `goto` statement:
+```
+GotoStmt = "goto" Label .
+```
+
+### Fallthrough statements
+
+A `fallthrough` statement:
+* transfers control to the first statement of the next case clause in an
+  expression `switch` statement
+  * it may be used only as the final non-empty statement in such a clause
+
+Grammar for `fallthrough` statement:
+```
+FallthroughStmt = "fallthrough" .
+```
+
+### Defer statements
+
+A `defer` statement:
+* invokes a function whose execution is deferred to the moment the surrounding
+  function returns
+  * either because the surrounding function executed a return statement
+  * reached the end of its function body
+  * or because the corresponding goroutine is panicking
+* the expression must be a function or method call
+  * it cannot be parenthesized
+  * calls of built-in functions are restricted as for expression statements
+* each time a `defer` statement executes
+  * the function value and parameters to the call are evaluated as usual and
+    saved anew but the actual function is not invoked
+* deferred functions are invoked immediately before the surrounding function
+  returns, in the reverse order they were deferred
+* if a deferred function value evaluates to `nil`, execution panics when the
+  function is invoked, not when the `defer` statement is executed
+* if the deferred function has any return values, they are discarded when the
+  function completes
+
+Grammar for `defer` statement:
+```
+DeferStmt = "defer" Expression .
+```
