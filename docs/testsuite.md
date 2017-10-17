@@ -43,7 +43,7 @@ File set:
   func main() {
   	fmt.Printf("%v is of a type %T\n", y, y)
   }
-```
+  ```
 * `$TESTSROOT/typeprop/suite001/test001/ver1.02/main.go`
   ```go
   // Original package, x's type was changed
@@ -56,7 +56,7 @@ File set:
   func main() {
   	fmt.Printf("%v is of a type %T\n", x, x)
   }
-```
+  ```
 
 Expected results:
 ```
