@@ -75,7 +75,7 @@ endef
 $(eval $(call AddProduct, EXTRACT,      extract        ))
 $(eval $(call AddProduct, SYMBOLTABLES, symboltables/* ))
 
-.PHONY: all help goenv build test gen clean
+.PHONY: all help goenv build test gen extract clean
 
 all:
 	$(MAKE) build V=$(V) L=$(L)
@@ -128,6 +128,14 @@ test:
 
 gen:
 	./gentypes.sh
+
+extract:
+	$(RMLOG)
+	./$(EXTRACT) \
+            --package-path $(PROJECT_ROOT)/pkg/parser/testdata \
+            --symbol-table-dir symboltables \
+            --cgo-symbols-path cgo/cgo.yml \
+            $(GLOG_FLAGS) $(WLOG)
 
 clean:
 	$(RM) $(RM_FLAGS) $(TRASH)
