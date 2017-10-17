@@ -260,7 +260,7 @@ Creating a new slice using `make([]T, length, capacity)`:
 
 Grammar for slice type:
 ```
-SliceType = "[" ElementType "]" .
+SliceType = "[" "]" ElementType .
 ```
 
 ### Struct types
