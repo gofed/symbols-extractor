@@ -7,8 +7,8 @@ and how you can extend its functionality.
 
 ## Directory structure
 
-*Symbols Extractor* is situated in the following directories, each of them
-provided with of short description of their sense:
+*Symbols Extractor* is situated in the following directories; each directory is
+provided with a short description of its meaning:
 ```
 <your-golang-workspace>/
     src/
@@ -189,6 +189,7 @@ generators can be used in those places:
 * in `fileset` and `testers` fields in a test;
 * in a `content` field in a file definition;
 * in an `expected-result` field in a tester.
+
 A generator is invoked once it is find and when its parameters and environment
 is known.
 
