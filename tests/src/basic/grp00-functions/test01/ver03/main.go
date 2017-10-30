@@ -37,3 +37,9 @@ func main() {
 	f := e.fn
 	fmt.Printf("%T, %T\n", d, f)
 }
+/*
+  Sequences:
+
+    (main.TA.fn, main.main.a, main.resolve)
+    (main.TB.fn, main.main.b, main.cmp)
+*/

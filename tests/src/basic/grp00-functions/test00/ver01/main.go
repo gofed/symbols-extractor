@@ -21,3 +21,9 @@ func main() {
 	c := b
 	ftm.Printf("%T\n", c)
 }
+/*
+  Sequences:
+
+    (main.c, main.b, main.a, main.sum)
+    (fmt.Printf.args[1], main.main.c, main.main.b, main.main.a, main.sum)
+*/
