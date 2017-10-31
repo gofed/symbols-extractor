@@ -165,6 +165,7 @@ func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool)
 			for _, def := range defs {
 				// TPDP(jchaloup): we should store all variables or non.
 				// Given the error is set only if the variable already exists, it should not matter so much.
+				fmt.Printf("Storgin symbol: %#v\n", def)
 				if err := fp.SymbolTable.AddVariable(def); err != nil {
 					return nil, err
 				}

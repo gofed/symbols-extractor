@@ -171,17 +171,17 @@ func (t *Table) LookupVariable(key string) (*gotypes.SymbolDef, error) {
 	return nil, fmt.Errorf("Variable `%v` not found", key)
 }
 
-func (t *Table) LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error) {
+func (t *Table) LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, SymbolType, error) {
 	for _, symbolType := range SymbolTypes {
 		if symbolType == DataTypeSymbol {
 			continue
 		}
 		if sym, ok := t.symbols[symbolType][key]; ok {
-			return sym, nil
+			return sym, SymbolType(symbolType), nil
 		}
 	}
 
-	return nil, fmt.Errorf("VariableLike symbol `%v` not found", key)
+	return nil, SymbolType(""), fmt.Errorf("VariableLike symbol `%v` not found", key)
 }
 
 func (t *Table) LookupFunction(key string) (*gotypes.SymbolDef, error) {
