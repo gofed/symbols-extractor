@@ -61,7 +61,7 @@ func main() {
 }
 /*
   Sequences:
-    - stared sequences are used in code
+    - sequences with asterisk are used in code
 
     (main.Circle.GetCoords, main.Point.GetCoords)
     (main.Ellipsis.GetCoords, main.Point.GetCoords)
