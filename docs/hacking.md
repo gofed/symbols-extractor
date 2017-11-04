@@ -73,15 +73,15 @@ tests:
 ```
 Moreover, if there is also a file named `all.yml` in the same directory as
 `tests.yml`, a test generator reads `all.yml` instead. Inside `all.yml` is a
-list of `tests.yml`-like files that are processed by a test generator in the
-order of their appearance in the list. In `all.yml` file, if an item is an
-existing file or directory, it is processed (in the case of directory, every
-file in the directory is processed in the alphabetical order but one exception
---- if there is `all.yml` file, the whole scenario is recursively repeated). If
-such item does not exist and its name is suffixless, the suffix `.yml` is added
-and the item is tried to be reopened. If it fails again, error should be
-reported. A test generator utility provides a various flags that can customize
-so far described behavior.
+list of `tests.yml`-like files, stored under the `all` key, that are processed
+by a test generator in the order of their appearance in the list. In `all.yml`
+file, if an item is an existing file or directory, it is processed (in the case
+of directory, every file in the directory is processed in the alphabetical
+order but one exception: if there is `all.yml` file, the whole scenario is
+recursively repeated). If such item does not exist and its name is suffixless,
+the suffix `.yml` is added and the item is tried to be reopened. If it fails
+again, error should be reported. A test generator utility provides a various
+flags that can customize so far described behavior.
 
 `spec-version`'s value is a sequence of 2 or 3 numbers delimited by dots with
 the meaning as major level, minor level, and optionally patch level,
