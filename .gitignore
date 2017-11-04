@@ -1,1 +1,2 @@
 *.log
+vendor/gopkg.in/old.yaml.v2
