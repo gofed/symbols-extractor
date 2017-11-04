@@ -20,11 +20,7 @@ const (
 
 func CanonizePath(path string) (rpath string, err error) {
 	if filepath.IsAbs(path) {
-		p, e := filepath.EvalSymlinks(path)
-		if e != nil {
-			return path, nil
-		}
-		return p, nil
+		return path, nil
 	}
 	gopath, ok := os.LookupEnv(GOPATH_NAME)
 	if ok && gopath != "" {
@@ -32,24 +28,14 @@ func CanonizePath(path string) (rpath string, err error) {
 		if err != nil {
 			return gopath, err
 		}
-		p := filepath.Join(gopath, path)
-		pp, e := filepath.EvalSymlinks(p)
-		if e != nil {
-			return p, nil
-		}
-		return pp, nil
+		return filepath.Join(gopath, path), nil
 	}
 	// GOPATH is not set -> use cwd:
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	p := filepath.Join(cwd, path)
-	pp, e := filepath.EvalSymlinks(p)
-	if e != nil {
-		return p, nil
-	}
-	return pp, nil
+	return filepath.Join(cwd, path), nil
 }
 
 func NeedsDir(path string) error {
