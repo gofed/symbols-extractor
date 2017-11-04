@@ -67,7 +67,7 @@ var unit_buffer = NewBuffer(1, nil, nil)
 func main() {
 	b := NewBuffer(16, nil, nil)
 	ub := unit_buffer
-        var (
+	var (
 		r ReaderFunc
 		w WriterFunc
 	)
