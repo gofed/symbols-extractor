@@ -9,9 +9,13 @@
 //
 package updater
 
+import (
+	"fmt"
+)
+
 const (
 	ErrNArgs = "Insuficient number of arguments!"
-	ErrCmdNotFound = "%s is not a valid command name!"
+	ErrCmdNotFound = "%q is not a valid command name!"
 )
 
 type UpdaterError struct {
@@ -22,6 +26,6 @@ func (e *UpdaterError) Error() string {
 	return e.detail
 }
 
-func NewUpdaterError(detail string) error {
-	return &UpdaterError{detail}
+func NewUpdaterError(format string, args ...interface{}) error {
+	return &UpdaterError{fmt.Sprintf(format, args...)}
 }

@@ -19,13 +19,13 @@ import (
 func main() {
 	cmd, err := updater.GetCommandByArgv(os.Args)
 	if err != nil {
-		updater.PrintError(err)
+		updater.PrintError(os.Args[0], err)
 		updater.PrintUsage(os.Stderr)
 		os.Exit(2)
 	}
 	err = cmd.Run(os.Args[2:])
 	if err != nil {
-		updater.PrintError(err)
+		updater.PrintError(cmd.CommandName(), err)
 		os.Exit(2)
 	}
 }

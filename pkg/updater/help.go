@@ -18,7 +18,7 @@ type HelpCommand struct {
 	name        string
 	description string
 	flags       *flag.FlagSet
-	help        *bool
+	HelpFlag    *bool
 }
 
 func (cmd *HelpCommand) CommandName() string {
@@ -29,10 +29,23 @@ func (cmd *HelpCommand) CommandDescription() string {
 	return cmd.description
 }
 
+func (cmd *HelpCommand) Help() {
+	cmd.flags.Usage()
+}
+
 func (cmd *HelpCommand) Run(argv []string) error {
 	cmd.flags.Parse(argv)
-	if *cmd.help {
-		cmd.flags.Usage()
+	if *cmd.HelpFlag {
+		cmd.Help()
+		return nil
+	}
+	if cmd.flags.NArg() > 0 {
+		s := cmd.flags.Args()[0]
+		c := GetCommand(s)
+		if c == nil {
+			return NewUpdaterError(ErrCmdNotFound, s)
+		}
+		c.Help()
 		return nil
 	}
 	PrintBanner(os.Stdout)
@@ -46,10 +59,12 @@ func NewHelpCommand(name, description string) Command {
 		name: name,
 		description: description,
 		flags: flags,
-		help: flags.Bool("help", false, "print this screen"),
+		HelpFlag: flags.Bool("help", false, "print this screen"),
 	}
 }
 
 func init() {
-	AddCommand(NewHelpCommand("help", "print this screen"))
+	AddCommand(NewHelpCommand(
+		"help", "print a detailed info about selected command",
+	))
 }

@@ -97,9 +97,13 @@ $(shell $(RMLOG))
 # Dependencies:
 UPDATE_DEPS  := ./cmd/update/update.go \
                 ./pkg/updater/testgen/init.go \
+                ./pkg/updater/testgen/loader.go \
+                ./pkg/updater/testgen/verifier.go \
                 ./pkg/updater/command.go \
                 ./pkg/updater/errors.go \
                 ./pkg/updater/help.go \
+                ./pkg/updater/utils.go \
+                ./pkg/updater/version.go \
                 ./Makefile
 EXTRACT_DEPS := ./cmd/extract/extract.go \
                 ./pkg/parser/alloctable/global/global.go \

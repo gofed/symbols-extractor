@@ -18,6 +18,7 @@ import (
 type Command interface {
 	CommandName() string
 	CommandDescription() string
+	Help()
 	Run(argv []string) error
 }
 
@@ -38,34 +39,14 @@ func GetCommand(name string) Command {
 }
 
 func GetCommandByArgv(argv []string) (cmd Command, err error) {
-	name := GetCommandNameFromArgv(argv)
 	if len(argv) < 2 {
-		return nil, CommandError(name, ErrNArgs)
+		return nil, NewUpdaterError(ErrNArgs)
 	}
 	cmd = GetCommand(argv[1])
 	if cmd == nil {
-		return nil, CommandError(name, ErrCmdNotFound, argv[1])
+		return nil, NewUpdaterError(ErrCmdNotFound, argv[1])
 	}
 	return cmd, nil
-}
-
-func GetCommandNameFromArgv(argv []string) string {
-	if len(argv) < 1 {
-		return ""
-	}
-	return argv[0]
-}
-
-func CommandError(name, format string, args ...interface{}) error {
-	var msg string
-	sargs := fmt.Sprintf(format, args...)
-
-	if name == "" {
-		msg = fmt.Sprintf("%s\n", sargs)
-	} else {
-		msg = fmt.Sprintf("%s: %s\n", name, sargs)
-	}
-	return NewUpdaterError(msg)
 }
 
 const (
@@ -76,8 +57,13 @@ const (
 		" type `<command> --help`.\n"
 )
 
-func PrintError(err error) {
-	fmt.Fprintf(os.Stderr, "%s\n", err)
+func Warning(name, format string, args ...interface{}) {
+	s := fmt.Sprintf(format, args...)
+	fmt.Fprintf(os.Stderr, "[Warning] %s: %s\n", name, s)
+}
+
+func PrintError(name string, err error) {
+	fmt.Fprintf(os.Stderr, "[Error] %s: %s\n", name, err)
 }
 
 func PrintBanner(output io.Writer) {
