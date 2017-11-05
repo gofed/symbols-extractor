@@ -1771,11 +1771,17 @@ func (o *Channel) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+type NamePackagePair struct {
+	Name    string `json:"name"`
+	Package string `json:"package"`
+}
+
 type SymbolDef struct {
-	Pos     string   `json:"pos"`
-	Name    string   `json:"name"`
-	Package string   `json:"package"`
-	Def     DataType `json:"def"`
+	Pos        string            `json:"pos"`
+	Name       string            `json:"name"`
+	Package    string            `json:"package"`
+	FncPropSeq []NamePackagePair `json:"fncpropseq"`
+	Def        DataType          `json:"def"`
 }
 
 func (o *SymbolDef) UnmarshalJSON(b []byte) error {

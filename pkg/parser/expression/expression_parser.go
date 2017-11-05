@@ -268,14 +268,33 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		postponedErr = fmt.Errorf("parseIdentifier: Symbol %q not yet processed", ident.Name)
 	} else {
 		// If it is a variable, return its definition
-		if def, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
+		if def, st, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
 			byteSlice, _ := json.Marshal(def)
 			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
 			// The data type of the variable is not accounted as it is not implicitely used
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			return types.ExprAttributeFromDataType(def.Def), nil
+			attr := types.ExprAttributeFromDataType(def.Def)
+			if st == symboltable.FunctionSymbol {
+				attr.FunctionPropagationSequence = []gotypes.NamePackagePair{
+					gotypes.NamePackagePair{
+						Name:    def.Name,
+						Package: def.Package,
+					},
+				}
+				fmt.Printf("attr: %#v\n", attr)
+			} else if st == symboltable.VariableSymbol {
+				// check if the variable has non-empty function propagration sequence
+				attr.FunctionPropagationSequence = append(def.FncPropSeq,
+					gotypes.NamePackagePair{
+						Name:    def.Name,
+						Package: def.Package,
+					},
+				)
+				fmt.Printf("attr2: %#v\n", attr)
+			}
+			return attr, nil
 		}
 	}
 

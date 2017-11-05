@@ -225,10 +225,16 @@ def parseDefinition(dataType, definition):
 def printSymbolDefinition(dataTypes):
         template_str = """
 
+type NamePackagePair struct {
+    Name    string   `json:"name"`
+    Package string   `json:"package"`
+}
+
 type SymbolDef struct {
        Pos     string   `json:"pos"`
        Name    string   `json:"name"`
        Package string   `json:"package"`
+       FncPropSeq []NamePackagePair `json:"fncpropseq"`
        Def     DataType `json:"def"`
 }
 

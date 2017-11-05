@@ -200,9 +200,10 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 				}
 				if typeDef == nil {
 					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
-						Name:    name.Name,
-						Package: sp.PackageName,
-						Def:     valueExprAttr.DataTypeList[i],
+						Name:       name.Name,
+						Package:    sp.PackageName,
+						Def:        valueExprAttr.DataTypeList[i],
+						FncPropSeq: valueExprAttr.FunctionPropagationSequence,
 					})
 				} else {
 					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{

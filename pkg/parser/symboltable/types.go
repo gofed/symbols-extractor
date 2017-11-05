@@ -6,7 +6,7 @@ import (
 
 type SymbolLookable interface {
 	LookupVariable(key string) (*gotypes.SymbolDef, error)
-	LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error)
+	LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, SymbolType, error)
 	LookupFunction(key string) (*gotypes.SymbolDef, error)
 	LookupDataType(key string) (*gotypes.SymbolDef, error)
 	LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error)
