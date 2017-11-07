@@ -1,2 +1,3 @@
 *.log
-vendor/gopkg.in/old.yaml.v2
+/symboltables/
+/vendor/gopkg.in/old.yaml.v2/

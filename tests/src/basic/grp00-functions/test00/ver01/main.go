@@ -19,7 +19,7 @@ func main() {
 	var a = sum
 	b := a
 	c := b
-	ftm.Printf("%T\n", c)
+	fmt.Printf("%T\n", c)
 }
 /*
   Sequences:
