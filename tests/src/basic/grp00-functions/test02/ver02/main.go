@@ -1,7 +1,10 @@
-// Version 02:
+// Version 02: Original version.
 package main
 
-import "fmt"
+import (
+	"os"
+	"fmt"
+)
 
 type Buffer struct {
 	data   []byte

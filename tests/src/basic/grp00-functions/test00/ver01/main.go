@@ -1,4 +1,4 @@
-// Version 01: Original version
+// Version 01: Original version.
 package main
 
 import "fmt"

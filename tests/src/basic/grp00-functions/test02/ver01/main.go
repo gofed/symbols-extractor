@@ -1,30 +1,26 @@
 // Version 01: Original version.
 package main
 
-import (
-	"fmt"
-)
-
 type Shape interface {
 	GetCoords() (float64, float64)
 	Draw()
 }
 
-type struct Canvas {
+type Canvas struct {
 	w, h uint
 	data []byte
 }
 
-type struct Point {
+type Point struct {
 	x, y float64
 }
 
-type struct Circle {
+type Circle struct {
 	*Point
 	r float64
 }
 
-type struct Ellipsis {
+type Ellipsis struct {
 	*Point
 	e, f float64
 }
@@ -56,7 +52,7 @@ func (e *Ellipsis) Draw() {
 var canvas = &Canvas{128, 128, make([]byte, 128*128)}
 
 func main() {
-	var e = &Ellipsis{16, 32, 10, 5}
+	var e = &Ellipsis{&Point{16, 32}, 10, 5}
 	e.Draw()
 }
 /*

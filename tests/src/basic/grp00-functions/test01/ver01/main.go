@@ -25,7 +25,8 @@ func resolve(a string, b float32) rune {
 }
 
 func cmp(a float32, b string) bool {
-	return a == strconv.ParseFloat(b, 32)
+	x, _ := strconv.ParseFloat(b, 32)
+	return a == x
 }
 
 func main() {
