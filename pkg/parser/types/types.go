@@ -19,7 +19,8 @@ type TypeParser interface {
 }
 
 type ExprAttribute struct {
-	DataTypeList []gotypes.DataType
+	DataTypeList                []gotypes.DataType
+	FunctionPropagationSequence []gotypes.NamePackagePair
 	// PropagationSequence []string
 }
 

@@ -1,0 +1,10 @@
+spec-version: 1.0
+info:
+  name: sample
+  author:
+  - Jiří Kučera, <jkucera AT redhat DOT com>
+  version: 0.0
+  comment: Sample test.
+tests:
+- generate: |
+    make_tests(context, 1, 2, 3)

@@ -198,7 +198,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 	// - The same holds for "&(&struct {field1 string; field2 int}{field1: "", field2: 3})"
 
 	// Based on the Composite Literal grammar, if the CL type is omitted,
-	// it must be reconstructuble from the context. Thus, if the is ommited,
+	// it must be reconstructuble from the context. Thus, if the CL is ommited,
 	// i.e. the CL type expr is set to nil, the type is constructed from the parent CL type
 	// ast.
 	//
@@ -268,14 +268,33 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		postponedErr = fmt.Errorf("parseIdentifier: Symbol %q not yet processed", ident.Name)
 	} else {
 		// If it is a variable, return its definition
-		if def, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
+		if def, st, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
 			byteSlice, _ := json.Marshal(def)
 			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
 			// The data type of the variable is not accounted as it is not implicitely used
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			return types.ExprAttributeFromDataType(def.Def), nil
+			attr := types.ExprAttributeFromDataType(def.Def)
+			if st == symboltable.FunctionSymbol {
+				attr.FunctionPropagationSequence = []gotypes.NamePackagePair{
+					gotypes.NamePackagePair{
+						Name:    def.Name,
+						Package: def.Package,
+					},
+				}
+				fmt.Printf("attr: %#v\n", attr)
+			} else if st == symboltable.VariableSymbol {
+				// check if the variable has non-empty function propagration sequence
+				attr.FunctionPropagationSequence = append(def.FncPropSeq,
+					gotypes.NamePackagePair{
+						Name:    def.Name,
+						Package: def.Package,
+					},
+				)
+				fmt.Printf("attr2: %#v\n", attr)
+			}
+			return attr, nil
 		}
 	}
 
