@@ -84,7 +84,7 @@ TRASH += $$(GOPATH)/bin/$$($(1)).exe
 endef
 define _AddProductD =
 $(1) := $(2)
-TRASH += $$($(1))/*
+TRASH += $$($(1))/*.json $$($(1))/.*.json
 endef
 
 $(eval $(call AddProductX, UPDATE,       update       ))
@@ -191,7 +191,7 @@ extract: $(GOPATH)/bin/$(EXTRACT)
 endif
 
 clean:
-	$(RM) $(RM_FLAGS) $(TRASH)
+	$(RM) $(RM_FLAGS) $(TRASH) *.log
 
 $(GOPATH)/bin/$(UPDATE): $(UPDATE_DEPS)
 	$(GO_INSTALL) $(GO_INSTALL_FLAGS) $(PROJECT_ROOT)/cmd/$(UPDATE) $(WLOG)
