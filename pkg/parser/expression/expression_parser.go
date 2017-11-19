@@ -108,7 +108,7 @@ func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType gotypes.DataType)
 }
 
 // TODO(jchaloup): produces ExprAttribute struct with extracted attributes
-func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *gotypes.SymbolDef) error {
+func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) error {
 	fieldCounter := 0
 	fieldLen := len(structDef.Fields)
 	for _, litElement := range lit.Elts {
@@ -148,7 +148,7 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 }
 
 func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprAttribute, error) {
-	var symbolDef *gotypes.SymbolDef
+	var symbolDef *symboltable.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
 		_, def, err := ep.retrieveQidDataType(typeDefType.Prefix, &ast.Ident{Name: typeDefType.Item})
@@ -660,7 +660,7 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
 		// local definition
-		var def *gotypes.SymbolDef
+		var def *symboltable.SymbolDef
 		var defType symboltable.SymbolType
 		var err error
 
@@ -928,7 +928,7 @@ func (ep *Parser) parseStructType(expr *ast.StructType) (*types.ExprAttribute, e
 	return types.ExprAttributeFromDataType(def), err
 }
 
-func (ep *Parser) retrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ident) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
+func (ep *Parser) retrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ident) (symboltable.SymbolLookable, *symboltable.SymbolDef, error) {
 	// qid.structtype expected
 	qid, ok := qidprefix.(*gotypes.Packagequalifier)
 	if !ok {
@@ -950,7 +950,7 @@ func (ep *Parser) retrieveQidDataType(qidprefix gotypes.DataType, item *ast.Iden
 
 type dataTypeFieldAccessor struct {
 	symbolTable symboltable.SymbolLookable
-	dataTypeDef *gotypes.SymbolDef
+	dataTypeDef *symboltable.SymbolDef
 	field       *ast.Ident
 	methodsOnly bool
 	fieldsOnly  bool
@@ -1059,7 +1059,7 @@ func (ep *Parser) retrieveDataTypeField(accessor *dataTypeFieldAccessor) (*types
 
 	type embeddedDataTypesItem struct {
 		symbolTable symboltable.SymbolLookable
-		symbolDef   *gotypes.SymbolDef
+		symbolDef   *symboltable.SymbolDef
 	}
 	var embeddedDataTypes []embeddedDataTypesItem
 
@@ -1179,7 +1179,7 @@ ITEMS_LOOP:
 	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", accessor.field.String(), accessor.dataTypeDef)
 }
 
-func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLookable, interfaceDefsymbol *gotypes.SymbolDef, method string) (*types.ExprAttribute, error) {
+func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLookable, interfaceDefsymbol *symboltable.SymbolDef, method string) (*types.ExprAttribute, error) {
 	glog.Infof("Retrieving Interface method %q from %#v\n", method, interfaceDefsymbol)
 	if interfaceDefsymbol.Def.GetType() != gotypes.InterfaceType {
 		return nil, fmt.Errorf("Trying to retrieve a %v method from a non-interface data type: %#v", method, interfaceDefsymbol.Def)
@@ -1187,7 +1187,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 
 	type embeddedInterfacesItem struct {
 		symbolTable symboltable.SymbolLookable
-		symbolDef   *gotypes.SymbolDef
+		symbolDef   *symboltable.SymbolDef
 	}
 	var embeddedInterfaces []embeddedInterfacesItem
 
@@ -1292,7 +1292,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 	}
 
 	var typeSymbolTable symboltable.SymbolLookable
-	var typeSymbolDef *gotypes.SymbolDef
+	var typeSymbolDef *symboltable.SymbolDef
 
 	switch dtExpr := dataTypeIdent.(type) {
 	case *ast.Ident:
@@ -1442,7 +1442,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			// anonymous struct
 			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: ep.SymbolTable,
-				dataTypeDef: &gotypes.SymbolDef{Def: def},
+				dataTypeDef: &symboltable.SymbolDef{Def: def},
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
 		default:
@@ -1487,7 +1487,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 	case *gotypes.Struct:
 		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: ep.SymbolTable,
-			dataTypeDef: &gotypes.SymbolDef{
+			dataTypeDef: &symboltable.SymbolDef{
 				Name:    "",
 				Package: "",
 				Def:     xType,
@@ -1496,7 +1496,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		})
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous
-		return ep.retrieveInterfaceMethod(ep.SymbolTable, &gotypes.SymbolDef{
+		return ep.retrieveInterfaceMethod(ep.SymbolTable, &symboltable.SymbolDef{
 			Name:    "",
 			Package: "",
 			Def:     xType,
@@ -1574,7 +1574,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	// c[1]
 	if indexExpr.GetType() == gotypes.IdentifierType || indexExpr.GetType() == gotypes.SelectorType {
 		for {
-			var symbolDef *gotypes.SymbolDef
+			var symbolDef *symboltable.SymbolDef
 			if indexExpr.GetType() == gotypes.IdentifierType {
 				xType := indexExpr.(*gotypes.Identifier)
 

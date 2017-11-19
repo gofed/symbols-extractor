@@ -136,7 +136,7 @@ func (c *CGOTable) LoadFromFile(file string) error {
 	}
 
 	for _, typeDef := range cgo.Types {
-		if err := c.AddDataType(&gotypes.SymbolDef{
+		if err := c.AddDataType(&SymbolDef{
 			Name:    typeDef.Name,
 			Package: "C",
 			Def:     typeDef.Type.DataType,
@@ -146,7 +146,7 @@ func (c *CGOTable) LoadFromFile(file string) error {
 	}
 
 	for _, varDef := range cgo.Variables {
-		if err := c.AddVariable(&gotypes.SymbolDef{
+		if err := c.AddVariable(&SymbolDef{
 			Name:    varDef.Name,
 			Package: "C",
 			Def:     varDef.Type.DataType,
@@ -169,7 +169,7 @@ func (c *CGOTable) LoadFromFile(file string) error {
 			Params:  params,
 			Results: results,
 		}
-		if err := c.AddFunction(&gotypes.SymbolDef{
+		if err := c.AddFunction(&SymbolDef{
 			Name:    fncDef.Name,
 			Package: "C",
 			Def:     f,

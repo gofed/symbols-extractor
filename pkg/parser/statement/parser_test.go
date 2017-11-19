@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
@@ -43,7 +44,7 @@ func prepareParser(pkgName string) *types.Config {
 //	funcSrc := "package funcdecl\ntype Sstr string\n"
 //	testFDecl := []struct {
 //		fDecl     string
-//		expectRes *gotypes.SymbolDef
+//		expectRes *symboltable.SymbolDef
 //	}{
 //		{
 //			fDecl:     "func (s *Sstr, t *Sstr) Foo() Sstr { return Sstr{} }",
@@ -53,10 +54,10 @@ func prepareParser(pkgName string) *types.Config {
 //		  ff := fdecl.Recv.List[0]
 //}
 
-func createSymDefFunc(gopkg, recv, name string, method, pntr bool) *gotypes.SymbolDef {
+func createSymDefFunc(gopkg, recv, name string, method, pntr bool) *symboltable.SymbolDef {
 	// help function which just create simple method/function SymbolDef
 	// - the test below is much more readable now
-	symdef := &gotypes.SymbolDef{
+	symdef := &symboltable.SymbolDef{
 		Name:    name,
 		Package: gopkg,
 		Def:     &gotypes.Function{},
@@ -85,33 +86,33 @@ func TestParseFuncDecl(t *testing.T) {
 	funcSrc := "package funcdecl\ntype Sstr string\ntype Foo string\n"
 	testFDecl := []struct {
 		fDecl     []string
-		expectRes []*gotypes.SymbolDef
+		expectRes []*symboltable.SymbolDef
 	}{
 		{
 			[]string{"func (s *Sstr, t *Sstr) Foo() Sstr { return Sstr{} }"},
-			[]*gotypes.SymbolDef{nil},
+			[]*symboltable.SymbolDef{nil},
 		},
 		{
 			[]string{"func () Foo() Sstr { return Sstr{} }"},
-			[]*gotypes.SymbolDef{nil},
+			[]*symboltable.SymbolDef{nil},
 		},
 		{
 			[]string{"func (s *Sstra) Foo() Sstr { return Sstr{} }"},
-			[]*gotypes.SymbolDef{nil},
+			[]*symboltable.SymbolDef{nil},
 		},
 		{
 			[]string{"func (s *int) Foo() Sstr { return Sstr{} }"},
-			[]*gotypes.SymbolDef{nil},
+			[]*symboltable.SymbolDef{nil},
 		},
 		{
 			[]string{"func (s *Sstr) Foo() Sstr { return Sstr{} }"},
-			[]*gotypes.SymbolDef{
+			[]*symboltable.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 			},
 		},
 		{
 			[]string{"func (s *Foo) Foo() Sstr { return Sstr{} }"},
-			[]*gotypes.SymbolDef{
+			[]*symboltable.SymbolDef{
 				createSymDefFunc(gopkg, "Foo", "Foo", true, true),
 			},
 		},
@@ -120,7 +121,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s *Sstr) Foo() Sstr { return Sstr{} }",
 				"func (s *Sstr) Foo2() Sstr { return Sstr{} }",
 			},
-			[]*gotypes.SymbolDef{
+			[]*symboltable.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 				createSymDefFunc(gopkg, "Sstr", "Foo2", true, true),
 			},
@@ -130,7 +131,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s Sstr) Foo() Sstr { return Sstr{} }",
 				"func (s Sstr) Foo2() Sstr { return Sstr{} }",
 			},
-			[]*gotypes.SymbolDef{
+			[]*symboltable.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, false),
 				createSymDefFunc(gopkg, "Sstr", "Foo2", true, false),
 			},
@@ -140,7 +141,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s *Sstr) Foo() Sstr { return Sstr{} }",
 				"func (s *Foo) Foo() Sstr { return Sstr{} }",
 			},
-			[]*gotypes.SymbolDef{
+			[]*symboltable.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 				createSymDefFunc(gopkg, "Foo", "Foo", true, true),
 			},
@@ -150,7 +151,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s *Sstr) Foo() Sstr { return Sstr{} }",
 				"func Foo() Sstr { return Sstr{} }",
 			},
-			[]*gotypes.SymbolDef{
+			[]*symboltable.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 				createSymDefFunc(gopkg, "", "Foo", false, false),
 			},
@@ -170,7 +171,7 @@ func TestParseFuncDecl(t *testing.T) {
 		//				"func Foo() Sstr { return Sstr{} }",
 		//				"func Foo() Sstr { return Sstr{} }",
 		//			},
-		//			[]*gotypes.SymbolDef{
+		//			[]*symboltable.SymbolDef{
 		//				createSymDefFunc(gopkg, "", "Foo", false, false),
 		//				nil,
 		//			},
