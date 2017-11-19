@@ -160,76 +160,110 @@ def getConstraints(items):
         constraints.append( c )
     return constraints
 
-def parseDefinition(dataType, definition):
-    #print dataType
-    #print definition
+class DataTypeGenerator(object):
+    def __init__(self, definitions, dataTypes):
+        self.definitions = definitions
+        self.output = ""
+        self.dataTypes = dataTypes
 
-    obj = ObjectDefinition(dataType)
+    def parse(self):
+        self.output = ""
 
-    if definition["type"] == "object":
-        for property in definition["properties"]:
-            itemType = definition["properties"][property]["type"]
-            # atomic type
-            if itemType == "string":
-                # skip all 'type' fields
-                if property == "type":
-                    continue
-                if definition["properties"][property]["description"] == "!!omit":
-                    obj.addAtomicField(property.capitalize(), itemType, omit=True)
-                else:
-                    obj.addAtomicField(property.capitalize(), itemType, omit=False)
-            elif itemType == "boolean":
-                # skip all 'type' fields
-                if property == "type":
-                    continue
-                if definition["properties"][property]["description"] == "!!omit":
-                    obj.addAtomicField(property.capitalize(), "bool", omit=True)
-                else:
-                    obj.addAtomicField(property.capitalize(), "bool", omit=False)
-            # list of permited types
-            elif itemType == "object":
-                ok = False
-                for keyOf in ["oneOf", "anyOf"]:
-                    if keyOf in definition["properties"][property]:
-                        constraints = getConstraints(definition["properties"][property][keyOf])
-                        obj.addNonAtomicField(property.capitalize(), "DataType", constraints)
-                        ok = True
-                        break
-                if not ok:
-                    logging.error("No anyOf nor OneOf iproperty.capitalize()n: %s" % items)
-                    exit(1)
-            elif itemType == "array":
-                items = definition["properties"][property]["items"]
-                if items["type"] == "object" and "properties" not in items:
+        for definition in self.definitions:
+            if definition not in self.dataTypes:
+                continue
+
+            self.parseDefinition(definition.capitalize(), self.definitions[definition])
+
+        return self
+
+    def parseDefinition(self, dataType, definition):
+        #print dataType
+        #print definition
+
+        obj = ObjectDefinition(dataType)
+
+        if definition["type"] == "object":
+            for property in definition["properties"]:
+                itemType = definition["properties"][property]["type"]
+                # atomic type
+                if itemType == "string":
+                    # skip all 'type' fields
+                    if property == "type":
+                        continue
+                    if definition["properties"][property]["description"] == "!!omit":
+                        obj.addAtomicField(property.capitalize(), itemType, omit=True)
+                    else:
+                        obj.addAtomicField(property.capitalize(), itemType, omit=False)
+                elif itemType == "boolean":
+                    # skip all 'type' fields
+                    if property == "type":
+                        continue
+                    if definition["properties"][property]["description"] == "!!omit":
+                        obj.addAtomicField(property.capitalize(), "bool", omit=True)
+                    else:
+                        obj.addAtomicField(property.capitalize(), "bool", omit=False)
+                # list of permited types
+                elif itemType == "object":
                     ok = False
                     for keyOf in ["oneOf", "anyOf"]:
-                        if keyOf in items:
-                            constraints = getConstraints(items[keyOf])
-                            obj.addArrayField(property.capitalize(), "DataType", constraints )
+                        if keyOf in definition["properties"][property]:
+                            constraints = getConstraints(definition["properties"][property][keyOf])
+                            obj.addNonAtomicField(property.capitalize(), "DataType", constraints)
                             ok = True
                             break
                     if not ok:
-                        logging.error("No anyOf nor OneOf in: %s" % items)
+                        logging.error("No anyOf nor OneOf iproperty.capitalize()n: %s" % items)
                         exit(1)
+                elif itemType == "array":
+                    items = definition["properties"][property]["items"]
+                    if items["type"] == "object" and "properties" not in items:
+                        ok = False
+                        for keyOf in ["oneOf", "anyOf"]:
+                            if keyOf in items:
+                                constraints = getConstraints(items[keyOf])
+                                obj.addArrayField(property.capitalize(), "DataType", constraints )
+                                ok = True
+                                break
+                        if not ok:
+                            logging.error("No anyOf nor OneOf in: %s" % items)
+                            exit(1)
+                    else:
+                        # parse items first
+                        itemDef = self.parseDefinition("%s%sItem" % (dataType.capitalize(), property.capitalize()), definition["properties"][property]["items"])
+                        obj.addArrayField(property.capitalize(), "%s%sItem" % (dataType.capitalize(), property.capitalize()), ["%s%sItem" % (dataType.capitalize(), property.capitalize())], useValue=True)
                 else:
-                    # parse items first
-                    itemDef = parseDefinition("%s%sItem" % (dataType.capitalize(), property.capitalize()), definition["properties"][property]["items"])
-                    obj.addArrayField(property.capitalize(), "%s%sItem" % (dataType.capitalize(), property.capitalize()), ["%s%sItem" % (dataType.capitalize(), property.capitalize())], useValue=True)
-            else:
-                logging.error("Unrecognized type: %s" % itemType)
-                exit(1)
+                    logging.error("Unrecognized type: %s" % itemType)
+                    exit(1)
 
-    print obj
-    return obj
+        self.output += str(obj)
+        return obj
+
+    def __str__(self):
+            return """package types
+
+        import "encoding/json"
+
+        // DataType is
+        type DataType interface {
+        	GetType() string
+        }""" + self.output
 
 def printSymbolDefinition(dataTypes):
         template_str = """
+
+package symboltable
+
+import (
+    "encoding/json"
+    gotypes "github.com/gofed/symbols-extractor/pkg/types"
+)
 
 type SymbolDef struct {
        Pos     string   `json:"pos"`
        Name    string   `json:"name"`
        Package string   `json:"package"`
-       Def     DataType `json:"def"`
+       Def     gotypes.DataType `json:"def"`
 }
 
 func (o *SymbolDef) UnmarshalJSON(b []byte) error {
@@ -258,8 +292,8 @@ func (o *SymbolDef) UnmarshalJSON(b []byte) error {
 
     switch dataType := m["type"]; dataType {
     {% for recursiveType in DataTypes %}
-    case {{ recursiveType|capitalize }}Type:
-        r := &{{ recursiveType|capitalize }}{}
+    case gotypes.{{ recursiveType|capitalize }}Type:
+        r := &gotypes.{{ recursiveType|capitalize }}{}
         if err := json.Unmarshal(*objMap["def"], &r); err != nil {
             return err
         }
@@ -281,23 +315,10 @@ if __name__ == "__main__":
     with open("golang-project-exported-api.json", "r") as f:
         data = json.load(f)
 
-    print """package types
-
-import "encoding/json"
-
-// DataType is
-type DataType interface {
-	GetType() string
-}"""
-
     dataTypes = ["identifier", "builtin", "packagequalifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
 
-    for definition in data["definitions"]:
-        if definition not in dataTypes:
-            continue
+    with open("pkg/types/types.go", "w") as file:
+        file.write(str(DataTypeGenerator(data["definitions"], dataTypes).parse()))
 
-        parseDefinition(definition.capitalize(), data["definitions"][definition])
-        #printDefinition(definition, data["definitions"][definition])
-
-    #
-    print printSymbolDefinition(dataTypes)
+    with open("pkg/parser/symboltable/symbol.go", "w") as file:
+        file.write(printSymbolDefinition(dataTypes))

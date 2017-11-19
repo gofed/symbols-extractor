@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
@@ -99,8 +100,8 @@ func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
 		return nil
 	}
 
-	err := fp.SymbolTable.AddImport(&gotypes.SymbolDef{Name: q.Name, Def: q})
-	glog.Infof("Packagequalifier added: %#v\n", &gotypes.SymbolDef{Name: q.Name, Def: q})
+	err := fp.SymbolTable.AddImport(&symboltable.SymbolDef{Name: q.Name, Def: q})
+	glog.Infof("Packagequalifier added: %#v\n", &symboltable.SymbolDef{Name: q.Name, Def: q})
 	return err
 }
 
@@ -119,7 +120,7 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 	for _, spec := range specs {
 		// Store a symbol just with a name and origin.
 		// Setting the symbol's definition to nil means the symbol is being parsed (somewhere in the chain)
-		if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
+		if err := fp.SymbolTable.AddDataType(&symboltable.SymbolDef{
 			Name:    spec.Name.Name,
 			Package: fp.PackageName,
 			Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
@@ -138,7 +139,7 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 			continue
 		}
 
-		if err := fp.SymbolTable.AddDataType(&gotypes.SymbolDef{
+		if err := fp.SymbolTable.AddDataType(&symboltable.SymbolDef{
 			Name:    spec.Name.Name,
 			Package: fp.PackageName,
 			Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
@@ -226,7 +227,7 @@ func (fp *FileParser) parseFuncDeclaration(spec *ast.FuncDecl) (bool, error) {
 		}
 	}
 
-	if err := fp.SymbolTable.AddFunction(&gotypes.SymbolDef{
+	if err := fp.SymbolTable.AddFunction(&symboltable.SymbolDef{
 		Name:    spec.Name.Name,
 		Package: fp.PackageName,
 		Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),

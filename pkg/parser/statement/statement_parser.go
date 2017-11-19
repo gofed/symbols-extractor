@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
@@ -163,7 +164,7 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 	return nil
 }
 
-func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, error) {
+func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef, error) {
 	var names []string
 	for _, name := range spec.Names {
 		names = append(names, name.Name)
@@ -182,7 +183,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		typeDef = def
 	}
 
-	var symbolsDef = make([]*gotypes.SymbolDef, 0)
+	var symbolsDef = make([]*symboltable.SymbolDef, 0)
 
 	if vLen == 1 {
 		valueExprAttr, err := sp.ExprParser.Parse(spec.Values[0])
@@ -199,13 +200,13 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 					continue
 				}
 				if typeDef == nil {
-					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
 						Def:     valueExprAttr.DataTypeList[i],
 					})
 				} else {
-					symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
 						Def:     typeDef,
@@ -241,7 +242,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		}
 		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExprAttr.DataTypeList, typeDef)
 		if typeDef != nil {
-			symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     typeDef,
@@ -262,7 +263,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 				}
 				sp.lastConstType = builtin
 			}
-			symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     valueExprAttr.DataTypeList[0],
@@ -281,7 +282,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, err
 		if spec.Names[i].Name == "_" {
 			continue
 		}
-		symbolsDef = append(symbolsDef, &gotypes.SymbolDef{
+		symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 			Name:    spec.Names[i].Name,
 			Package: sp.PackageName,
 			Def:     typeDef,
@@ -312,7 +313,7 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 			case *ast.TypeSpec:
 				glog.Infof("Processing type spec declaration %#v\n", genDeclSpec)
 
-				if err := sp.SymbolTable.AddDataType(&gotypes.SymbolDef{
+				if err := sp.SymbolTable.AddDataType(&symboltable.SymbolDef{
 					Name: genDeclSpec.Name.Name,
 					// local variable has package origin as well (though the symbol gets dropped later on)
 					Package: sp.PackageName,
@@ -329,7 +330,7 @@ func (sp *Parser) parseDeclStmt(statement *ast.DeclStmt) error {
 					return err
 				}
 
-				if err := sp.SymbolTable.AddDataType(&gotypes.SymbolDef{
+				if err := sp.SymbolTable.AddDataType(&symboltable.SymbolDef{
 					Name:    genDeclSpec.Name.Name,
 					Package: sp.PackageName,
 					Def:     typeDef,
@@ -569,7 +570,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			// TODO(jchaloup): If the statement.Tok is not token.DEFINE, don't add the variable to the symbol table.
 			//                 Instead, check the varible is of the same type (or compatible) as the already stored one.
 			if statement.Tok == token.DEFINE {
-				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name:    lhsExpr.Name,
 					Package: sp.PackageName,
 					Def:     rhsExpr,
@@ -731,7 +732,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 					}
 				}
 				if rhsIdentifier != nil {
-					sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 						Name:    rhsIdentifier.Def,
 						Package: "",
 						Def:     &gotypes.Interface{},
@@ -743,7 +744,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 					return err
 				}
 				if rhsIdentifier != nil {
-					sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+					sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 						Name:    rhsIdentifier.Def,
 						Package: "",
 						Def:     rhsType,
@@ -841,7 +842,7 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 							if !ok {
 								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
 							}
-							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+							sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 								Name:    ident.Name,
 								Package: sp.PackageName,
 								Def:     rhsChannel.Value,
@@ -864,13 +865,13 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
 							}
 
-							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+							sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 								Name:    ident1.Name,
 								Package: sp.PackageName,
 								Def:     rhsChannel.Value,
 							})
 
-							sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+							sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 								Name:    ident2.Name,
 								Package: sp.PackageName,
 								Def:     &gotypes.Builtin{Def: "bool"},
@@ -1002,7 +1003,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			glog.Infof("Processing range.Key variable %v", keyIdent.Name)
 
 			if keyIdent.Name != "_" {
-				if err := sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+				if err := sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name:    keyIdent.Name,
 					Package: sp.PackageName,
 					Def:     key,
@@ -1019,7 +1020,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			}
 			glog.Infof("Processing range.Value variable %v", valueIdent.Name)
 			if valueIdent.Name != "_" && value != nil {
-				if err := sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+				if err := sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name:    valueIdent.Name,
 					Package: sp.PackageName,
 					Def:     value,
@@ -1167,7 +1168,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 		}
 		// the receiver can be typed only
 		if funcDecl.Recv.List[0].Names != nil {
-			sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+			sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 				Name: (*funcDecl.Recv).List[0].Names[0].Name,
 				Def:  def,
 			})
@@ -1183,7 +1184,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 
 			// field.Names is always non-empty if param's datatype is defined
 			for _, name := range field.Names {
-				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
 				})
@@ -1199,7 +1200,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 			}
 
 			for _, name := range field.Names {
-				sp.SymbolTable.AddVariable(&gotypes.SymbolDef{
+				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
 				})

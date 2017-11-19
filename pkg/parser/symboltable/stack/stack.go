@@ -5,15 +5,14 @@ import (
 	"fmt"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
-	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
 
 // Stack is a multi-level symbol table for parsing blocks of code
 type Stack struct {
-	Tables  []*symboltable.Table          `json:"tables"`
-	Size    int                           `json:"size"`
-	Imports map[string]*gotypes.SymbolDef `json:"imports"`
+	Tables  []*symboltable.Table              `json:"tables"`
+	Size    int                               `json:"size"`
+	Imports map[string]*symboltable.SymbolDef `json:"imports"`
 }
 
 // NewStack creates an empty stack with no symbol table
@@ -23,7 +22,7 @@ func New() *Stack {
 			symboltable.NewTable(),
 		},
 		Size:    0,
-		Imports: make(map[string]*gotypes.SymbolDef, 0),
+		Imports: make(map[string]*symboltable.SymbolDef, 0),
 	}
 }
 
@@ -46,12 +45,12 @@ func (s *Stack) Pop() {
 	glog.Infof("Popping symbol table stack %v\n", s.Size)
 }
 
-func (s *Stack) AddImport(sym *gotypes.SymbolDef) error {
+func (s *Stack) AddImport(sym *symboltable.SymbolDef) error {
 	s.Imports[sym.Name] = sym
 	return nil
 }
 
-func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
+func (s *Stack) AddVariable(sym *symboltable.SymbolDef) error {
 	if s.Size > 0 {
 		glog.Infof("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
 		return s.Tables[s.Size-1].AddVariable(sym)
@@ -59,7 +58,7 @@ func (s *Stack) AddVariable(sym *gotypes.SymbolDef) error {
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
-func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
+func (s *Stack) AddDataType(sym *symboltable.SymbolDef) error {
 	if s.Size > 0 {
 		glog.Infof("====Adding %#v datatype at level %v\n", sym, s.Size-1)
 		return s.Tables[s.Size-1].AddDataType(sym)
@@ -67,7 +66,7 @@ func (s *Stack) AddDataType(sym *gotypes.SymbolDef) error {
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
-func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
+func (s *Stack) AddFunction(sym *symboltable.SymbolDef) error {
 	glog.Infof("====Adding function %q as: %#v", sym.Name, sym.Def)
 	if s.Size > 0 {
 		return s.Tables[s.Size-1].AddFunction(sym)
@@ -75,7 +74,7 @@ func (s *Stack) AddFunction(sym *gotypes.SymbolDef) error {
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
-func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
+func (s *Stack) LookupVariable(name string) (*symboltable.SymbolDef, error) {
 	glog.Infof("====Looking up a variable %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
@@ -91,7 +90,7 @@ func (s *Stack) LookupVariable(name string) (*gotypes.SymbolDef, error) {
 	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
-func (s *Stack) LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error) {
+func (s *Stack) LookupMethod(datatype, methodName string) (*symboltable.SymbolDef, error) {
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupMethod(datatype, methodName)
@@ -102,7 +101,7 @@ func (s *Stack) LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, e
 	return nil, fmt.Errorf("Method %q of data type %q not found", methodName, datatype)
 }
 
-func (s *Stack) LookupFunction(name string) (*gotypes.SymbolDef, error) {
+func (s *Stack) LookupFunction(name string) (*symboltable.SymbolDef, error) {
 	glog.Infof("====Looking up a function %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
@@ -114,7 +113,7 @@ func (s *Stack) LookupFunction(name string) (*gotypes.SymbolDef, error) {
 	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
-func (s *Stack) LookupDataType(name string) (*gotypes.SymbolDef, error) {
+func (s *Stack) LookupDataType(name string) (*symboltable.SymbolDef, error) {
 	glog.Infof("====Looking up a data type %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
@@ -126,7 +125,7 @@ func (s *Stack) LookupDataType(name string) (*gotypes.SymbolDef, error) {
 	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
-func (s *Stack) LookupVariableLikeSymbol(name string) (*gotypes.SymbolDef, error) {
+func (s *Stack) LookupVariableLikeSymbol(name string) (*symboltable.SymbolDef, error) {
 	glog.Infof("====Looking up a variablelike %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
@@ -153,7 +152,7 @@ func (s *Stack) Exists(name string) bool {
 }
 
 // Lookup looks for the first occurrence of a symbol with the given name
-func (s *Stack) Lookup(name string) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
+func (s *Stack) Lookup(name string) (*symboltable.SymbolDef, symboltable.SymbolType, error) {
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, st, err := s.Tables[i].Lookup(name)

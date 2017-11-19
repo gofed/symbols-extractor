@@ -1,16 +1,12 @@
 package symboltable
 
-import (
-	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-)
-
 type SymbolLookable interface {
-	LookupVariable(key string) (*gotypes.SymbolDef, error)
-	LookupVariableLikeSymbol(key string) (*gotypes.SymbolDef, error)
-	LookupFunction(key string) (*gotypes.SymbolDef, error)
-	LookupDataType(key string) (*gotypes.SymbolDef, error)
-	LookupMethod(datatype, methodName string) (*gotypes.SymbolDef, error)
-	Lookup(key string) (*gotypes.SymbolDef, SymbolType, error)
+	LookupVariable(key string) (*SymbolDef, error)
+	LookupVariableLikeSymbol(key string) (*SymbolDef, error)
+	LookupFunction(key string) (*SymbolDef, error)
+	LookupDataType(key string) (*SymbolDef, error)
+	LookupMethod(datatype, methodName string) (*SymbolDef, error)
+	Lookup(key string) (*SymbolDef, SymbolType, error)
 	Exists(name string) bool
 }
 
@@ -40,7 +36,7 @@ var (
 
 type SymbolTable interface {
 	SymbolLookable
-	AddVariable(sym *gotypes.SymbolDef) error
-	AddDataType(sym *gotypes.SymbolDef) error
-	AddFunction(sym *gotypes.SymbolDef) error
+	AddVariable(sym *SymbolDef) error
+	AddDataType(sym *SymbolDef) error
+	AddFunction(sym *SymbolDef) error
 }

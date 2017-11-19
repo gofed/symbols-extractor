@@ -45,7 +45,7 @@ type StatementParser interface {
 	// ParseFuncBody parses function body with pushing function parameter(s) and/or its receiver into the symbol table
 	ParseFuncBody(funcDecl *ast.FuncDecl) error
 	// ParseValueSpec parses variable/constant definition/declaration
-	ParseValueSpec(spec *ast.ValueSpec) ([]*gotypes.SymbolDef, error)
+	ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef, error)
 }
 
 // Config for a parser
@@ -72,7 +72,7 @@ func (c *Config) SymbolPos(pos token.Pos) string {
 	return fmt.Sprintf("%v:%v", c.FileName, pos)
 }
 
-func (c *Config) GetBuiltin(name string) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
+func (c *Config) GetBuiltin(name string) (*symboltable.SymbolDef, symboltable.SymbolType, error) {
 	table, err := c.GlobalSymbolTable.Lookup("builtin")
 	if err != nil {
 		return nil, "", err
@@ -93,7 +93,7 @@ func (c *Config) IsBuiltin(name string) bool {
 }
 
 // Lookup retrieves a definition of identifier ident
-func (c *Config) Lookup(ident *gotypes.Identifier) (*gotypes.SymbolDef, symboltable.SymbolType, error) {
+func (c *Config) Lookup(ident *gotypes.Identifier) (*symboltable.SymbolDef, symboltable.SymbolType, error) {
 	if ident.Package == "" {
 		return nil, "", fmt.Errorf("Identifier %#v does not set its Package field", ident)
 	}
@@ -107,7 +107,7 @@ func (c *Config) Lookup(ident *gotypes.Identifier) (*gotypes.SymbolDef, symbolta
 	return table.Lookup(ident.Def)
 }
 
-func (c *Config) LookupMethod(ident *gotypes.Identifier, method string) (*gotypes.SymbolDef, error) {
+func (c *Config) LookupMethod(ident *gotypes.Identifier, method string) (*symboltable.SymbolDef, error) {
 	if ident.Package == "" {
 		return nil, fmt.Errorf("Identifier %#v does not set its Package field", ident)
 	}
@@ -121,7 +121,7 @@ func (c *Config) LookupMethod(ident *gotypes.Identifier, method string) (*gotype
 	return table.LookupMethod(ident.Def, method)
 }
 
-func (c *Config) LookupDataType(ident *gotypes.Identifier) (*gotypes.SymbolDef, symboltable.SymbolLookable, error) {
+func (c *Config) LookupDataType(ident *gotypes.Identifier) (*symboltable.SymbolDef, symboltable.SymbolLookable, error) {
 	if ident.Package == "" {
 		return nil, nil, fmt.Errorf("Identifier %#v does not set its Package field", ident)
 	}
@@ -137,7 +137,7 @@ func (c *Config) LookupDataType(ident *gotypes.Identifier) (*gotypes.SymbolDef, 
 	return def, table, err
 }
 
-func (c *Config) RetrieveQidDataType(qidselector *gotypes.Selector) (symboltable.SymbolLookable, *gotypes.SymbolDef, error) {
+func (c *Config) RetrieveQidDataType(qidselector *gotypes.Selector) (symboltable.SymbolLookable, *symboltable.SymbolDef, error) {
 	// qid.structtype expected
 	qid, ok := qidselector.Prefix.(*gotypes.Packagequalifier)
 	if !ok {
@@ -157,7 +157,7 @@ func (c *Config) RetrieveQidDataType(qidselector *gotypes.Selector) (symboltable
 }
 
 func (c *Config) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.DataType, error) {
-	var symbolDef *gotypes.SymbolDef
+	var symbolDef *symboltable.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
 		_, def, err := c.RetrieveQidDataType(typeDefType)
