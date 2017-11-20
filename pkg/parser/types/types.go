@@ -9,6 +9,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
+	"github.com/gofed/symbols-extractor/pkg/parser/types/contract"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
@@ -21,6 +22,22 @@ type TypeParser interface {
 type ExprAttribute struct {
 	DataTypeList []gotypes.DataType
 	// PropagationSequence []string
+	Contract contract.Contract
+}
+
+func NewExtrAttribute() *ExprAttribute {
+	return &ExprAttribute{}
+}
+
+func (e *ExprAttribute) AddDataType(d gotypes.DataType) *ExprAttribute {
+	e.DataTypeList = append(e.DataTypeList, d)
+	return e
+}
+
+func (e *ExprAttribute) SetContract(c contract.Contract) *ExprAttribute {
+	e.Contract = c
+	fmt.Printf("\tContract: %#v\n\n", c)
+	return e
 }
 
 func ExprAttributeFromDataType(list ...gotypes.DataType) *ExprAttribute {

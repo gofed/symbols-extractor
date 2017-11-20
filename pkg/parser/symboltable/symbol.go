@@ -2,14 +2,17 @@ package symboltable
 
 import (
 	"encoding/json"
+
+	"github.com/gofed/symbols-extractor/pkg/parser/types/contract"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
 type SymbolDef struct {
-	Pos     string           `json:"pos"`
-	Name    string           `json:"name"`
-	Package string           `json:"package"`
-	Def     gotypes.DataType `json:"def"`
+	Pos      string            `json:"pos"`
+	Name     string            `json:"name"`
+	Package  string            `json:"package"`
+	Def      gotypes.DataType  `json:"def"`
+	Contract contract.Contract `json:"contract"`
 }
 
 func (o *SymbolDef) UnmarshalJSON(b []byte) error {

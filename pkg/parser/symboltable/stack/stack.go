@@ -125,20 +125,20 @@ func (s *Stack) LookupDataType(name string) (*symboltable.SymbolDef, error) {
 	return nil, fmt.Errorf("Symbol %v not found", name)
 }
 
-func (s *Stack) LookupVariableLikeSymbol(name string) (*symboltable.SymbolDef, error) {
+func (s *Stack) LookupVariableLikeSymbol(name string) (*symboltable.SymbolDef, symboltable.SymbolType, error) {
 	glog.Infof("====Looking up a variablelike %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
-		def, err := s.Tables[i].LookupVariableLikeSymbol(name)
+		def, st, err := s.Tables[i].LookupVariableLikeSymbol(name)
 		if err == nil {
-			return def, nil
+			return def, st, nil
 		}
 	}
 	// if the variable is not found, check the qids
 	if def, ok := s.Imports[name]; ok {
-		return def, nil
+		return def, symboltable.VariableSymbol, nil
 	}
-	return nil, fmt.Errorf("VariableLike Symbol %v not found", name)
+	return nil, symboltable.SymbolType(""), fmt.Errorf("VariableLike Symbol %v not found", name)
 }
 
 func (s *Stack) Exists(name string) bool {

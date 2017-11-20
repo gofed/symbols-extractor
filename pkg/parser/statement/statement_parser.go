@@ -201,15 +201,17 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				}
 				if typeDef == nil {
 					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
-						Name:    name.Name,
-						Package: sp.PackageName,
-						Def:     valueExprAttr.DataTypeList[i],
+						Name:     name.Name,
+						Package:  sp.PackageName,
+						Def:      valueExprAttr.DataTypeList[i],
+						Contract: valueExprAttr.Contract,
 					})
 				} else {
 					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
-						Name:    name.Name,
-						Package: sp.PackageName,
-						Def:     typeDef,
+						Name:     name.Name,
+						Package:  sp.PackageName,
+						Def:      typeDef,
+						Contract: valueExprAttr.Contract,
 					})
 				}
 			}
@@ -243,9 +245,10 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExprAttr.DataTypeList, typeDef)
 		if typeDef != nil {
 			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
-				Name:    spec.Names[i].Name,
-				Package: sp.PackageName,
-				Def:     typeDef,
+				Name:     spec.Names[i].Name,
+				Package:  sp.PackageName,
+				Def:      typeDef,
+				Contract: valueExprAttr.Contract,
 			})
 			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				if builtin.Def == "iota" {
@@ -264,9 +267,10 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				sp.lastConstType = builtin
 			}
 			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
-				Name:    spec.Names[i].Name,
-				Package: sp.PackageName,
-				Def:     valueExprAttr.DataTypeList[0],
+				Name:     spec.Names[i].Name,
+				Package:  sp.PackageName,
+				Def:      valueExprAttr.DataTypeList[0],
+				Contract: valueExprAttr.Contract,
 			})
 		}
 	}
