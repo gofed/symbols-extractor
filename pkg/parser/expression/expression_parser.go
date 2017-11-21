@@ -41,6 +41,9 @@ type Parser struct {
 }
 
 // parseBasicLit consumes *ast.BasicLit and produces Builtin
+//
+// Grammar:
+//	BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
 	var builtin *gotypes.Builtin
@@ -58,7 +61,11 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error)
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
-	attr := types.NewExtrAttribute().AddDataType(builtin).SetContract(&contract.Resource{DataType: builtin, Package: ep.PackageName})
+	attr := types.NewExtrAttribute().AddDataType(builtin).SetContract(&contract.Literal{CommonData: &contract.CommonData{
+		Package: ep.PackageName,
+		ExpectedType: builtin,
+		DataTypeWasDerived: true, // the data type of literal is derived from its nature
+	}})
 	return attr, nil
 }
 
@@ -287,7 +294,15 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 				// 		Package: def.Package,
 				// 	},
 				// }
-				attr.SetContract(&contract.Resource{DataType: def.Def, Package: def.Package, Name: def.Name})
+				// TODO(jkucera): Make contract while function is declared? (yes)
+				attr.SetContract(&contract.Function{
+					CommonData: &contract.CommonData{
+						Package: def.Package,
+						ExpectedType: def.Def,
+						DataTypeWasDerived: false, // ?????????????? -> this should be set during the function declaration
+					},
+					Name: def.Name,
+				})
 				fmt.Printf("attr: %#v\n", attr)
 			} else if st == symboltable.VariableSymbol {
 				// check if the variable has non-empty function propagration sequence
