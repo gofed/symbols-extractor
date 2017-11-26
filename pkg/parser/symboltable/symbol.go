@@ -9,6 +9,8 @@ import (
 
 type SymbolDef struct {
 	Pos      string            `json:"pos"`
+	// TODO(jkucera): Name, Package and Def are currently present inside assignment contract, Assignment,
+	// as Name, Package, and ExpectedType, respectively. Remove them?
 	Name     string            `json:"name"`
 	Package  string            `json:"package"`
 	Def      gotypes.DataType  `json:"def"`
