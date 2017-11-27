@@ -252,7 +252,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			// Not the `iota` case:
 			// - `id1, id2, id3, ..., idn = expr` case (`expr` is probably a function call expression):
 			if nLen != len(valueExprAttr.DataTypeList) {
-				return nil, fmt.Errorf("ValueSpec %#v has different number of identifiers on LHS (%v) than a number of results of invocation on RHS (%v)", spec, nLen, len(valueExprAttr.DataTypeList))
+				panic(fmt.Errorf("ValueSpec %#v has different number of identifiers on LHS (%v) than a number of results of invocation on RHS (%v)", spec, nLen, len(valueExprAttr.DataTypeList)))
 			}
 			// Iterate through identifiers:
 			for i, name := range spec.Names {
@@ -271,7 +271,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 					//   possible)
 					t, err := resolveLhsType(valueExprAttr.DataTypeList[i], is_const)
 					if err != nil {
-						return nil, err
+						panic(err)
 					}
 					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 						Name:     name.Name,
@@ -314,11 +314,11 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			return symbolsDef, nil
 		}
 		// `iota` case:
-		return nil, fmt.Errorf("iota should be handled as a variable and not as a type")
+		// panic(fmt.Errorf("iota should be handled as a variable and not as a type"))
 	}
 
 	if nLen < vLen {
-		return nil, fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
+		panic(fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen))
 	}
 
 	// `const/var id1, id2, ..., idn = expr1, expr2, ..., exprm` case:
@@ -326,7 +326,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 	for i := 0; i < vLen; i++ {
 		glog.Infof("----Processing ast.ValueSpec[%v]: %#v\n", i, spec.Values[i])
 		if typeDef == nil && spec.Values[i] == nil {
-			return nil, fmt.Errorf("No type nor value in ValueSpec declaration")
+			panic(fmt.Errorf("No type nor value in ValueSpec declaration"))
 		}
 		// TODO(jchaloup): if the variable type is an interface and the variable value type is a concrete type
 		//                 note somewhere the concrete type must implemented the interface
@@ -339,7 +339,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 
 		// Functions with multiple results are not allowed here
 		if len(valueExprAttr.DataTypeList) != 1 {
-			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExprAttr.DataTypeList)
+			panic(fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExprAttr.DataTypeList))
 		}
 		// Put the variables/consts into the symbol table
 		if spec.Names[i].Name == "_" {
@@ -382,7 +382,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			}
 			t, err := resolveLhsType(valueExprAttr.DataTypeList[0], is_const)
 			if err != nil {
-				return nil, err
+				panic(err)
 			}
 			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 				Name:     spec.Names[i].Name,
@@ -407,7 +407,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 		if typeDef == nil {
 			// Assuming the line is preceded by iota
 			if sp.lastConstType == nil {
-				return nil, fmt.Errorf("No type in ValueSpec declaration for identifier at pos %v (starting index from 1)", i+1)
+				panic(fmt.Errorf("No type in ValueSpec declaration for identifier at pos %v (starting index from 1)", i+1))
 			}
 			typeDef = sp.lastConstType
 		}

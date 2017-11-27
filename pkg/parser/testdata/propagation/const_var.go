@@ -273,5 +273,6 @@ const S3 = "abc"
 
 // ----------------------------------------------------------------------------
 // -- const X = mexpr
-// BUG(jkucera): This should fail.
-const X1 = F()
+// ValueSpec `X1 = F()` has different number of identifiers on LHS (1) than a
+// number of results of invocation on RHS (2)
+//const X1 = F()
