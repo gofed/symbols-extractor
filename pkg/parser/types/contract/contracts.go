@@ -13,7 +13,13 @@ import (
 
 const (
 	LiteralType = "literal"
+	UnaryOpType = "unaryOp"
 	BinaryOpType = "binaryOp"
+	DereferenceType = "dereference"
+	InvocationType = "invocation"
+	SelectorType = "selector"
+	IndexType = "index"
+	TypeAssertType = "typeassert"
 	AssignmentType = "assignment"
 )
 
@@ -59,11 +65,79 @@ func (l *Literal) GetType() string {
 
 // Contract for binary expressions
 type BinaryOp struct {
+	*CommonData
 	X, Y Contract
 }
 
 func (c *BinaryOp) GetType() string {
 	return BinaryOpType
+}
+
+// Contract for unary expressions
+type UnaryOp struct {
+	*CommonData
+	X Contract
+}
+
+func (c *UnaryOp) GetType() string {
+	return UnaryOpType
+}
+
+// Contract for star expressions
+type Dereference struct {
+	*CommonData
+	Parent Contract
+}
+
+func (c *Dereference) GetType() string {
+	return DereferenceType
+}
+
+// Contract for call expressions
+type Invocation struct {
+	*CommonData
+	// Function expression contract
+	Func   Contract
+	// Function arguments contracts (maybe useless)
+	Params []Contract
+	// Zero-based index of a return type if a function return multiple values
+	RetIdx int
+}
+
+func (c *Invocation) GetType() string {
+	return InvocationType
+}
+
+// Contract for `X.Y`-like expressions
+type Selector struct {
+	*CommonData
+	Parent Contract
+	Field  string
+}
+
+func (c *Selector) GetType() string {
+	return SelectorType
+}
+
+// Contract for `X[Y]`-like expressions
+type Index struct {
+	*CommonData
+	Parent, Index Contract
+}
+
+func (c *Index) GetType() string {
+	return IndexType
+}
+
+// Contract for `X.(Y)`-like expressions
+type TypeAssert struct {
+	*CommonData
+	Parent Contract
+	// Y is ExpectedType
+}
+
+func (c *TypeAssert) GetType() string {
+	return TypeAssertType
 }
 
 // Contract for a declaration/assignment
