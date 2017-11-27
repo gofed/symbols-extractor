@@ -129,13 +129,8 @@ test:
 gen:
 	./gentypes.sh
 
-extract:
-	$(RMLOG)
-	./$(EXTRACT) \
-            --package-path $(PROJECT_ROOT)/pkg/parser/testdata \
-            --symbol-table-dir symboltables \
-            --cgo-symbols-path cgo/cgo.yml \
-            $(GLOG_FLAGS) $(WLOG)
+scan:
+	./scan.sh
 
 clean:
 	$(RM) $(RM_FLAGS) $(TRASH)
