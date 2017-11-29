@@ -294,7 +294,14 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 				// 		Package: def.Package,
 				// 	},
 				// }
-				attr.SetContract(&contract.Resource{DataType: def.Def, Package: def.Package, Name: def.Name})
+				attr.SetContract(&contract.Literal{
+					CommonData: contract.CommonData{
+						Package: def.Package,
+						ExpectedType: def.Def,
+						DataTypeWasDerived: false,
+					},
+					Name: def.Name,
+				})
 				fmt.Printf("attr: %#v\n", attr)
 			} else if st == symboltable.VariableSymbol {
 				// check if the variable has non-empty function propagration sequence
