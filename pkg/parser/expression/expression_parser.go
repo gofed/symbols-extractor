@@ -53,11 +53,11 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error)
 	case token.FLOAT:
 		builtin = &gotypes.Builtin{Def: "float", Untyped: true}
 	case token.IMAG:
-		builtin = &gotypes.Builtin{Def: "imag", Untyped: true}
+		builtin = &gotypes.Builtin{Def: "complex", Untyped: true}
 	case token.STRING:
 		builtin = &gotypes.Builtin{Def: "string", Untyped: true}
 	case token.CHAR:
-		builtin = &gotypes.Builtin{Def: "char", Untyped: true}
+		builtin = &gotypes.Builtin{Def: "rune", Untyped: true}
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
