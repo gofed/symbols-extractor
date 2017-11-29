@@ -21,6 +21,27 @@ type Contract interface {
 	GetType() string
 }
 
+// Common parts for all contracts
+type CommonData struct {
+	// The name of package where contract was made
+	Package            string
+	// The expected type for this contract. ExpectedType is computed once
+	// during parsing (during the time when a contract is first made) and
+	// it is persistently saved for later use
+	// TODO(jkucera): We use `gotypes.DataType` for now, but this is not
+	// good for later marshalling as there is a danger of large data amount
+	// as the one (possibly composite) data type can be marshalled many
+	// times. Suggestions:
+	// a) custom marshalling/unmarshalling
+	//    - use a section in json file that represents a map with keys as
+	//      data type hash and value as marshalled data type definition
+	//    - use these hashes in place of data types
+	ExpectedType       gotypes.DataType
+	// Is true if the expected data type for this contract was derived
+	// according to the Golang rules.
+	DataTypeWasDerived bool
+}
+
 type Resource struct {
 	gotypes.DataType
 	Package string
