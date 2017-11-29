@@ -378,7 +378,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				}
 				sp.lastConstType = builtin
 			}
-			t, err := resolveLhsType(valueExprAttr.DataTypeList[i], is_const)
+			t, err := resolveLhsType(valueExprAttr.DataTypeList[0], is_const)
 			if err != nil {
 				return nil, err
 			}
