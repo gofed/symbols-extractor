@@ -164,7 +164,11 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 	return nil
 }
 
+// Grammar:
+//     ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
+//     VarSpec   = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
 func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef, error) {
+	// Gather names from IdentifierList
 	var names []string
 	for _, name := range spec.Names {
 		names = append(names, name.Name)
@@ -174,6 +178,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 	nLen := len(spec.Names)
 	vLen := len(spec.Values)
 
+	// If Type is present, parse it:
 	var typeDef gotypes.DataType
 	if spec.Type != nil {
 		def, err := sp.TypeParser.Parse(spec.Type)
@@ -185,17 +190,23 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 
 	var symbolsDef = make([]*symboltable.SymbolDef, 0)
 
+	// `var/const id, ... = expr` case:
 	if vLen == 1 {
+		// - parse `expr`:
 		valueExprAttr, err := sp.ExprParser.Parse(spec.Values[0])
 		if err != nil {
 			return nil, err
 		}
 
 		if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); !ok || builtin.Def != "iota" {
+			// Not the `iota` case:
+			// - `id1, id2, id3, ..., idn = expr` case (`expr` is probably a function call expression):
 			if nLen != len(valueExprAttr.DataTypeList) {
 				return nil, fmt.Errorf("ValueSpec %#v has different number of identifiers on LHS (%v) than a number of results of invocation on RHS (%v)", spec, nLen, len(valueExprAttr.DataTypeList))
 			}
+			// Iterate through identifiers:
 			for i, name := range spec.Names {
+				// - ignore the anonymous ones:
 				if name.Name == "_" {
 					continue
 				}
@@ -207,6 +218,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 						Contract: valueExprAttr.Contract,
 					})
 				} else {
+					// Type is given
 					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 						Name:     name.Name,
 						Package:  sp.PackageName,
@@ -217,12 +229,15 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			}
 			return symbolsDef, nil
 		}
+		// `iota` case:
 	}
 
 	if nLen < vLen {
 		return nil, fmt.Errorf("ValueSpec %#v has less number of identifieries on LHS (%v) than a number of expressions on RHS (%v)", spec, nLen, vLen)
 	}
 
+	// `const/var id1, id2, ..., idn = expr1, expr2, ..., exprm` case:
+	// - note that n >= m
 	for i := 0; i < vLen; i++ {
 		glog.Infof("----Processing ast.ValueSpec[%v]: %#v\n", i, spec.Values[i])
 		if typeDef == nil && spec.Values[i] == nil {
@@ -230,11 +245,14 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 		}
 		// TODO(jchaloup): if the variable type is an interface and the variable value type is a concrete type
 		//                 note somewhere the concrete type must implemented the interface
+		// TODO(jkucera): What if `typeDef != nil` and `spec.Values[i] == nil`? The variable/constant gets its
+		//                implicit (zero) value, we must handle this here
 		valueExprAttr, err := sp.ExprParser.Parse(spec.Values[i])
 		if err != nil {
 			return nil, err
 		}
 
+		// Functions with multiple results are not allowed here
 		if len(valueExprAttr.DataTypeList) != 1 {
 			return nil, fmt.Errorf("Expecting a single expression. Got a list instead: %#v", valueExprAttr.DataTypeList)
 		}
