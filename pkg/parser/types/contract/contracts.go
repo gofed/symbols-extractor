@@ -14,6 +14,7 @@ import (
 const (
 	ResourceType = "resource"
 	BinaryOpType = "binaryOp"
+	AssignmentType = "assigment"
 )
 
 // Contract between a data type and its application
