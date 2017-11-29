@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/parser/types/contract"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
