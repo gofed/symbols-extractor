@@ -282,7 +282,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 		if spec.Names[i].Name == "_" {
 			continue
 		}
-		is_const := name.Obj.Kind == ast.Con
+		is_const := spec.Names[i].Obj.Kind == ast.Con
 		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExprAttr.DataTypeList, typeDef)
 		if typeDef != nil {
 			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
