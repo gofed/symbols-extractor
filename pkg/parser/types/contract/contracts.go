@@ -18,6 +18,7 @@ const (
 
 // Contract between a data type and its application
 type Contract interface {
+	// Get the contract type (kind)
 	GetType() string
 }
 
