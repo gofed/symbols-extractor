@@ -210,12 +210,23 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				if name.Name == "_" {
 					continue
 				}
+				is_const := name.Obj.Kind == ast.Con
 				if typeDef == nil {
 					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 						Name:     name.Name,
 						Package:  sp.PackageName,
 						Def:      valueExprAttr.DataTypeList[i],
-						Contract: valueExprAttr.Contract,
+						Contract: &contract.Assignment{
+							CommonData: contract.CommonData{
+								Package: sp.PackageName,
+								ExpectedType: valueExprAttr.DataTypeList[i],
+								DataTypeWasDerived: true,
+							},
+							Parent: valueExprAttr.Contract,
+							Name: name.Name,
+							IsDecl: true,
+							IsConst: is_const,
+						},
 					})
 				} else {
 					// Type is given
@@ -223,7 +234,17 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 						Name:     name.Name,
 						Package:  sp.PackageName,
 						Def:      typeDef,
-						Contract: valueExprAttr.Contract,
+						Contract: &contract.Assignment{
+							CommonData: contract.CommonData{
+								Package: sp.PackageName,
+								ExpectedType: typeDef,
+								DataTypeWasDerived: false,
+							},
+							Parent: valueExprAttr.Contract,
+							Name: name.Name,
+							IsDecl: true,
+							IsConst: is_const,
+						},
 					})
 				}
 			}
@@ -260,13 +281,24 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 		if spec.Names[i].Name == "_" {
 			continue
 		}
+		is_const := name.Obj.Kind == ast.Con
 		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExprAttr.DataTypeList, typeDef)
 		if typeDef != nil {
 			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 				Name:     spec.Names[i].Name,
 				Package:  sp.PackageName,
 				Def:      typeDef,
-				Contract: valueExprAttr.Contract,
+				Contract: &contract.Assignment{
+					CommonData: contract.CommonData{
+						Package: sp.PackageName,
+						ExpectedType: typeDef,
+						DataTypeWasDerived: false,
+					},
+					Parent: valueExprAttr.Contract,
+					Name: spec.Names[i].Name,
+					IsDecl: true,
+					IsConst: is_const,
+				},
 			})
 			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				if builtin.Def == "iota" {
@@ -288,7 +320,17 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				Name:     spec.Names[i].Name,
 				Package:  sp.PackageName,
 				Def:      valueExprAttr.DataTypeList[0],
-				Contract: valueExprAttr.Contract,
+				Contract: &contract.Assignment{
+					CommonData: contract.CommonData{
+						Package: sp.PackageName,
+						ExpectedType: valueExprAttr.DataTypeList[0],
+						DataTypeWasDerived: true,
+					},
+					Parent: valueExprAttr.Contract,
+					Name: spec.Names[i].Name,
+					IsDecl: true,
+					IsConst: is_const,
+				},
 			})
 		}
 	}
