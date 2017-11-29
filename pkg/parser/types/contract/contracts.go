@@ -12,7 +12,7 @@ import (
 // -
 
 const (
-	ResourceType = "resource"
+	LiteralType = "literal"
 	BinaryOpType = "binaryOp"
 )
 
@@ -43,15 +43,17 @@ type CommonData struct {
 	DataTypeWasDerived bool
 }
 
-type Resource struct {
-	gotypes.DataType
-	Package string
-	Name    string
+// Contract for literals
+type Literal struct {
+	CommonData
+	// For function name, empty if a literal is not a function or it is an
+	// anonymous function
+	Name string
 	// TODO(jchaloup): add additional flags, e.g. DataTypeForced, FunctionValue
 }
 
-func (r *Resource) GetType() string {
-	return ResourceType
+func (l *Literal) GetType() string {
+	return LiteralType
 }
 
 type BinaryOp struct {
