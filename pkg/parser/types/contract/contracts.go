@@ -61,3 +61,21 @@ type BinaryOp struct {
 func (c *BinaryOp) GetType() string {
 	return BinaryOpType
 }
+
+// Contract for a declaration/assignment
+// TODO(jkucera): Assignment to field, assignment to container member
+type Assignment struct {
+	CommonData
+	// Contract of right-hand side expression
+	Parent  Contract
+	// Name of a symbol
+	Name    string
+	// True if it is a declarative assignment
+	IsDecl  bool
+	// True if it is a constant declaration
+	IsConst bool
+}
+
+func (c *Assignment) GetType() string {
+	return AssignmentType
+}
