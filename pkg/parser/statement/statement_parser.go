@@ -165,6 +165,55 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 	return nil
 }
 
+var builtin_numeric_types = map[string]struct{}{
+	"uint8": {}, "uint16": {}, "uint32": {}, "uint64": {},
+	"int8": {}, "int16": {}, "int32": {}, "int64": {},
+	"float32": {}, "float64": {},
+	"complex64": {}, "complex128": {},
+	"byte": {}, "rune": {},
+	"uint": {}, "int": {}, "uintptr": {},
+}
+
+var untyped_numeric_types = map[string]struct{}{
+	"rune": {}, "int": {}, "float": {}, "complex": {},
+}
+
+func resolveLhsType(rhs gotypes.DataType, is_const bool) (gotypes.DataType, error) {
+	if is_const {
+		// Must be bool, numeric type or string
+		t := rhs.(*gotypes.Builtin)
+		if _, ok := builtin_numeric_types[t.Def]; ok {
+			return t, nil
+		}
+		if _, ok := untyped_numeric_types[t.Def]; ok {
+			return t, nil
+		}
+		if t.Def == "bool" || t.Def == "string" {
+			return t, nil
+		}
+		return nil, fmt.Errorf("Constants can be only boolean, numeric, or strings (given %q)\n", t.Def)
+	}
+	// `var` case
+	// - if rhs is untyped, convert it to its default type
+	switch t := rhs.(type) {
+	case *gotypes.Builtin:
+		if t.Untyped {
+			switch t.Def {
+			case "bool", "rune", "int", "string":
+				return &gotypes.Builtin{Def: t.Def, Untyped: false}, nil
+			case "float":
+				return &gotypes.Builtin{Def: "float64", Untyped: false}, nil
+			case "complex":
+				return &gotypes.Builtin{Def: "complex128", Untyped: false}, nil
+			default:
+				return nil, fmt.Errorf("Untyped %v\n", t.Def)
+			}
+		}
+	}
+	// - rhs is typed
+	return rhs, nil
+}
+
 // Grammar:
 //     ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
 //     VarSpec   = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
@@ -213,14 +262,26 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				}
 				is_const := name.Obj.Kind == ast.Con
 				if typeDef == nil {
+					// Type not given; this symbol definition means that we are
+					// making a contract `var/const id = expr`; we must compute
+					// the type of `id` first:
+					// - in case of `var`, untyped "type" of `expr` became typed
+					//   according to Golang rules
+					// - in case of `const`, type is copied (if the assignemt is
+					//   possible)
+					t, err := resolveLhsType(valueExprAttr.DataTypeList[i], is_const)
+					if err != nil {
+						return nil, err
+					}
 					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 						Name:     name.Name,
 						Package:  sp.PackageName,
-						Def:      valueExprAttr.DataTypeList[i],
+						Def:      t, // resolved type
 						Contract: &contract.Assignment{
 							CommonData: contract.CommonData{
 								Package: sp.PackageName,
-								ExpectedType: valueExprAttr.DataTypeList[i],
+								// Expected type of assignment contract will be resolved type
+								ExpectedType: t,
 								DataTypeWasDerived: true,
 							},
 							Parent: valueExprAttr.Contract,
@@ -317,14 +378,18 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				}
 				sp.lastConstType = builtin
 			}
+			t, err := resolveLhsType(valueExprAttr.DataTypeList[i], is_const)
+			if err != nil {
+				return nil, err
+			}
 			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
 				Name:     spec.Names[i].Name,
 				Package:  sp.PackageName,
-				Def:      valueExprAttr.DataTypeList[0],
+				Def:      t,
 				Contract: &contract.Assignment{
 					CommonData: contract.CommonData{
 						Package: sp.PackageName,
-						ExpectedType: valueExprAttr.DataTypeList[0],
+						ExpectedType: t,
 						DataTypeWasDerived: true,
 					},
 					Parent: valueExprAttr.Contract,
