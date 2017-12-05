@@ -6,6 +6,8 @@ import (
 	"go/token"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
@@ -20,7 +22,14 @@ type TypeParser interface {
 
 type ExprAttribute struct {
 	DataTypeList []gotypes.DataType
+	TypeVarList  []typevars.Interface
 	// PropagationSequence []string
+}
+
+func (e *ExprAttribute) AddTypeVar(typevar typevars.Interface) *ExprAttribute {
+	e.TypeVarList = append(e.TypeVarList, typevar)
+	glog.Infof("Adding TypeVar: %v\n", typevars.TypeVar2String(typevar))
+	return e
 }
 
 func ExprAttributeFromDataType(list ...gotypes.DataType) *ExprAttribute {
@@ -66,6 +75,8 @@ type Config struct {
 	ExprParser ExpressionParser
 	// statement parser
 	StmtParser StatementParser
+	// per-file contract table
+	ContractTable *contracttable.Table
 }
 
 func (c *Config) SymbolPos(pos token.Pos) string {

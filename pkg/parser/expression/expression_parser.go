@@ -8,6 +8,8 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -42,20 +44,25 @@ type Parser struct {
 // parseBasicLit consumes *ast.BasicLit and produces Builtin
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
+	var builtin *gotypes.Builtin
 	switch lit.Kind {
 	case token.INT:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "int", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "int", Untyped: true}
 	case token.FLOAT:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "float", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "float", Untyped: true}
 	case token.IMAG:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "imag", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "imag", Untyped: true}
 	case token.STRING:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "string", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "string", Untyped: true}
 	case token.CHAR:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "char", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "char", Untyped: true}
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
+
+	return types.ExprAttributeFromDataType(builtin).AddTypeVar(&typevars.Constant{
+		DataType: builtin,
+	}), nil
 }
 
 func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType gotypes.DataType) (*types.ExprAttribute, error) {
@@ -275,7 +282,10 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			return types.ExprAttributeFromDataType(def.Def), nil
+			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(&typevars.Variable{
+				Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
+				Package: def.Package,
+			}), nil
 		}
 	}
 
@@ -447,7 +457,16 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 
 				}
 				if xt.Untyped {
-					return types.ExprAttributeFromDataType(yt), nil
+					z := &typevars.Variable{
+						Name: "virtual",
+					}
+					ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+						OpToken: expr.Op,
+						X:       xAttr.TypeVarList[0],
+						Y:       yAttr.TypeVarList[0],
+						Z:       z,
+					})
+					return types.ExprAttributeFromDataType(yt).AddTypeVar(z), nil
 				}
 				if yt.Untyped {
 					return types.ExprAttributeFromDataType(xt), nil
@@ -464,21 +483,48 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped})
 				glog.Infof("xx+yy: %v\n", string(byteSlice))
 			}
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}), nil
+			z := &typevars.Variable{
+				Name: ep.Config.ContractTable.NewVariable(),
+			}
+			ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+				OpToken: expr.Op,
+				X:       xAttr.TypeVarList[0],
+				Y:       yAttr.TypeVarList[0],
+				Z:       z,
+			})
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}).AddTypeVar(z), nil
 		}
 		if yt.Untyped {
 			{
 				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped})
 				glog.Infof("xx+yy: %v\n", string(byteSlice))
 			}
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}), nil
+			z := &typevars.Variable{
+				Name: ep.Config.ContractTable.NewVariable(),
+			}
+			ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+				OpToken: expr.Op,
+				X:       xAttr.TypeVarList[0],
+				Y:       yAttr.TypeVarList[0],
+				Z:       z,
+			})
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}).AddTypeVar(z), nil
 		}
 		// both operands are typed => Untyped = false
 		{
 			byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def})
 			glog.Infof("xx+yy: %v\n", string(byteSlice))
 		}
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def}), nil
+		z := &typevars.Variable{
+			Name: ep.Config.ContractTable.NewVariable(),
+		}
+		ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+			OpToken: expr.Op,
+			X:       xAttr.TypeVarList[0],
+			Y:       yAttr.TypeVarList[0],
+			Z:       z,
+		})
+		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def}).AddTypeVar(z), nil
 	}
 
 	glog.Infof("Binaryexpr.x: %#v\nBinaryexpr.y: %#v\n", xAttr.DataTypeList[0], yAttr.DataTypeList[0])

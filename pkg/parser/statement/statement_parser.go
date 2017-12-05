@@ -7,6 +7,8 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -199,19 +201,37 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				if name.Name == "_" {
 					continue
 				}
+				var sDef *symboltable.SymbolDef
 				if typeDef == nil {
-					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
+					sDef = &symboltable.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
 						Def:     valueExprAttr.DataTypeList[i],
-					})
+						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+					}
+					if len(valueExprAttr.TypeVarList) > 0 {
+						sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+							X:            valueExprAttr.TypeVarList[i],
+							Y:            typevars.VariableFromSymbolDef(sDef),
+							ExpectedType: sDef.Def,
+						})
+					}
 				} else {
-					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
+					sDef = &symboltable.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
 						Def:     typeDef,
-					})
+						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+					}
+					if len(valueExprAttr.TypeVarList) > 0 {
+						sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+							X:            valueExprAttr.TypeVarList[i],
+							Y:            typevars.VariableFromSymbolDef(sDef),
+							ExpectedType: sDef.Def,
+						})
+					}
 				}
+				symbolsDef = append(symbolsDef, sDef)
 			}
 			return symbolsDef, nil
 		}
@@ -602,6 +622,7 @@ func (sp *Parser) parseGoStmt(statement *ast.GoStmt) error {
 }
 
 func (sp *Parser) parseBranchStmt(statement *ast.BranchStmt) error {
+	// TODO(jchaloup): just panic here!!!
 	glog.Infof("Processing branch statement  %#v\n", statement)
 	return nil
 }

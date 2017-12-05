@@ -126,6 +126,9 @@ test:
 	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/statement \
             $(GLOG_FLAGS) $(WLOG)
 
+integration:
+	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/tests/integration $(GLOG_FLAGS) $(WLOG)
+
 gen:
 	./gentypes.sh
 

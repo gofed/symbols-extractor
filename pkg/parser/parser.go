@@ -12,6 +12,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
+	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
@@ -282,6 +283,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 		PackageName:       packagePath,
 		SymbolTable:       c.SymbolTable,
 		GlobalSymbolTable: pp.globalSymbolTable,
+		ContractTable:     contracttable.New(),
 	}
 
 	config.TypeParser = typeparser.New(config)
