@@ -275,17 +275,26 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		postponedErr = fmt.Errorf("parseIdentifier: Symbol %q not yet processed", ident.Name)
 	} else {
 		// If it is a variable, return its definition
-		if def, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
+		if def, st, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
 			byteSlice, _ := json.Marshal(def)
 			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
 			// The data type of the variable is not accounted as it is not implicitely used
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(&typevars.Variable{
-				Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
-				Package: def.Package,
-			}), nil
+			var typeVar typevars.Interface
+			if st == symboltable.FunctionSymbol {
+				typeVar = &typevars.Function{
+					Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
+					Package: def.Package,
+				}
+			} else {
+				typeVar = &typevars.Variable{
+					Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
+					Package: def.Package,
+				}
+			}
+			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(typeVar), nil
 		}
 	}
 
@@ -458,7 +467,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				}
 				if xt.Untyped {
 					z := &typevars.Variable{
-						Name: "virtual",
+						Name: ep.Config.ContractTable.NewVariable(),
 					}
 					ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
 						OpToken: expr.Op,
@@ -767,7 +776,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
-	processArgs := func(args []ast.Expr, params []gotypes.DataType) error {
+	// params = list of function/method parameters definition (from its signature)
+	processArgs := func(functionTypeVar *typevars.Function, args []ast.Expr, params []gotypes.DataType) error {
 		// TODO(jchaloup): check the arguments can be assigned to the parameters
 		// TODO(jchaloup): generate type contract for each argument
 		if params != nil {
@@ -776,27 +786,55 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				if err != nil {
 					return err
 				}
+				// e.g. f(...) (a, b, c); g(a,b,c) ...; g(f(...))
 				if len(params) == len(attr.DataTypeList) {
+					for i := range attr.DataTypeList {
+						ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+							X: attr.TypeVarList[i],
+							Y: &typevars.Argument{
+								Function: *functionTypeVar,
+								Index:    i,
+							},
+							ExpectedType: attr.DataTypeList[i],
+						})
+					}
 					return nil
 				}
 				if len(attr.DataTypeList) != 1 {
 					return fmt.Errorf("Argument %#v of a call expression does not have one return value", args[0])
 				}
+
+				// E.g. func f(a string, b ...int) called as f("aaa"), the 'b' is nil then
+				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X: attr.TypeVarList[0],
+					Y: &typevars.Argument{
+						Function: *functionTypeVar,
+						Index:    0,
+					},
+					ExpectedType: attr.DataTypeList[0],
+				})
 				return nil
 			}
 		}
-		for _, arg := range args {
+		for i, arg := range args {
 			// an argument is passed to the function so its data type does not affect the result data type of the call
 			attr, err := ep.Parse(arg)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("attr: %#v\terr: %v\n", attr, err)
+
 			if attr == nil || len(attr.DataTypeList) != 1 {
 				return fmt.Errorf("Argument %#v of a call expression does not have one return value", arg)
 			}
-			// TODO(jchaloup): data type of the argument itself can be propagated to the function/method
-			// to provide more information about the type if the function parameter is an interface.
+
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X: attr.TypeVarList[0],
+				Y: &typevars.Argument{
+					Function: *functionTypeVar,
+					Index:    i,
+				},
+				ExpectedType: attr.DataTypeList[0],
+			})
 		}
 		return nil
 	}
@@ -813,7 +851,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		if err != nil {
 			return nil, err
 		}
-		if err := processArgs(expr.Args, nil); err != nil {
+		if err := processArgs(nil, expr.Args, nil); err != nil {
 			return nil, err
 		}
 		return types.ExprAttributeFromDataType(def), nil
@@ -850,14 +888,14 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					return types.ExprAttributeFromDataType(typeDef), err
 				case 2:
 					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
-					if err := processArgs([]ast.Expr{expr.Args[1]}, nil); err != nil {
+					if err := processArgs(nil, []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
 					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
 					return types.ExprAttributeFromDataType(typeDef), err
 				case 3:
 					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
-					if err := processArgs([]ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+					if err := processArgs(nil, []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
 					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
@@ -876,12 +914,31 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				return types.ExprAttributeFromDataType(&gotypes.Pointer{Def: typeDef}), err
 			}
 		}
-		if err := processArgs(expr.Args, funcType.Params); err != nil {
+		// The attr.TypeVarList[0] must be typevars.Function
+		f, ok := attr.TypeVarList[0].(*typevars.Function)
+		if !ok {
+			panic(fmt.Sprintf("expr %#v expected to be a function", expr))
+		}
+		ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+			F:         f,
+			ArgsCount: len(expr.Args),
+		})
+
+		if err := processArgs(f, expr.Args, funcType.Params); err != nil {
 			return nil, err
 		}
-		return types.ExprAttributeFromDataType(funcType.Results...), nil
+
+		attr := types.ExprAttributeFromDataType(funcType.Results...)
+		for i := range funcType.Results {
+			z := &typevars.ReturnType{
+				Function: *f,
+				Index:    i,
+			}
+			attr.AddTypeVar(z)
+		}
+		return attr, nil
 	case *gotypes.Method:
-		if err := processArgs(expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
+		if err := processArgs(nil, expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
 			return nil, err
 		}
 		return types.ExprAttributeFromDataType(funcType.Def.(*gotypes.Function).Results...), nil

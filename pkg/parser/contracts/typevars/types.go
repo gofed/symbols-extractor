@@ -15,7 +15,9 @@ type Type string
 
 var ConstantType Type = "Constant"
 var VariableType Type = "Variable"
+var FunctionType Type = "Function"
 var ArgumentType Type = "Argument"
+var ReturnTypeType Type = "ReturnType"
 
 // Constant to represent:
 // - basic literal type
@@ -56,16 +58,46 @@ func TypeVar2String(tv Interface) string {
 		return fmt.Sprintf("TypeVar.Constant: %#v", d.DataType)
 	case *Variable:
 		return fmt.Sprintf("TypeVar.Variable: (%v) %v", d.Package, d.Name)
+	case *Function:
+		return fmt.Sprintf("TypeVar.Function: (%v) %v", d.Package, d.Name)
+	case *ReturnType:
+		return fmt.Sprintf("TypeVar.ReturnType: (%v) %v at %v", d.Package, d.Name, d.Index)
+	case *Argument:
+		return fmt.Sprintf("TypeVar.Argument: (%v) %v at %v", d.Package, d.Name, d.Index)
 	default:
 		fmt.Printf("\nTypeVar %#v\n\n", tv)
 		panic("Unrecognized TypeVar")
 	}
 }
 
+type Function struct {
+	Name    string
+	Package string
+}
+
+func (v *Function) GetType() Type {
+	return FunctionType
+}
+
 // Argument represent an address of a function/method argument
 type Argument struct {
+	// Location of a function
+	Function
+	// Return type position
+	Index int
 }
 
 func (a *Argument) GetType() Type {
 	return ArgumentType
+}
+
+type ReturnType struct {
+	// Location of a function
+	Function
+	// Return type position
+	Index int
+}
+
+func (a *ReturnType) GetType() Type {
+	return ReturnTypeType
 }

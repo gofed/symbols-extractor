@@ -594,6 +594,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					Name:    lhsExpr.Name,
 					Package: sp.PackageName,
 					Def:     rhsExpr,
+					Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, statement.Lhs[i].Pos()),
 				})
 			}
 		case *ast.SelectorExpr, *ast.StarExpr:

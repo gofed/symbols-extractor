@@ -17,6 +17,7 @@ type Contract interface {
 var BinaryOpType Type = "binaryop"
 var PropagatesToType Type = "propagatesto"
 var IsCompatibleWithType Type = "iscompatiblewith"
+var IsInvocableType Type = "isinvocable"
 
 func Contract2String(c Contract) string {
 	switch d := c.(type) {
@@ -26,8 +27,11 @@ func Contract2String(c Contract) string {
 		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
 	case *IsCompatibleWith:
 		return fmt.Sprintf("IsCompatibleWith:\n\tX=%v\n\tY=%v\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
+	case *IsInvocable:
+		return fmt.Sprintf("IsInvocable:\n\tF=%v,\n\targCount=%v", typevars.TypeVar2String(d.F), d.ArgsCount)
+	default:
+		panic(fmt.Sprintf("Contract %#v not recognized", c))
 	}
-	return ""
 }
 
 // BinaryOp represents contract between two typevars
@@ -62,4 +66,13 @@ type IsCompatibleWith struct {
 
 func (i *IsCompatibleWith) GetType() Type {
 	return IsCompatibleWithType
+}
+
+type IsInvocable struct {
+	F         typevars.Interface
+	ArgsCount int
+}
+
+func (i *IsInvocable) GetType() Type {
+	return IsInvocableType
 }

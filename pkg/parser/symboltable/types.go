@@ -2,7 +2,7 @@ package symboltable
 
 type SymbolLookable interface {
 	LookupVariable(key string) (*SymbolDef, error)
-	LookupVariableLikeSymbol(key string) (*SymbolDef, error)
+	LookupVariableLikeSymbol(key string) (*SymbolDef, SymbolType, error)
 	LookupFunction(key string) (*SymbolDef, error)
 	LookupDataType(key string) (*SymbolDef, error)
 	LookupMethod(datatype, methodName string) (*SymbolDef, error)

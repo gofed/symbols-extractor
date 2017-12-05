@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
@@ -64,6 +65,7 @@ func TestDataTypes(t *testing.T) {
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 		GlobalSymbolTable:     gtable,
+		ContractTable:         contracttable.New(),
 	}
 
 	config.SymbolTable.Push()
@@ -81,6 +83,7 @@ func TestDataTypes(t *testing.T) {
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 		GlobalSymbolTable:     gtable,
+		ContractTable:         contracttable.New(),
 	}
 
 	config.SymbolTable.Push()
