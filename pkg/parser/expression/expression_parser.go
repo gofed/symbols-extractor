@@ -65,60 +65,115 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error)
 	}), nil
 }
 
-func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType gotypes.DataType) (*types.ExprAttribute, error) {
-	var valueExpr ast.Expr
-	if kvExpr, ok := expr.(*ast.KeyValueExpr); ok {
-		_, err := ep.Parse(kvExpr.Key)
+// to parse *gotypes.Array, *gotypes.Slice, *gotypes.Map
+func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.DataType) (*typevars.Constant, error) {
+	var valueTypeVar typevars.Interface
+	var keyTypeVar typevars.Interface
+	var valueType gotypes.DataType
+
+	switch elmExpr := litType.(type) {
+	case *gotypes.Slice:
+		valueType = elmExpr.Elmtype
+		valueTypeVar = &typevars.ListValue{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Elmtype,
+			},
+		}
+		keyTypeVar = &typevars.ListKey{}
+	case *gotypes.Array:
+		valueType = elmExpr.Elmtype
+		valueTypeVar = &typevars.ListValue{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Elmtype,
+			},
+		}
+		keyTypeVar = &typevars.ListKey{}
+	case *gotypes.Map:
+		valueType = elmExpr.Valuetype
+		valueTypeVar = &typevars.MapValue{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Valuetype,
+			},
+		}
+		keyTypeVar = &typevars.MapKey{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Keytype,
+			},
+		}
+	default:
+		return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
+	}
+
+	for _, litElement := range litElements {
+		var valueExpr ast.Expr
+		if kvExpr, ok := litElement.(*ast.KeyValueExpr); ok {
+			attr, err := ep.Parse(kvExpr.Key)
+			if err != nil {
+				return nil, err
+			}
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            keyTypeVar,
+				Y:            attr.TypeVarList[0],
+				ExpectedType: attr.DataTypeList[0],
+			})
+			valueExpr = kvExpr.Value
+		} else {
+			valueExpr = litElement
+		}
+
+		if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
+			var typeDef gotypes.DataType
+			// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
+			if clExpr.Type == nil {
+				if pointer, ok := valueType.(*gotypes.Pointer); ok {
+					typeDef = pointer.Def
+					// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
+				} else {
+					typeDef = valueType
+				}
+			}
+			attr, err := ep.parseCompositeLit(clExpr, typeDef)
+			if err != nil {
+				return nil, err
+			}
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            valueTypeVar,
+				Y:            attr.TypeVarList[0],
+				ExpectedType: attr.DataTypeList[0],
+			})
+			continue
+		}
+
+		attr, err := ep.Parse(valueExpr)
 		if err != nil {
 			return nil, err
 		}
-		valueExpr = kvExpr.Value
-	} else {
-		valueExpr = expr
-	}
-
-	if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
-		var valueType gotypes.DataType
-		switch elmExpr := litType.(type) {
-		case *gotypes.Slice:
-			valueType = elmExpr.Elmtype
-		case *gotypes.Array:
-			valueType = elmExpr.Elmtype
-		case *gotypes.Map:
-			valueType = elmExpr.Valuetype
-		default:
-			return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
+		if len(attr.DataTypeList) != 1 {
+			return nil, fmt.Errorf("Expected single expression for KV value, got %#v", attr.DataTypeList)
 		}
 
-		var typeDef gotypes.DataType
-		// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
-		if clExpr.Type == nil {
-			if pointer, ok := valueType.(*gotypes.Pointer); ok {
-				typeDef = pointer.Def
-				// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
-			} else {
-				typeDef = valueType
-			}
-		}
-
-		return ep.parseCompositeLit(clExpr, typeDef)
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X:            valueTypeVar,
+			Y:            attr.TypeVarList[0],
+			ExpectedType: attr.DataTypeList[0],
+		})
 	}
 
-	attr, err := ep.Parse(valueExpr)
-	if err != nil {
-		return nil, err
-	}
-	if len(attr.DataTypeList) != 1 {
-		return nil, fmt.Errorf("Expected single expression for KV value, got %#v", attr.DataTypeList)
-	}
-	return attr, nil
+	return &typevars.Constant{
+		DataType: litType,
+	}, nil
 }
 
-// TODO(jchaloup): produces ExprAttribute struct with extracted attributes
-func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) error {
+// *gotypes.Struct
+func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) (*typevars.Constant, error) {
+	structTypeVar := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
 	fieldCounter := 0
 	fieldLen := len(structDef.Fields)
 	for _, litElement := range lit.Elts {
+		var fieldTypeVar *typevars.Field
 		var valueExpr ast.Expr
 		// if the struct fields name are omitted, the order matters
 		// TODO(jchaloup): should check if all elements are KeyValueExpr or not (otherwise go compilation fails)
@@ -126,32 +181,62 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 			// The field must be an identifier
 			keyDefIdentifier, ok := kvExpr.Key.(*ast.Ident)
 			if !ok {
-				return fmt.Errorf("Struct's field %#v is not an identifier", litElement)
+				return nil, fmt.Errorf("Struct's field %#v is not an identifier", litElement)
 			}
 			if structSymbol != nil {
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
 			}
+			ep.Config.ContractTable.AddContract(&contracts.HasField{
+				X:     *structTypeVar,
+				Field: keyDefIdentifier.Name,
+			})
+			fieldTypeVar = &typevars.Field{
+				Variable: *structTypeVar,
+				Name:     keyDefIdentifier.Name,
+			}
 			valueExpr = kvExpr.Value
 		} else {
 			if fieldCounter >= fieldLen {
-				return fmt.Errorf("Number of fields of the CL is greater than the number of fields of underlying struct %#v", structDef)
+				return nil, fmt.Errorf("Number of fields of the CL is greater than the number of fields of underlying struct %#v", structDef)
 			}
 			if structSymbol != nil {
 				// TODO(jchaloup): Should we count the anonymous field as well? Maybe make a AddDataTypeAnonymousField?
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
 			}
+			ep.Config.ContractTable.AddContract(&contracts.HasField{
+				X:     *structTypeVar,
+				Index: fieldCounter,
+			})
+			fieldTypeVar = &typevars.Field{
+				Variable: *structTypeVar,
+				Index:    fieldCounter,
+			}
 			valueExpr = litElement
 		}
 
 		// process the field value
-		_, err := ep.Parse(valueExpr)
+		attr, err := ep.Parse(valueExpr)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X:            fieldTypeVar,
+			Y:            attr.TypeVarList[0],
+			ExpectedType: attr.DataTypeList[0],
+		})
 		fieldCounter++
 	}
 
-	return nil
+	ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+		X: &typevars.Constant{
+			DataType: structDef,
+		},
+		Y: structTypeVar,
+	})
+
+	return &typevars.Constant{
+		DataType: structDef,
+	}, nil
 }
 
 func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprAttribute, error) {
@@ -179,7 +264,6 @@ func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprA
 }
 
 // parseCompositeLit consumes ast.CompositeLit and produces data type of the root composite literal
-// TODO(jchaloup): for each composite literal generate a data type contract
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (*types.ExprAttribute, error) {
 	glog.Infof("Processing CompositeLit: %#v\n", lit)
 	// https://golang.org/ref/spec#Composite_literals
@@ -232,25 +316,29 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 		return nil, err
 	}
 	glog.Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
+
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
+	var typeVar *typevars.Constant
 	switch litTypeExpr := nonIdentLitTypeDef.DataTypeList[0].(type) {
 	case *gotypes.Struct:
 		// anonymous structure -> we can ignore field's allocation
-		if err := ep.parseCompositeLitStructElements(lit, litTypeExpr, nil); err != nil {
+		var err error
+		typeVar, err = ep.parseCompositeLitStructElements(lit, litTypeExpr, nil)
+		if err != nil {
 			return nil, err
 		}
 	case *gotypes.Array, *gotypes.Slice, *gotypes.Map:
 		glog.Infof("parseCompositeLitArrayLikeElements: %#v\n", lit)
-		for _, litElement := range lit.Elts {
-			if _, err := ep.parseKeyValueLikeExpr(litElement, nonIdentLitTypeDef.DataTypeList[0]); err != nil {
-				return nil, err
-			}
+		var err error
+		typeVar, err = ep.parseKeyValueLikeExpr(lit.Elts, nonIdentLitTypeDef.DataTypeList[0])
+		if err != nil {
+			return nil, err
 		}
 	default:
 		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef.DataTypeList[0]))
 	}
 
-	return types.ExprAttributeFromDataType(litTypedef), nil
+	return types.ExprAttributeFromDataType(litTypedef).AddTypeVar(typeVar), nil
 }
 
 // parseIdentifier consumes ast.Ident and produces:

@@ -18,6 +18,12 @@ var VariableType Type = "Variable"
 var FunctionType Type = "Function"
 var ArgumentType Type = "Argument"
 var ReturnTypeType Type = "ReturnType"
+var MapKeyType Type = "MapKey"
+var MapValueType Type = "MapValue"
+var ListKeyType Type = "ListKey"
+var ListValueType Type = "ListValue"
+var FieldType Type = "Field"
+var CGOType Type = "CGO"
 
 // Constant to represent:
 // - basic literal type
@@ -52,22 +58,81 @@ func VariableFromSymbolDef(def *symboltable.SymbolDef) *Variable {
 	}
 }
 
+type Field struct {
+	Variable
+	Name  string
+	Index int
+}
+
+func (f *Field) GetType() Type {
+	return FieldType
+}
+
+type CGO struct{}
+
+func (c *CGO) GetType() Type {
+	return CGOType
+}
+
 func TypeVar2String(tv Interface) string {
 	switch d := tv.(type) {
 	case *Constant:
 		return fmt.Sprintf("TypeVar.Constant: %#v", d.DataType)
 	case *Variable:
 		return fmt.Sprintf("TypeVar.Variable: (%v) %v", d.Package, d.Name)
+	case *ListKey:
+		return fmt.Sprintf("TypeVar.ListKey: int")
+	case *ListValue:
+		return fmt.Sprintf("TypeVar.ListValue: %#v", d.Constant.DataType)
+	case *MapKey:
+		return fmt.Sprintf("TypeVar.MapKey: %#v", d.Constant.DataType)
+	case *MapValue:
+		return fmt.Sprintf("TypeVar.MapValue: %#v", d.Constant.DataType)
 	case *Function:
 		return fmt.Sprintf("TypeVar.Function: (%v) %v", d.Package, d.Name)
 	case *ReturnType:
 		return fmt.Sprintf("TypeVar.ReturnType: (%v) %v at %v", d.Package, d.Name, d.Index)
 	case *Argument:
 		return fmt.Sprintf("TypeVar.Argument: (%v) %v at %v", d.Package, d.Name, d.Index)
+	case *Field:
+		if d.Name == "" {
+			return fmt.Sprintf("TypeVar.Field: (%v) %v at index %v", d.Variable.Package, d.Variable.Name, d.Index)
+		}
+		return fmt.Sprintf("TypeVar.Field: (%v) %v with field %q", d.Variable.Package, d.Variable.Name, d.Name)
 	default:
 		fmt.Printf("\nTypeVar %#v\n\n", tv)
 		panic("Unrecognized TypeVar")
 	}
+}
+
+type ListKey struct{}
+
+func (l *ListKey) GetType() Type {
+	return ListKeyType
+}
+
+type ListValue struct {
+	Constant
+}
+
+func (l *ListValue) GetType() Type {
+	return ListValueType
+}
+
+type MapKey struct {
+	Constant
+}
+
+func (m *MapKey) GetType() Type {
+	return MapKeyType
+}
+
+type MapValue struct {
+	Constant
+}
+
+func (m *MapValue) GetType() Type {
+	return MapValueType
 }
 
 type Function struct {
@@ -100,4 +165,68 @@ type ReturnType struct {
 
 func (a *ReturnType) GetType() Type {
 	return ReturnTypeType
+}
+
+func MakeVar(name, packageName string) *Variable {
+	return &Variable{
+		Name:    name,
+		Package: packageName,
+	}
+}
+
+func MakeVirtualVar(index int) *Variable {
+	return MakeVar(fmt.Sprintf("virtual.var.%v", index), "")
+}
+
+func MakeConstant(datatype gotypes.DataType) *Constant {
+	return &Constant{
+		DataType: datatype,
+	}
+}
+
+func MakeFunction(name, packageName string) *Function {
+	return &Function{
+		Name:    name,
+		Package: packageName,
+	}
+}
+
+func MakeArgument(name, packageName string, index int) *Argument {
+	return &Argument{
+		Function: *MakeFunction(name, packageName),
+		Index:    index,
+	}
+}
+
+func MakeReturn(name, packageName string, index int) *ReturnType {
+	return &ReturnType{
+		Function: *MakeFunction(name, packageName),
+		Index:    index,
+	}
+}
+
+func MakeListValue(datatype gotypes.DataType) *ListValue {
+	return &ListValue{
+		Constant: *MakeConstant(datatype),
+	}
+}
+
+func MakeMapKey(datatype gotypes.DataType) *MapKey {
+	return &MapKey{
+		Constant: *MakeConstant(datatype),
+	}
+}
+
+func MakeMapValue(datatype gotypes.DataType) *MapValue {
+	return &MapValue{
+		Constant: *MakeConstant(datatype),
+	}
+}
+
+func MakeField(v *Variable, field string, index int) *Field {
+	return &Field{
+		Variable: *v,
+		Name:     field,
+		Index:    index,
+	}
 }

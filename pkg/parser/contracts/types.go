@@ -18,17 +18,20 @@ var BinaryOpType Type = "binaryop"
 var PropagatesToType Type = "propagatesto"
 var IsCompatibleWithType Type = "iscompatiblewith"
 var IsInvocableType Type = "isinvocable"
+var HasFieldType Type = "hasfield"
 
 func Contract2String(c Contract) string {
 	switch d := c.(type) {
 	case *BinaryOp:
 		return fmt.Sprintf("BinaryOpContract:\n\tX=%v,\n\tY=%v,\n\tZ=%v,\n\top=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), typevars.TypeVar2String(d.Z), d.OpToken)
 	case *PropagatesTo:
-		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
+		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%#v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
 	case *IsCompatibleWith:
 		return fmt.Sprintf("IsCompatibleWith:\n\tX=%v\n\tY=%v\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
 	case *IsInvocable:
 		return fmt.Sprintf("IsInvocable:\n\tF=%v,\n\targCount=%v", typevars.TypeVar2String(d.F), d.ArgsCount)
+	case *HasField:
+		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v", typevars.TypeVar2String(&d.X), d.Field, d.Index)
 	default:
 		panic(fmt.Sprintf("Contract %#v not recognized", c))
 	}
@@ -75,4 +78,14 @@ type IsInvocable struct {
 
 func (i *IsInvocable) GetType() Type {
 	return IsInvocableType
+}
+
+type HasField struct {
+	X     typevars.Variable
+	Field string
+	Index int
+}
+
+func (i *HasField) GetType() Type {
+	return HasFieldType
 }
