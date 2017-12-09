@@ -547,7 +547,16 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		// As the list of all data types is read from the builtin package,
 		// it is not possible to keep a clean solution and provide
 		// the check for the operands validity at the same time.
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}), nil
+		z := &typevars.Variable{
+			Name: ep.Config.ContractTable.NewVariable(),
+		}
+		ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+			OpToken: expr.Op,
+			X:       xAttr.TypeVarList[0],
+			Y:       yAttr.TypeVarList[0],
+			Z:       z,
+		})
+		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(z), nil
 	}
 
 	// If both types are built-in, just return built-in
@@ -566,12 +575,21 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				// The right operand can be ignored (it is always converted to an integer).
 				// If the left operand is untyped int => untyped int (or int for non-constant expressions)
 				// if the left operand is typed int => return int
+				z := &typevars.Variable{
+					Name: ep.Config.ContractTable.NewVariable(),
+				}
+				ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+					OpToken: expr.Op,
+					X:       xAttr.TypeVarList[0],
+					Y:       yAttr.TypeVarList[0],
+					Z:       z,
+				})
 				if xt.Untyped {
 					// const a = 8.0 << 1
 					// a is of type int, checked at https://play.golang.org/
-					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "int", Untyped: true}), nil
+					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "int", Untyped: true}).AddTypeVar(z), nil
 				}
-				return types.ExprAttributeFromDataType(xt), nil
+				return types.ExprAttributeFromDataType(xt).AddTypeVar(z), nil
 			case token.AND, token.OR, token.MUL, token.SUB, token.QUO, token.ADD, token.AND_NOT, token.REM, token.XOR:
 				// The same reasoning as with the relational operators
 				// Experiments:
@@ -579,64 +597,27 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				if xt.Untyped && yt.Untyped {
 
 				}
+				z := &typevars.Variable{
+					Name: ep.Config.ContractTable.NewVariable(),
+				}
+				ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+					OpToken: expr.Op,
+					X:       xAttr.TypeVarList[0],
+					Y:       yAttr.TypeVarList[0],
+					Z:       z,
+				})
 				if xt.Untyped {
-					z := &typevars.Variable{
-						Name: ep.Config.ContractTable.NewVariable(),
-					}
-					ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
-						OpToken: expr.Op,
-						X:       xAttr.TypeVarList[0],
-						Y:       yAttr.TypeVarList[0],
-						Z:       z,
-					})
 					return types.ExprAttributeFromDataType(yt).AddTypeVar(z), nil
 				}
 				if yt.Untyped {
-					return types.ExprAttributeFromDataType(xt), nil
+					return types.ExprAttributeFromDataType(xt).AddTypeVar(z), nil
 				}
 				// byte(2)&uint8(3) is uint8
 				if (xt.Def == "byte" && yt.Def == "uint8") || (yt.Def == "byte" && xt.Def == "uint8") {
-					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}), nil
+					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(z), nil
 				}
 			}
 			return nil, fmt.Errorf("Binary operation %q over two different built-in types: %q != %q", expr.Op, xt, yt)
-		}
-		if xt.Untyped {
-			{
-				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped})
-				glog.Infof("xx+yy: %v\n", string(byteSlice))
-			}
-			z := &typevars.Variable{
-				Name: ep.Config.ContractTable.NewVariable(),
-			}
-			ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
-				OpToken: expr.Op,
-				X:       xAttr.TypeVarList[0],
-				Y:       yAttr.TypeVarList[0],
-				Z:       z,
-			})
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}).AddTypeVar(z), nil
-		}
-		if yt.Untyped {
-			{
-				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped})
-				glog.Infof("xx+yy: %v\n", string(byteSlice))
-			}
-			z := &typevars.Variable{
-				Name: ep.Config.ContractTable.NewVariable(),
-			}
-			ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
-				OpToken: expr.Op,
-				X:       xAttr.TypeVarList[0],
-				Y:       yAttr.TypeVarList[0],
-				Z:       z,
-			})
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}).AddTypeVar(z), nil
-		}
-		// both operands are typed => Untyped = false
-		{
-			byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def})
-			glog.Infof("xx+yy: %v\n", string(byteSlice))
 		}
 		z := &typevars.Variable{
 			Name: ep.Config.ContractTable.NewVariable(),
@@ -647,6 +628,25 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 			Y:       yAttr.TypeVarList[0],
 			Z:       z,
 		})
+		if xt.Untyped {
+			{
+				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped})
+				glog.Infof("xx+yy: %v\n", string(byteSlice))
+			}
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}).AddTypeVar(z), nil
+		}
+		if yt.Untyped {
+			{
+				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped})
+				glog.Infof("xx+yy: %v\n", string(byteSlice))
+			}
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}).AddTypeVar(z), nil
+		}
+		// both operands are typed => Untyped = false
+		{
+			byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def})
+			glog.Infof("xx+yy: %v\n", string(byteSlice))
+		}
 		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def}).AddTypeVar(z), nil
 	}
 
@@ -692,15 +692,25 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		return nil, fmt.Errorf("At least one operand of a binary expression has to be an identifier or a qualified identifier")
 	}
 
+	z := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+	ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+		OpToken: expr.Op,
+		X:       xAttr.TypeVarList[0],
+		Y:       yAttr.TypeVarList[0],
+		Z:       z,
+	})
+
 	// Even here we assume existence of untyped constants.
 	// If there is only one identifier it means the other operand is a built-in type.
 	// Assuming the code is written correctly (it compiles), resulting data type of the operation
 	// is always the identifier.
 	// TODO(jchaloup): if an operand is a data type identifier, we need to return the data type itself, not its definition
 	if xIsIdentifier {
-		return types.ExprAttributeFromDataType(xIdent), nil
+		return types.ExprAttributeFromDataType(xIdent).AddTypeVar(z), nil
 	}
-	return types.ExprAttributeFromDataType(yIdent), nil
+	return types.ExprAttributeFromDataType(yIdent).AddTypeVar(z), nil
 }
 
 // parseStarExpr consumes ast.StarExpr and produces:

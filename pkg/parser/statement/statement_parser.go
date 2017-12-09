@@ -266,6 +266,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     typeDef,
+				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 			})
 			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				if builtin.Def == "iota" {
@@ -287,6 +288,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     valueExprAttr.DataTypeList[0],
+				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 			})
 		}
 	}
@@ -306,6 +308,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			Name:    spec.Names[i].Name,
 			Package: sp.PackageName,
 			Def:     typeDef,
+			Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 		})
 	}
 
@@ -405,7 +408,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 
 	// define general Rhs index function
 	rhsIndexer := func(i int) (gotypes.DataType, typevars.Interface, error) {
-		glog.Infof("Calling general Rhs index function")
+		glog.Infof("Calling general Rhs index function at pos %v", statement.Pos())
 		defAttr, err := sp.ExprParser.Parse(statement.Rhs[i])
 		if err != nil {
 			return nil, nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
@@ -596,14 +599,15 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 
 			// TODO(jchaloup): If the statement.Tok is not token.DEFINE, don't add the variable to the symbol table.
 			//                 Instead, check the varible is of the same type (or compatible) as the already stored one.
-			sDef := &symboltable.SymbolDef{
-				Name:    lhsExpr.Name,
-				Package: sp.PackageName,
-				Def:     rhsExpr,
-				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, statement.Lhs[i].Pos()),
-			}
+
 			glog.Infof("Adding contract for token %v", statement.Tok)
 			if statement.Tok == token.DEFINE {
+				sDef := &symboltable.SymbolDef{
+					Name:    lhsExpr.Name,
+					Package: sp.PackageName,
+					Def:     rhsExpr,
+					Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, statement.Lhs[i].Pos()),
+				}
 				sp.SymbolTable.AddVariable(sDef)
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 					X:            rhsTypeVar,
@@ -611,6 +615,10 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					ExpectedType: sDef.Def,
 				})
 			} else {
+				sDef, err := sp.SymbolTable.LookupVariable(lhsExpr.Name)
+				if err != nil {
+					return err
+				}
 				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 					X:            rhsTypeVar,
 					Y:            typevars.VariableFromSymbolDef(sDef),
