@@ -125,6 +125,10 @@ func f() string {
 	ma := mapV["3"]
 	sa := "ahoj"[0]
 
+	// type assertion
+	asA := Int(uopb)
+	asB := asA.(int)
+
 	fmt.Print(a, list, mapV, structV, structV2, listV2, ra)
 
 	return b

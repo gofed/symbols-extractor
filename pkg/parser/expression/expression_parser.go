@@ -925,14 +925,16 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				// e.g. f(...) (a, b, c); g(a,b,c) ...; g(f(...))
 				if len(params) == len(attr.DataTypeList) {
 					for i := range attr.DataTypeList {
-						ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-							X: attr.TypeVarList[i],
-							Y: &typevars.Argument{
-								Function: *functionTypeVar,
-								Index:    i,
-							},
-							ExpectedType: attr.DataTypeList[i],
-						})
+						if functionTypeVar != nil {
+							ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+								X: attr.TypeVarList[i],
+								Y: &typevars.Argument{
+									Function: *functionTypeVar,
+									Index:    i,
+								},
+								ExpectedType: attr.DataTypeList[i],
+							})
+						}
 					}
 					return nil
 				}
@@ -941,14 +943,16 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				}
 
 				// E.g. func f(a string, b ...int) called as f("aaa"), the 'b' is nil then
-				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X: attr.TypeVarList[0],
-					Y: &typevars.Argument{
-						Function: *functionTypeVar,
-						Index:    0,
-					},
-					ExpectedType: attr.DataTypeList[0],
-				})
+				if functionTypeVar != nil {
+					ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X: attr.TypeVarList[0],
+						Y: &typevars.Argument{
+							Function: *functionTypeVar,
+							Index:    0,
+						},
+						ExpectedType: attr.DataTypeList[0],
+					})
+				}
 				return nil
 			}
 		}
@@ -963,14 +967,16 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				return fmt.Errorf("Argument %#v of a call expression does not have one return value", arg)
 			}
 
-			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-				X: attr.TypeVarList[0],
-				Y: &typevars.Argument{
-					Function: *functionTypeVar,
-					Index:    i,
-				},
-				ExpectedType: attr.DataTypeList[0],
-			})
+			if functionTypeVar != nil {
+				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X: attr.TypeVarList[0],
+					Y: &typevars.Argument{
+						Function: *functionTypeVar,
+						Index:    i,
+					},
+					ExpectedType: attr.DataTypeList[0],
+				})
+			}
 		}
 		return nil
 	}
@@ -987,10 +993,25 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		if err != nil {
 			return nil, err
 		}
-		if err := processArgs(nil, expr.Args, nil); err != nil {
+
+		attr, err := ep.Parse(expr.Args[0])
+		if err != nil {
 			return nil, err
 		}
-		return types.ExprAttributeFromDataType(def), nil
+
+		if attr == nil || len(attr.DataTypeList) != 1 {
+			return nil, fmt.Errorf("Argument %#v of a call expression does not have one return value", expr.Args[0])
+		}
+
+		y := typevars.MakeConstant(def)
+
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X:            attr.TypeVarList[0],
+			Y:            y,
+			ExpectedType: attr.DataTypeList[0],
+		})
+
+		return types.ExprAttributeFromDataType(def).AddTypeVar(y), nil
 	}
 	glog.Infof("isDataType of %#v is false", expr.Fun)
 
@@ -1932,7 +1953,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttribute, error) {
 	glog.Infof("Processing TypeAssertExpr: %#v\n", expr)
 	// X.(Type)
-	_, xErr := ep.Parse(expr.X)
+	attr, xErr := ep.Parse(expr.X)
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -1954,7 +1975,15 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttr
 		return nil, err
 	}
 
-	return types.ExprAttributeFromDataType(def), nil
+	y := typevars.MakeConstant(def)
+
+	ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+		X:            attr.TypeVarList[0],
+		Y:            y,
+		ExpectedType: attr.DataTypeList[0],
+	})
+
+	return types.ExprAttributeFromDataType(def).AddTypeVar(y), nil
 }
 
 func (ep *Parser) Parse(expr ast.Expr) (*types.ExprAttribute, error) {

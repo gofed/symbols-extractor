@@ -183,6 +183,8 @@ var vars = map[string]string{
 	"lb":       ":1642:lb",
 	"ma":       ":1655:ma",
 	"sa":       ":1672:sa",
+	"asA":      ":1709:asA",
+	"asB":      ":1727:asB",
 }
 
 type TestSuite struct {
@@ -1045,6 +1047,38 @@ func createIndexableTestSuite() *TestSuite {
 	}
 }
 
+func createTypeCastingTestSuite() *TestSuite {
+	return &TestSuite{
+		group: "type casting",
+		contracts: []contracts.Contract{
+			// asA := Int(uopb)
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeVar(vars["uopb"], packageName),
+				Y: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "Int",
+					Package: packageName,
+				}),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "Int",
+					Package: packageName,
+				}),
+				Y: typevars.MakeVar(vars["asA"], packageName),
+			},
+			// asB := asA.(int)
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeVar(vars["asA"], packageName),
+				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "int"}),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				Y: typevars.MakeVar(vars["asB"], packageName),
+			},
+		},
+	}
+}
+
 func createEmptyTestSuite() *TestSuite {
 	return &TestSuite{
 		group:     "empty",
@@ -1084,6 +1118,7 @@ func TestDataTypes(t *testing.T) {
 		createBinaryOperatorTestSuite(),
 		createPointersTestSuite(),
 		createIndexableTestSuite(),
+		createTypeCastingTestSuite(),
 	}
 
 	contractsList := config.ContractTable.Contracts()
