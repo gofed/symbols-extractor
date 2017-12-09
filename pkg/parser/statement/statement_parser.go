@@ -405,6 +405,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 
 	// define general Rhs index function
 	rhsIndexer := func(i int) (gotypes.DataType, typevars.Interface, error) {
+		glog.Infof("Calling general Rhs index function")
 		defAttr, err := sp.ExprParser.Parse(statement.Rhs[i])
 		if err != nil {
 			return nil, nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
@@ -453,6 +454,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				}
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
+				glog.Infof("Calling CallExpr Rhs index function")
 				if i < callExprDefLen {
 					return callExprDefAttr.DataTypeList[i], callExprDefAttr.TypeVarList[i], nil
 				}
@@ -477,6 +479,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				return err
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
+				glog.Infof("Calling IndexExpr Rhs index function")
 				if i == 0 {
 					// - map
 					// - identifier of map
@@ -545,6 +548,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				return err
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
+				glog.Infof("Calling TypeAssertExpr Rhs index function")
 				if i == 0 {
 					return typeDef, &typevars.Constant{DataType: typeDef}, nil
 				}
@@ -598,6 +602,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				Def:     rhsExpr,
 				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, statement.Lhs[i].Pos()),
 			}
+			glog.Infof("Adding contract for token %v", statement.Tok)
 			if statement.Tok == token.DEFINE {
 				sp.SymbolTable.AddVariable(sDef)
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{

@@ -15,6 +15,7 @@ type Contract interface {
 }
 
 var BinaryOpType Type = "binaryop"
+var UnaryOpType Type = "unaryop"
 var PropagatesToType Type = "propagatesto"
 var IsCompatibleWithType Type = "iscompatiblewith"
 var IsInvocableType Type = "isinvocable"
@@ -24,6 +25,8 @@ func Contract2String(c Contract) string {
 	switch d := c.(type) {
 	case *BinaryOp:
 		return fmt.Sprintf("BinaryOpContract:\n\tX=%v,\n\tY=%v,\n\tZ=%v,\n\top=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), typevars.TypeVar2String(d.Z), d.OpToken)
+	case *UnaryOp:
+		return fmt.Sprintf("UnaryOpContract:\n\tX=%v,\n\tY=%v,\n\top=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.OpToken)
 	case *PropagatesTo:
 		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%#v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
 	case *IsCompatibleWith:
@@ -49,8 +52,11 @@ type BinaryOp struct {
 	// TODO(jchaloup): add expected type
 }
 
-func (b *BinaryOp) GetType() Type {
-	return BinaryOpType
+type UnaryOp struct {
+	OpToken token.Token
+	// Y = op X
+	X, Y typevars.Interface
+	// TODO(jchaloup): add expected type
 }
 
 type PropagatesTo struct {
@@ -58,17 +64,9 @@ type PropagatesTo struct {
 	ExpectedType gotypes.DataType
 }
 
-func (p *PropagatesTo) GetType() Type {
-	return PropagatesToType
-}
-
 type IsCompatibleWith struct {
 	X, Y         typevars.Interface
 	ExpectedType gotypes.DataType
-}
-
-func (i *IsCompatibleWith) GetType() Type {
-	return IsCompatibleWithType
 }
 
 type IsInvocable struct {
@@ -76,14 +74,30 @@ type IsInvocable struct {
 	ArgsCount int
 }
 
-func (i *IsInvocable) GetType() Type {
-	return IsInvocableType
-}
-
 type HasField struct {
 	X     typevars.Variable
 	Field string
 	Index int
+}
+
+func (b *BinaryOp) GetType() Type {
+	return BinaryOpType
+}
+
+func (b *UnaryOp) GetType() Type {
+	return UnaryOpType
+}
+
+func (p *PropagatesTo) GetType() Type {
+	return PropagatesToType
+}
+
+func (i *IsCompatibleWith) GetType() Type {
+	return IsCompatibleWithType
+}
+
+func (i *IsInvocable) GetType() Type {
+	return IsInvocableType
 }
 
 func (i *HasField) GetType() Type {

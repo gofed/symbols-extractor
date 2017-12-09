@@ -58,6 +58,13 @@ func VariableFromSymbolDef(def *symboltable.SymbolDef) *Variable {
 	}
 }
 
+func FunctionFromSymbolDef(def *symboltable.SymbolDef) *Function {
+	return &Function{
+		Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
+		Package: def.Package,
+	}
+}
+
 type Field struct {
 	Variable
 	Name  string

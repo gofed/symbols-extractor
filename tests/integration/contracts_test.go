@@ -96,6 +96,13 @@ func compareContracts(t *testing.T, expected, tested contracts.Contract) {
 		if x.OpToken != y.OpToken {
 			t.Errorf("Expected BinaryOp.Op %q, got %q instead", x.OpToken, y.OpToken)
 		}
+	case *contracts.UnaryOp:
+		y := tested.(*contracts.UnaryOp)
+		compareTypeVars(t, x.X, y.X)
+		compareTypeVars(t, x.Y, y.Y)
+		if x.OpToken != y.OpToken {
+			t.Errorf("Expected UnaryOp.Op %q, got %q instead", x.OpToken, y.OpToken)
+		}
 	case *contracts.IsInvocable:
 		y := tested.(*contracts.IsInvocable)
 		compareTypeVars(t, x.F, y.F)
@@ -162,6 +169,14 @@ func TestDataTypes(t *testing.T) {
 		"structV":  ":606:structV",
 		"structV2": ":687:structV2",
 		"listV2":   ":757:listV2",
+		"ra":       ":823:ra",
+		"chanA":    ":834:chanA",
+		"chanValA": ":859:chanValA",
+		"uopa":     ":881:uopa",
+		"uopb":     ":893:uopb",
+		"uopc":     ":905:uopc",
+		"uopd":     ":920:uopd",
+		"uope":     ":893:uope",
 	}
 
 	tests := []contracts.Contract{
@@ -529,6 +544,88 @@ func TestDataTypes(t *testing.T) {
 				},
 			}),
 			Y: typevars.MakeVar(vars["listV2"], packageName),
+		},
+		//
+		// ra := &a
+		//
+		&contracts.UnaryOp{
+			X:       typevars.MakeVar(vars["a"], packageName),
+			Y:       typevars.MakeVirtualVar(9),
+			OpToken: token.AND,
+		},
+		&contracts.PropagatesTo{
+			X: typevars.MakeVirtualVar(9),
+			Y: typevars.MakeVar(vars["ra"], packageName),
+		},
+		//
+		// chanA := make(chan int)
+		//
+		&contracts.PropagatesTo{
+			X: typevars.MakeConstant(&gotypes.Channel{
+				Dir:   "3",
+				Value: &gotypes.Builtin{Untyped: false, Def: "int"},
+			}),
+			Y: typevars.MakeVar(vars["chanA"], packageName),
+		},
+		//
+		// chanValA := <-chanA
+		//
+		&contracts.UnaryOp{
+			X:       typevars.MakeVar(vars["chanA"], packageName),
+			Y:       typevars.MakeVirtualVar(10),
+			OpToken: token.ARROW,
+		},
+		&contracts.PropagatesTo{
+			X: typevars.MakeVirtualVar(10),
+			Y: typevars.MakeVar(vars["chanValA"], packageName),
+		},
+		//
+		// uopa := ^1
+		//
+		&contracts.UnaryOp{
+			X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+			Y:       typevars.MakeVirtualVar(11),
+			OpToken: token.XOR,
+		},
+		&contracts.PropagatesTo{
+			X: typevars.MakeVirtualVar(11),
+			Y: typevars.MakeVar(vars["uopa"], packageName),
+		},
+		//
+		// uopb := -1
+		//
+		&contracts.UnaryOp{
+			X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+			Y:       typevars.MakeVirtualVar(12),
+			OpToken: token.SUB,
+		},
+		&contracts.PropagatesTo{
+			X: typevars.MakeVirtualVar(12),
+			Y: typevars.MakeVar(vars["uopb"], packageName),
+		},
+		//
+		// uopc := !true
+		//
+		&contracts.UnaryOp{
+			X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+			Y:       typevars.MakeVirtualVar(13),
+			OpToken: token.NOT,
+		},
+		&contracts.PropagatesTo{
+			X: typevars.MakeVirtualVar(13),
+			Y: typevars.MakeVar(vars["uopc"], packageName),
+		},
+		//
+		// uopd := +1
+		//
+		&contracts.UnaryOp{
+			X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+			Y:       typevars.MakeVirtualVar(14),
+			OpToken: token.ADD,
+		},
+		&contracts.PropagatesTo{
+			X: typevars.MakeVirtualVar(14),
+			Y: typevars.MakeVar(vars["uopd"], packageName),
 		},
 	}
 

@@ -76,12 +76,17 @@ func f() string {
 		},
 	}
 
-	fmt.Printf("a: %v\n", a)
-	fmt.Printf("list: %v\n", list)
-	fmt.Printf("mapV: %v\n", mapV)
-	fmt.Printf("structV: %v\n", structV)
-	fmt.Printf("structV2: %v\n", structV2)
-	fmt.Printf("listV2: %v\n", listV2)
+	ra := &a
+
+	chanA := make(chan int)
+	chanValA := <-chanA
+
+	uopa := ^1
+	uopb := -1
+	uopc := !true
+	uopd := +1
+
+	fmt.Print(a, list, mapV, structV, structV2, listV2, ra)
 
 	return b
 }

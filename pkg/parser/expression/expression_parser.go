@@ -370,19 +370,14 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			var typeVar typevars.Interface
 			if st == symboltable.FunctionSymbol {
-				typeVar = &typevars.Function{
-					Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
-					Package: def.Package,
-				}
-			} else {
-				typeVar = &typevars.Variable{
-					Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
-					Package: def.Package,
-				}
+				return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
+					typevars.FunctionFromSymbolDef(def),
+				), nil
 			}
-			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(typeVar), nil
+			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
+				typevars.VariableFromSymbolDef(def),
+			), nil
 		}
 	}
 
@@ -398,16 +393,24 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		case symboltable.VariableSymbol:
 			switch ident.Name {
 			case "true", "false":
-				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}), nil
+				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+				), nil
 			case "nil":
-				return types.ExprAttributeFromDataType(&gotypes.Nil{}), nil
+				return types.ExprAttributeFromDataType(&gotypes.Nil{}).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Nil{}),
+				), nil
 			case "iota":
-				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "iota"}), nil
+				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "iota"}).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Builtin{Def: "iota"}),
+				), nil
 			default:
 				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
 			}
 		case symboltable.FunctionSymbol:
-			return types.ExprAttributeFromDataType(symbolDef.Def), nil
+			return types.ExprAttributeFromDataType(symbolDef.Def).AddTypeVar(
+				typevars.FunctionFromSymbolDef(symbolDef),
+			), nil
 		default:
 			return nil, fmt.Errorf("Unsupported symbol type: %v", symbolType)
 		}
@@ -437,12 +440,23 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		return nil, fmt.Errorf("Operand of an unary operator is not a single value")
 	}
 
+	y := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
+	var yAttr *types.ExprAttribute
+
 	// TODO(jchaloup): check the token is really a unary operator
 	// TODO(jchaloup): add the missing unary operator tokens
 	switch expr.Op {
 	// variable address
 	case token.AND:
-		return types.ExprAttributeFromDataType(&gotypes.Pointer{Def: attr.DataTypeList[0]}), nil
+		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+			OpToken: expr.Op,
+			X:       attr.TypeVarList[0],
+			Y:       y,
+		})
+		yAttr = types.ExprAttributeFromDataType(&gotypes.Pointer{Def: attr.DataTypeList[0]})
 	// channel
 	case token.ARROW:
 		nonIdentDefAttr, err := ep.findFirstNonidDataType(attr.DataTypeList[0])
@@ -452,13 +466,25 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		if nonIdentDefAttr.DataTypeList[0].GetType() != gotypes.ChannelType {
 			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead at %v", nonIdentDefAttr.DataTypeList[0].GetType(), expr.Pos())
 		}
-		return types.ExprAttributeFromDataType(nonIdentDefAttr.DataTypeList[0].(*gotypes.Channel).Value), nil
+		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+			OpToken: expr.Op,
+			X:       attr.TypeVarList[0],
+			Y:       y,
+		})
+		yAttr = types.ExprAttributeFromDataType(nonIdentDefAttr.DataTypeList[0].(*gotypes.Channel).Value)
 		// other
 	case token.XOR, token.OR, token.SUB, token.NOT, token.ADD:
-		return attr, nil
+		// is token.OR really a unary operator?
+		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+			OpToken: expr.Op,
+			X:       attr.TypeVarList[0],
+			Y:       y,
+		})
+		yAttr = types.ExprAttributeFromDataType(attr.DataTypeList[0])
 	default:
 		return nil, fmt.Errorf("Unary operator %#v (%#v) not recognized", expr.Op, token.ADD)
 	}
+	return yAttr.AddTypeVar(y), nil
 }
 
 // parseBinaryExpr consumes ast.BinaryExpr and produces:
@@ -972,25 +998,21 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				switch arglen := len(expr.Args); arglen {
 				case 1:
 					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
-					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-					return types.ExprAttributeFromDataType(typeDef), err
 				case 2:
 					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
-					if err := processArgs(nil, []ast.Expr{expr.Args[1]}, nil); err != nil {
+					if err := processArgs(typevars.MakeFunction("make", "builtin"), []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
-					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-					return types.ExprAttributeFromDataType(typeDef), err
 				case 3:
 					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
-					if err := processArgs(nil, []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+					if err := processArgs(typevars.MakeFunction("make", "builtin"), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
-					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-					return types.ExprAttributeFromDataType(typeDef), err
 				default:
 					return nil, fmt.Errorf("Expecting 1, 2 or 3 arguments of built-in function make, got %q instead", arglen)
 				}
+				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(typevars.MakeConstant(typeDef)), err
 			case "new":
 				// The new built-in function allocates memory. The first argument is a type,
 				// not a value, and the value returned is a pointer to a newly
@@ -999,7 +1021,11 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					return nil, fmt.Errorf("Len of new args != 1, it is %#v", expr.Args)
 				}
 				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-				return types.ExprAttributeFromDataType(&gotypes.Pointer{Def: typeDef}), err
+				return types.ExprAttributeFromDataType(
+					&gotypes.Pointer{Def: typeDef},
+				).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Pointer{Def: typeDef}),
+				), err
 			}
 		}
 		// The attr.TypeVarList[0] must be typevars.Function
