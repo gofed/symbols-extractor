@@ -119,6 +119,12 @@ func f() string {
 	// pointers
 	da := *ra
 
+	// indeces
+	la := list[0:1]
+	lb := la[3]
+	ma := mapV["3"]
+	sa := "ahoj"[0]
+
 	fmt.Print(a, list, mapV, structV, structV2, listV2, ra)
 
 	return b

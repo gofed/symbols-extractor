@@ -50,6 +50,7 @@ func compareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 		if x.Index != y.Index {
 			t.Errorf("Got ReturnType.Index %v, expected %v", x.Index, y.Index)
 		}
+	case *typevars.ListKey:
 	case *typevars.ListValue:
 		y := tested.(*typevars.ListValue)
 		compareTypeVars(t, &x.Constant, &y.Constant)
@@ -134,6 +135,9 @@ func compareContracts(t *testing.T, expected, tested contracts.Contract) {
 		y := tested.(*contracts.ReferenceOf)
 		compareTypeVars(t, x.X, y.X)
 		compareTypeVars(t, x.Y, y.Y)
+	case *contracts.IsIndexable:
+		y := tested.(*contracts.IsIndexable)
+		compareTypeVars(t, x.X, y.X)
 	default:
 		t.Errorf("Contract %#v not recognized", expected)
 	}
@@ -175,6 +179,10 @@ var vars = map[string]string{
 	"bopf":     ":1488:bopf",
 	"bopg":     ":1543:bopg",
 	"da":       ":1601:da",
+	"la":       ":1625:la",
+	"lb":       ":1642:lb",
+	"ma":       ":1655:ma",
+	"sa":       ":1672:sa",
 }
 
 type TestSuite struct {
@@ -964,6 +972,79 @@ func createPointersTestSuite() *TestSuite {
 	}
 }
 
+func createIndexableTestSuite() *TestSuite {
+	return &TestSuite{
+		group: "indexable",
+		contracts: []contracts.Contract{
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeListKey(),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeListKey(),
+			},
+			&contracts.IsIndexable{
+				X: typevars.MakeVar(vars["list"], packageName),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVar(vars["list"], packageName),
+				Y: typevars.MakeVar(vars["la"], packageName),
+			},
+			//lb := la[3]
+			&contracts.IsIndexable{
+				X: typevars.MakeVar(vars["la"], packageName),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeListKey(),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeListValue(&gotypes.Slice{
+					Elmtype: &gotypes.Identifier{
+						Def:     "Int",
+						Package: packageName,
+					},
+				}),
+				Y: typevars.MakeVar(vars["lb"], packageName),
+			},
+			// ma := mapV["3"]
+			&contracts.IsIndexable{
+				X: typevars.MakeVar(vars["mapV"], packageName),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeMapKey(&gotypes.Builtin{Untyped: true, Def: "string"}),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeMapValue(&gotypes.Map{
+					Keytype: &gotypes.Builtin{
+						Untyped: false,
+						Def:     "string",
+					},
+					Valuetype: &gotypes.Builtin{
+						Untyped: false,
+						Def:     "int",
+					},
+				}),
+				Y: typevars.MakeVar(vars["ma"], packageName),
+			},
+			//sa := "ahoj"[0]
+			&contracts.IsIndexable{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeListKey(),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeListValue(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeVar(vars["sa"], packageName),
+			},
+		},
+	}
+}
+
 func createEmptyTestSuite() *TestSuite {
 	return &TestSuite{
 		group:     "empty",
@@ -1002,6 +1083,7 @@ func TestDataTypes(t *testing.T) {
 		createUnaryOperatorTestSuite(),
 		createBinaryOperatorTestSuite(),
 		createPointersTestSuite(),
+		createIndexableTestSuite(),
 	}
 
 	contractsList := config.ContractTable.Contracts()

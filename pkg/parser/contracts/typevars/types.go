@@ -212,6 +212,10 @@ func MakeReturn(name, packageName string, index int) *ReturnType {
 	}
 }
 
+func MakeListKey() *ListKey {
+	return &ListKey{}
+}
+
 func MakeListValue(datatype gotypes.DataType) *ListValue {
 	return &ListValue{
 		Constant: *MakeConstant(datatype),

@@ -24,6 +24,7 @@ var IsReferenceableType Type = "isreferenceable"
 var ReferenceOfType Type = "referenceof"
 var IsDereferenceableType Type = "Isdereferenceable"
 var DereferenceOfType Type = "dereferenceOf"
+var IsIndexableType Type = "isindexable"
 
 func Contract2String(c Contract) string {
 	switch d := c.(type) {
@@ -47,6 +48,8 @@ func Contract2String(c Contract) string {
 		return fmt.Sprintf("DereferenceOf:\n\tX=%v,\n\tY=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y))
 	case *HasField:
 		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v", typevars.TypeVar2String(&d.X), d.Field, d.Index)
+	case *IsIndexable:
+		return fmt.Sprintf("IsIndexable:\n\tX=%v", typevars.TypeVar2String(d.X))
 	default:
 		panic(fmt.Sprintf("Contract %#v not recognized", c))
 	}
@@ -108,6 +111,10 @@ type DereferenceOf struct {
 	X, Y typevars.Interface
 }
 
+type IsIndexable struct {
+	X typevars.Interface
+}
+
 func (b *BinaryOp) GetType() Type {
 	return BinaryOpType
 }
@@ -146,4 +153,8 @@ func (i *ReferenceOf) GetType() Type {
 
 func (i *DereferenceOf) GetType() Type {
 	return DereferenceOfType
+}
+
+func (i *IsIndexable) GetType() Type {
+	return IsIndexableType
 }

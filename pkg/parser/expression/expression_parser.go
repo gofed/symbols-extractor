@@ -1087,20 +1087,37 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 // Assumptions:
 // - All Low, High, Max expression are valid slice indexes
 func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, error) {
+	// From https://golang.org/ref/spec#Slice_types:
+	// 		"The elements can be addressed by integer indices 0 through len(s)-1."
 	if expr.Low != nil {
-		if _, err := ep.Parse(expr.Low); err != nil {
+		attr, err := ep.Parse(expr.Low)
+		if err != nil {
 			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
 	}
 	if expr.High != nil {
-		if _, err := ep.Parse(expr.High); err != nil {
+		attr, err := ep.Parse(expr.High)
+		if err != nil {
 			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
 	}
 	if expr.Max != nil {
-		if _, err := ep.Parse(expr.Max); err != nil {
+		attr, err := ep.Parse(expr.Max)
+		if err != nil {
 			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
 	}
 
 	exprDefAttr, err := ep.Parse(expr.X)
@@ -1111,6 +1128,10 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, err
 	if len(exprDefAttr.DataTypeList) != 1 {
 		return nil, fmt.Errorf("SliceExpr is not a single argument")
 	}
+
+	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
+		X: exprDefAttr.TypeVarList[0],
+	})
 
 	return exprDefAttr, nil
 }
@@ -1782,7 +1803,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	glog.Infof("Processing IndexExpr: %#v\n", expr)
 	// X[Index]
 	// The Index can be a simple literal or another compound expression
-	_, indexErr := ep.Parse(expr.Index)
+	indexAttr, indexErr := ep.Parse(expr.Index)
 	if indexErr != nil {
 		return nil, indexErr
 	}
@@ -1845,29 +1866,63 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 		}
 	}
 
+	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
+		X: xDefAttr.TypeVarList[0],
+	})
+
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
 	switch xType := indexExpr.(type) {
 	case *gotypes.Map:
-		return types.ExprAttributeFromDataType(xType.Valuetype), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeMapKey(indexAttr.DataTypeList[0]),
+		})
+		y := typevars.MakeMapValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Valuetype).AddTypeVar(y), nil
 	case *gotypes.Array:
-		return types.ExprAttributeFromDataType(xType.Elmtype), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
+		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Slice:
-		return types.ExprAttributeFromDataType(xType.Elmtype), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
+		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Builtin:
 		if xType.Def == "string" {
 			// Checked at https://play.golang.org/
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}), nil
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X: indexAttr.TypeVarList[0],
+				Y: typevars.MakeListKey(),
+			})
+			y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
 	case *gotypes.Identifier:
 		if xType.Def == "string" && xType.Package == "builtin" {
 			// Checked at https://play.golang.org/
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}), nil
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X: indexAttr.TypeVarList[0],
+				Y: typevars.MakeListKey(),
+			})
+			y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
 	case *gotypes.Ellipsis:
-		return types.ExprAttributeFromDataType(xType.Def), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
+		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Def).AddTypeVar(y), nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v at %v", xDefAttr.DataTypeList[0], expr.Pos()))
 	}
