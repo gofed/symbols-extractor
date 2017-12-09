@@ -732,7 +732,19 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (*types.ExprAttribute, error
 	if !ok {
 		return nil, fmt.Errorf("Accessing a value of non-pointer type: %#v", attr.DataTypeList[0])
 	}
-	return types.ExprAttributeFromDataType(val.Def), nil
+	ep.Config.ContractTable.AddContract(&contracts.IsDereferenceable{
+		X: attr.TypeVarList[0],
+	})
+
+	y := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+	ep.Config.ContractTable.AddContract(&contracts.DereferenceOf{
+		X: attr.TypeVarList[0],
+		Y: y,
+	})
+
+	return types.ExprAttributeFromDataType(val.Def).AddTypeVar(y), nil
 }
 
 // parseParenExpr consumes ast.Expr and drops direct sequence of parenthesis

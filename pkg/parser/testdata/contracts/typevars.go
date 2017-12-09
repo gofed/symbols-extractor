@@ -116,6 +116,9 @@ func f() string {
 	bope = bopg + 1
 	bope = 1 + bopg
 
+	// pointers
+	da := *ra
+
 	fmt.Print(a, list, mapV, structV, structV2, listV2, ra)
 
 	return b

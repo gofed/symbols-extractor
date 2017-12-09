@@ -120,6 +120,20 @@ func compareContracts(t *testing.T, expected, tested contracts.Contract) {
 				t.Errorf("Expected HasField.Index %q, got %q instead", x.Index, y.Index)
 			}
 		}
+	case *contracts.IsDereferenceable:
+		y := tested.(*contracts.IsDereferenceable)
+		compareTypeVars(t, x.X, y.X)
+	case *contracts.IsReferenceable:
+		y := tested.(*contracts.IsReferenceable)
+		compareTypeVars(t, x.X, y.X)
+	case *contracts.DereferenceOf:
+		y := tested.(*contracts.DereferenceOf)
+		compareTypeVars(t, x.X, y.X)
+		compareTypeVars(t, x.Y, y.Y)
+	case *contracts.ReferenceOf:
+		y := tested.(*contracts.ReferenceOf)
+		compareTypeVars(t, x.X, y.X)
+		compareTypeVars(t, x.Y, y.Y)
 	default:
 		t.Errorf("Contract %#v not recognized", expected)
 	}
@@ -160,6 +174,7 @@ var vars = map[string]string{
 	"bope":     ":1413:bope",
 	"bopf":     ":1488:bopf",
 	"bopg":     ":1543:bopg",
+	"da":       ":1601:da",
 }
 
 type TestSuite struct {
@@ -929,6 +944,26 @@ func createBinaryOperatorTestSuite() *TestSuite {
 	}
 }
 
+func createPointersTestSuite() *TestSuite {
+	return &TestSuite{
+		group: "pointers",
+		contracts: []contracts.Contract{
+			// da := *ra
+			&contracts.IsDereferenceable{
+				X: typevars.MakeVar(vars["ra"], packageName),
+			},
+			&contracts.DereferenceOf{
+				X: typevars.MakeVar(vars["ra"], packageName),
+				Y: typevars.MakeVirtualVar(38),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(38),
+				Y: typevars.MakeVar(vars["da"], packageName),
+			},
+		},
+	}
+}
+
 func createEmptyTestSuite() *TestSuite {
 	return &TestSuite{
 		group:     "empty",
@@ -966,6 +1001,7 @@ func TestDataTypes(t *testing.T) {
 		createCompositeLiteralTestSuite(),
 		createUnaryOperatorTestSuite(),
 		createBinaryOperatorTestSuite(),
+		createPointersTestSuite(),
 	}
 
 	contractsList := config.ContractTable.Contracts()
