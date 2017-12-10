@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
@@ -20,6 +21,7 @@ func prepareParser(pkgName string) *types.Config {
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 		GlobalSymbolTable:     global.New(""),
+		ContractTable:         contracttable.New(),
 	}
 
 	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())

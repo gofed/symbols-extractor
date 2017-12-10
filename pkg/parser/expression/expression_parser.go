@@ -187,13 +187,10 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
 			}
 			ep.Config.ContractTable.AddContract(&contracts.HasField{
-				X:     *structTypeVar,
+				X:     structTypeVar,
 				Field: keyDefIdentifier.Name,
 			})
-			fieldTypeVar = &typevars.Field{
-				Variable: *structTypeVar,
-				Name:     keyDefIdentifier.Name,
-			}
+			fieldTypeVar = typevars.MakeField(structTypeVar, keyDefIdentifier.Name, 0)
 			valueExpr = kvExpr.Value
 		} else {
 			if fieldCounter >= fieldLen {
@@ -204,13 +201,10 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
 			}
 			ep.Config.ContractTable.AddContract(&contracts.HasField{
-				X:     *structTypeVar,
+				X:     structTypeVar,
 				Index: fieldCounter,
 			})
-			fieldTypeVar = &typevars.Field{
-				Variable: *structTypeVar,
-				Index:    fieldCounter,
-			}
+			fieldTypeVar = typevars.MakeField(structTypeVar, "", fieldCounter)
 			valueExpr = litElement
 		}
 
@@ -1082,9 +1076,9 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 			newVar := ep.Config.ContractTable.NewVariable()
 			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 				X: d,
-				Y: typevars.MakeVar(newVar, d.Package),
+				Y: typevars.MakeVar(newVar, ep.Config.PackageName),
 			})
-			f = typevars.MakeFunction(newVar, d.Package)
+			f = typevars.MakeFunction(newVar, ep.Config.PackageName)
 		default:
 			panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
 		}
@@ -1119,9 +1113,9 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 			newVar := ep.Config.ContractTable.NewVariable()
 			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 				X: d,
-				Y: typevars.MakeVar(newVar, d.Package),
+				Y: typevars.MakeVar(newVar, ep.Config.PackageName),
 			})
-			f = typevars.MakeFunction(newVar, d.Package)
+			f = typevars.MakeFunction(newVar, ep.Config.PackageName)
 		default:
 			panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
 		}
@@ -1688,7 +1682,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 	})
 
 	ep.Config.ContractTable.AddContract(&contracts.HasField{
-		X:     *y,
+		X:     y,
 		Field: expr.Sel.Name,
 	})
 
@@ -1928,18 +1922,13 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v at %v", expr.Sel.Name, xDefAttr.DataTypeList[0], expr.Pos())
 	}
 
-	varTypeVar, ok := xDefAttr.TypeVarList[0].(*typevars.Variable)
-	if !ok {
-		panic("Not a typevars.Variable")
-	}
-
 	ep.Config.ContractTable.AddContract(&contracts.HasField{
-		X:     *varTypeVar,
+		X:     xDefAttr.TypeVarList[0],
 		Field: outputField,
 	})
 
 	return outputAttr.AddTypeVar(
-		typevars.MakeField(varTypeVar, outputField, 0),
+		typevars.MakeField(xDefAttr.TypeVarList[0], outputField, 0),
 	), nil
 }
 

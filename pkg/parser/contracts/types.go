@@ -47,7 +47,7 @@ func Contract2String(c Contract) string {
 	case *DereferenceOf:
 		return fmt.Sprintf("DereferenceOf:\n\tX=%v,\n\tY=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y))
 	case *HasField:
-		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v", typevars.TypeVar2String(&d.X), d.Field, d.Index)
+		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v", typevars.TypeVar2String(d.X), d.Field, d.Index)
 	case *IsIndexable:
 		return fmt.Sprintf("IsIndexable:\n\tX=%v", typevars.TypeVar2String(d.X))
 	default:
@@ -90,7 +90,7 @@ type IsInvocable struct {
 }
 
 type HasField struct {
-	X     typevars.Variable
+	X     typevars.Interface
 	Field string
 	Index int
 }

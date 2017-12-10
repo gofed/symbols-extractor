@@ -62,7 +62,7 @@ func compareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 		compareTypeVars(t, &x.Constant, &y.Constant)
 	case *typevars.Field:
 		y := tested.(*typevars.Field)
-		compareTypeVars(t, &x.Variable, &y.Variable)
+		compareTypeVars(t, x.Interface, y.Interface)
 		if x.Name != y.Name {
 			t.Errorf("Got Field.Name %v, expected %v", x.Name, y.Name)
 		}
@@ -112,7 +112,7 @@ func compareContracts(t *testing.T, expected, tested contracts.Contract) {
 		}
 	case *contracts.HasField:
 		y := tested.(*contracts.HasField)
-		compareTypeVars(t, &x.X, &y.X)
+		compareTypeVars(t, x.X, y.X)
 		if x.Field != y.Field {
 			t.Errorf("Expected HasField.Field %q, got %q instead", x.Field, y.Field)
 		}
@@ -421,7 +421,7 @@ func createCompositeLiteralTestSuite() *TestSuite {
 			//
 			// key1 exists
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(7),
+				X:     typevars.MakeVirtualVar(7),
 				Field: "key1",
 			},
 			// key1 <-> string
@@ -431,7 +431,7 @@ func createCompositeLiteralTestSuite() *TestSuite {
 			},
 			// key2 exists
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(7),
+				X:     typevars.MakeVirtualVar(7),
 				Field: "key2",
 			},
 			// key2 <-> int
@@ -484,7 +484,7 @@ func createCompositeLiteralTestSuite() *TestSuite {
 			//
 			// key at pos 0 used
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(8),
+				X:     typevars.MakeVirtualVar(8),
 				Index: 0,
 			},
 			// key at pos 0 <-> string
@@ -494,7 +494,7 @@ func createCompositeLiteralTestSuite() *TestSuite {
 			},
 			// key at pos 1 used
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(8),
+				X:     typevars.MakeVirtualVar(8),
 				Index: 1,
 			},
 			// key at pos 1 <-> int
@@ -1145,7 +1145,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVirtualVar(40),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(40),
+				X:     typevars.MakeVirtualVar(40),
 				Field: "method",
 			},
 			&contracts.PropagatesTo{
@@ -1165,7 +1165,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["mA"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["mA"], packageName),
+				X:     typevars.MakeVar(vars["mA"], packageName),
 				Field: "method",
 			},
 			&contracts.PropagatesTo{
@@ -1196,7 +1196,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["ia"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["ia"], packageName),
+				X:     typevars.MakeVar(vars["ia"], packageName),
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
@@ -1228,7 +1228,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["ida"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["ida"], packageName),
+				X:     typevars.MakeVar(vars["ida"], packageName),
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
@@ -1251,7 +1251,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["idc"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["idc"], packageName),
+				X:     typevars.MakeVar(vars["idc"], packageName),
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
@@ -1265,7 +1265,7 @@ func createSelectorsTestSuite() *TestSuite {
 			// ide := &struct{ d int }{2}
 			// idf := ide.d
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(50),
+				X:     typevars.MakeVirtualVar(50),
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
@@ -1302,7 +1302,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["ide"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["ide"], packageName),
+				X:     typevars.MakeVar(vars["ide"], packageName),
 				Field: "d",
 			},
 			&contracts.PropagatesTo{
@@ -1328,7 +1328,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["idg"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["idg"], packageName),
+				X:     typevars.MakeVar(vars["idg"], packageName),
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
@@ -1342,7 +1342,7 @@ func createSelectorsTestSuite() *TestSuite {
 			// idi := struct{ d int }{2}
 			// idj := idi.d
 			&contracts.HasField{
-				X:     *typevars.MakeVirtualVar(53),
+				X:     typevars.MakeVirtualVar(53),
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
@@ -1374,7 +1374,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["idi"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["idi"], packageName),
+				X:     typevars.MakeVar(vars["idi"], packageName),
 				Field: "d",
 			},
 			&contracts.PropagatesTo{
@@ -1431,7 +1431,7 @@ func createSelectorsTestSuite() *TestSuite {
 				Y: typevars.MakeVar(vars["idk"], packageName),
 			},
 			&contracts.HasField{
-				X:     *typevars.MakeVar(vars["idk"], packageName),
+				X:     typevars.MakeVar(vars["idk"], packageName),
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{

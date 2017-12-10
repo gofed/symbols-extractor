@@ -67,7 +67,7 @@ func FunctionFromSymbolDef(def *symboltable.SymbolDef) *Function {
 }
 
 type Field struct {
-	Variable
+	Interface
 	Name  string
 	Index int
 }
@@ -104,9 +104,9 @@ func TypeVar2String(tv Interface) string {
 		return fmt.Sprintf("TypeVar.Argument: (%v) %v at %v", d.Package, d.Name, d.Index)
 	case *Field:
 		if d.Name == "" {
-			return fmt.Sprintf("TypeVar.Field: (%v) %v at index %v", d.Variable.Package, d.Variable.Name, d.Index)
+			return fmt.Sprintf("TypeVar.Field: %#v at index %v", d.Interface, d.Index)
 		}
-		return fmt.Sprintf("TypeVar.Field: (%v) %v with field %q", d.Variable.Package, d.Variable.Name, d.Name)
+		return fmt.Sprintf("TypeVar.Field: %#v with field %q", d.Interface, d.Name)
 	default:
 		fmt.Printf("\nTypeVar %#v\n\n", tv)
 		panic("Unrecognized TypeVar")
@@ -242,10 +242,10 @@ func MakeMapValue(datatype gotypes.DataType) *MapValue {
 	}
 }
 
-func MakeField(v *Variable, field string, index int) *Field {
+func MakeField(i Interface, field string, index int) *Field {
 	return &Field{
-		Variable: *v,
-		Name:     field,
-		Index:    index,
+		Interface: i,
+		Name:      field,
+		Index:     index,
 	}
 }
