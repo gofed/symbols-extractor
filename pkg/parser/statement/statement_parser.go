@@ -209,13 +209,11 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 						Def:     valueExprAttr.DataTypeList[i],
 						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 					}
-					if len(valueExprAttr.TypeVarList) > 0 {
-						sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-							X:            valueExprAttr.TypeVarList[i],
-							Y:            typevars.VariableFromSymbolDef(sDef),
-							ExpectedType: sDef.Def,
-						})
-					}
+					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X:            valueExprAttr.TypeVarList[i],
+						Y:            typevars.VariableFromSymbolDef(sDef),
+						ExpectedType: sDef.Def,
+					})
 				} else {
 					sDef = &symboltable.SymbolDef{
 						Name:    name.Name,
@@ -223,13 +221,11 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 						Def:     typeDef,
 						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 					}
-					if len(valueExprAttr.TypeVarList) > 0 {
-						sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-							X:            valueExprAttr.TypeVarList[i],
-							Y:            typevars.VariableFromSymbolDef(sDef),
-							ExpectedType: sDef.Def,
-						})
-					}
+					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X:            valueExprAttr.TypeVarList[i],
+						Y:            typevars.VariableFromSymbolDef(sDef),
+						ExpectedType: sDef.Def,
+					})
 				}
 				symbolsDef = append(symbolsDef, sDef)
 			}

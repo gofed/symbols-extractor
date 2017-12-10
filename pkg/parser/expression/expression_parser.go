@@ -1071,11 +1071,24 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				), err
 			}
 		}
-		// The attr.TypeVarList[0] must be typevars.Function
-		f, ok := attr.TypeVarList[0].(*typevars.Function)
-		if !ok {
-			panic(fmt.Sprintf("expr %#v expected to be a function", expr))
+		// The attr.TypeVarList[0] must be typevars.Function or typevars.variable
+		var f *typevars.Function
+		switch d := attr.TypeVarList[0].(type) {
+		case *typevars.Function:
+			f = d
+		case *typevars.Variable:
+			f = typevars.MakeFunction(d.Name, d.Package)
+		case *typevars.Field:
+			newVar := ep.Config.ContractTable.NewVariable()
+			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X: d,
+				Y: typevars.MakeVar(newVar, d.Package),
+			})
+			f = typevars.MakeFunction(newVar, d.Package)
+		default:
+			panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
 		}
+
 		ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
 			F:         f,
 			ArgsCount: len(expr.Args),
@@ -1095,10 +1108,37 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		}
 		return attr, nil
 	case *gotypes.Method:
-		if err := processArgs(nil, expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
+
+		var f *typevars.Function
+		switch d := attr.TypeVarList[0].(type) {
+		case *typevars.Function:
+			f = d
+		case *typevars.Variable:
+			f = typevars.MakeFunction(d.Name, d.Package)
+		case *typevars.Field:
+			newVar := ep.Config.ContractTable.NewVariable()
+			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X: d,
+				Y: typevars.MakeVar(newVar, d.Package),
+			})
+			f = typevars.MakeFunction(newVar, d.Package)
+		default:
+			panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
+		}
+
+		if err := processArgs(f, expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
 			return nil, err
 		}
-		return types.ExprAttributeFromDataType(funcType.Def.(*gotypes.Function).Results...), nil
+
+		attr := types.ExprAttributeFromDataType(funcType.Def.(*gotypes.Function).Results...)
+		for i := range funcType.Def.(*gotypes.Function).Results {
+			z := &typevars.ReturnType{
+				Function: *f,
+				Index:    i,
+			}
+			attr.AddTypeVar(z)
+		}
+		return attr, nil
 	default:
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
@@ -1197,7 +1237,15 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 	}
 
 	def, err := ep.TypeParser.Parse(expr.Type)
-	return types.ExprAttributeFromDataType(def), err
+	newVar := ep.Config.ContractTable.NewVariable()
+	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+		X: typevars.MakeConstant(def),
+		Y: typevars.MakeFunction(newVar, ep.Config.PackageName),
+	})
+
+	return types.ExprAttributeFromDataType(def).AddTypeVar(
+		typevars.MakeFunction(newVar, ep.Config.PackageName),
+	), err
 }
 
 // parseStructType consumes ast.StructType and produces data type corresponding to struct definition
@@ -1561,7 +1609,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 	return nil, fmt.Errorf("Unable to find a method %v in interface %#v", method, interfaceDefsymbol)
 }
 
-func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *gotypes.Function, error) {
+func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *types.ExprAttribute, error) {
 	parExpr, ok := expr.X.(*ast.ParenExpr)
 	if !ok {
 		return false, nil, nil
@@ -1626,7 +1674,27 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 	if !ok {
 		return false, nil, fmt.Errorf("Expected a method %q of data type %v, got %#v instead", expr.Sel.Name, typeSymbolDef.Name, methodDefAttr.DataTypeList[0])
 	}
-	return true, method.Def.(*gotypes.Function), nil
+
+	y := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
+	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+		X: &typevars.Constant{
+			DataType: typeSymbolDef.Def,
+			Package:  typeSymbolDef.Package,
+		},
+		Y: y,
+	})
+
+	ep.Config.ContractTable.AddContract(&contracts.HasField{
+		X:     *y,
+		Field: expr.Sel.Name,
+	})
+
+	return true, types.ExprAttributeFromDataType(method.Def.(*gotypes.Function)).AddTypeVar(
+		typevars.MakeField(y, expr.Sel.Name, 0),
+	), nil
 }
 
 // parseSelectorExpr consumes ast.SelectorExpr and produces:
@@ -1649,7 +1717,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		return nil, err
 	}
 	if hasMethod {
-		return types.ExprAttributeFromDataType(function), nil
+		return function, nil
 	}
 	// X.Sel a.k.a Prefix.Item
 	xDefAttr, xErr := ep.Parse(expr.X)
@@ -1661,7 +1729,10 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 	byteSlice, _ := json.Marshal(xDefAttr.DataTypeList[0])
-	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\t\t%v at %v\n", xDefAttr.DataTypeList[0], expr.Sel, string(byteSlice), expr.Pos())
+	glog.Infof("\n\nSelectorExpr.X:\n\t%#v\n\tTypeVar: %#v\n\tfield:%#v\n\t%v at %v\n", xDefAttr.DataTypeList[0], xDefAttr.TypeVarList[0], expr.Sel, string(byteSlice), expr.Pos())
+
+	var outputAttr *types.ExprAttribute
+	var outputField string
 
 	// The struct and an interface are the only data type from which a field/method is retriveable
 	switch xType := xDefAttr.DataTypeList[0].(type) {
@@ -1699,13 +1770,21 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 				byteSlice, _ := json.Marshal(structDefsymbol)
 				glog.Infof("Struct retrieved: %v\n", string(byteSlice))
 			}
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: symbolTable,
 				dataTypeDef: structDefsymbol,
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Selector:
 			// qid to different package
+			// TODO(jchaloup): create a contract once the multi-package contracts collecting is implemented
 			pq, ok := def.Prefix.(*gotypes.Packagequalifier)
 			if !ok {
 				return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-qualified struct data type: %#v", expr.Sel.Name, def)
@@ -1721,11 +1800,16 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			})
 		case *gotypes.Struct:
 			// anonymous struct
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: ep.SymbolTable,
 				dataTypeDef: &symboltable.SymbolDef{Def: def},
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		default:
 			return nil, fmt.Errorf("Trying to retrieve a %q field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
@@ -1740,21 +1824,36 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		}
 		switch defSymbol.Def.(type) {
 		case *gotypes.Struct:
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: symbolTable,
 				dataTypeDef: defSymbol,
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Interface:
-			return ep.retrieveInterfaceMethod(symbolTable, defSymbol, expr.Sel.Name)
+			attr, err := ep.retrieveInterfaceMethod(symbolTable, defSymbol, expr.Sel.Name)
+			if err != nil {
+				return attr, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Identifier:
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable:    symbolTable,
 				dataTypeDef:    defSymbol,
 				field:          &ast.Ident{Name: expr.Sel.Name},
 				fieldsOnly:     true,
 				dropFieldsOnly: true,
 			})
+			if err != nil {
+				return attr, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		default:
 			// check data types with receivers
 			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", expr.Sel.Name, xType)
@@ -1762,11 +1861,12 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			if err != nil {
 				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v at %v: %v", defSymbol, expr.Pos(), err)
 			}
-			return types.ExprAttributeFromDataType(def.Def), nil
+			outputAttr = types.ExprAttributeFromDataType(def.Def)
+			outputField = expr.Sel.Name
 		}
 	// anonymous struct
 	case *gotypes.Struct:
-		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: ep.SymbolTable,
 			dataTypeDef: &symboltable.SymbolDef{
 				Name:    "",
@@ -1775,13 +1875,23 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			},
 			field: &ast.Ident{Name: expr.Sel.Name},
 		})
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous
-		return ep.retrieveInterfaceMethod(ep.SymbolTable, &symboltable.SymbolDef{
+		attr, err := ep.retrieveInterfaceMethod(ep.SymbolTable, &symboltable.SymbolDef{
 			Name:    "",
 			Package: "",
 			Def:     xType,
 		}, expr.Sel.Name)
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	case *gotypes.Selector:
 		// qid.structtype expected
 		st, sd, err := ep.retrieveQidDataType(xType.Prefix, &ast.Ident{Name: xType.Item})
@@ -1803,15 +1913,34 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		if err != nil {
 			return nil, err
 		}
-		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: table,
 			dataTypeDef: def,
 			field:       &ast.Ident{Name: expr.Sel.Name},
 			methodsOnly: true,
 		})
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	default:
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v at %v", expr.Sel.Name, xDefAttr.DataTypeList[0], expr.Pos())
 	}
+
+	varTypeVar, ok := xDefAttr.TypeVarList[0].(*typevars.Variable)
+	if !ok {
+		panic("Not a typevars.Variable")
+	}
+
+	ep.Config.ContractTable.AddContract(&contracts.HasField{
+		X:     *varTypeVar,
+		Field: outputField,
+	})
+
+	return outputAttr.AddTypeVar(
+		typevars.MakeField(varTypeVar, outputField, 0),
+	), nil
 }
 
 // parseIndexExpr consumes ast.IndexExpr and produces:

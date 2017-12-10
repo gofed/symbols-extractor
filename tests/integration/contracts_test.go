@@ -185,6 +185,25 @@ var vars = map[string]string{
 	"sa":       ":1672:sa",
 	"asA":      ":1709:asA",
 	"asB":      ":1727:asB",
+	"ffA":      ":1828:ffA",
+	"ffB":      ":1865:ffB",
+	"frA":      ":1902:frA",
+	"mA":       ":1945:mA",
+	"mB":       ":1956:mB",
+	"ia":       ":2245:ia",
+	"ib":       ":2260:ib",
+	"ida":      ":2350:ida",
+	"idb":      ":2363:idb",
+	"idc":      ":2386:idc",
+	"idd":      ":2399:idd",
+	"ide":      ":2484:ide",
+	"idf":      ":2512:idf",
+	"idg":      ":2600:idg",
+	"idh":      ":2621:idh",
+	"idi":      ":2644:idi",
+	"idj":      ":2671:idj",
+	"idk":      ":2686:idk",
+	"idl":      ":2734:idl",
 }
 
 type TestSuite struct {
@@ -1079,6 +1098,358 @@ func createTypeCastingTestSuite() *TestSuite {
 	}
 }
 
+func createFuncLiteralTestSuite() *TestSuite {
+	return &TestSuite{
+		group: "function literal",
+		contracts: []contracts.Contract{
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Function{
+					Params: []gotypes.DataType{
+						&gotypes.Builtin{Untyped: false, Def: "int"},
+					},
+					Results: []gotypes.DataType{
+						&gotypes.Builtin{Untyped: false, Def: "int"},
+					},
+					Package: packageName,
+				}),
+				Y: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(39)),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(39)),
+				Y: typevars.MakeVar(vars["ffA"], packageName),
+			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeFunction(vars["ffA"], packageName),
+				ArgsCount: 1,
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeArgument(vars["ffA"], packageName, 0),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(vars["ffA"], packageName, 0),
+				Y: typevars.MakeVar(vars["ffB"], packageName),
+			},
+		},
+	}
+}
+
+func createSelectorsTestSuite() *TestSuite {
+	return &TestSuite{
+		group: "selectors",
+		contracts: []contracts.Contract{
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVirtualVar(40),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVirtualVar(40),
+				Field: "method",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVirtualVar(40), "method", 0),
+				Y: typevars.MakeVar(vars["frA"], packageName),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVirtualVar(41),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVar(vars["mA"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["mA"], packageName),
+				Field: "method",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["mA"], packageName), "method", 0),
+				Y: typevars.MakeVirtualVar(42),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(42).Name, packageName, 0),
+				Y: typevars.MakeVar(vars["mB"], packageName),
+			},
+			// var ia D2 = &D3{}
+			// ib := ia.imethod()
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVirtualVar(43),
+			},
+			&contracts.UnaryOp{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y:       typevars.MakeVirtualVar(44),
+				OpToken: token.AND,
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeVirtualVar(44),
+				Y: typevars.MakeVar(vars["ia"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["ia"], packageName),
+				Field: "imethod",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["ia"], packageName), "imethod", 0),
+				Y: typevars.MakeVirtualVar(45),
+			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(45)),
+				ArgsCount: 0,
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(45).Name, packageName, 0),
+				Y: typevars.MakeVar(vars["ib"], packageName),
+			},
+			// type D4 D3
+			// func (d *D4) imethod() int { return 0 }
+			// ida := D4{}
+			// idb := ida.imethod()
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVirtualVar(46),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVar(vars["ida"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["ida"], packageName),
+				Field: "imethod",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["ida"], packageName), "imethod", 0),
+				Y: typevars.MakeVirtualVar(47),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(47).Name, packageName, 0),
+				Y: typevars.MakeVar(vars["idb"], packageName),
+			},
+			// idc := &ida
+			// idd := idc.imethod()
+			&contracts.UnaryOp{
+				X:       typevars.MakeVar(vars["ida"], packageName),
+				Y:       typevars.MakeVirtualVar(48),
+				OpToken: token.AND,
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(48),
+				Y: typevars.MakeVar(vars["idc"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["idc"], packageName),
+				Field: "imethod",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["idc"], packageName), "imethod", 0),
+				Y: typevars.MakeVirtualVar(49),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(49).Name, packageName, 0),
+				Y: typevars.MakeVar(vars["idd"], packageName),
+			},
+			// ide := &struct{ d int }{2}
+			// idf := ide.d
+			&contracts.HasField{
+				X:     *typevars.MakeVirtualVar(50),
+				Index: 0,
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeField(typevars.MakeVar(typevars.MakeVirtualVar(50).Name, packageName), "", 0),
+				Y: typevars.MakeConstant(
+					&gotypes.Builtin{Untyped: true, Def: "int"},
+				),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{
+						{
+							Name: "d",
+							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+						},
+					},
+				}),
+				Y: typevars.MakeVirtualVar(50),
+			},
+			&contracts.UnaryOp{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{
+						{
+							Name: "d",
+							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+						},
+					},
+				}),
+				Y:       typevars.MakeVirtualVar(51),
+				OpToken: token.AND,
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(51),
+				Y: typevars.MakeVar(vars["ide"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["ide"], packageName),
+				Field: "d",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["ide"], packageName), "d", 0),
+				Y: typevars.MakeVar(vars["idf"], packageName),
+			},
+			// type D6 string
+			// func (d *D6) imethod() int { return 0 }
+			// idg := D6("string")
+			// idh := idg.imethod()
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "D6",
+					Package: packageName,
+				}),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "D6",
+					Package: packageName,
+				}),
+				Y: typevars.MakeVar(vars["idg"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["idg"], packageName),
+				Field: "imethod",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["idg"], packageName), "imethod", 0),
+				Y: typevars.MakeVirtualVar(52),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(52).Name, packageName, 0),
+				Y: typevars.MakeVar(vars["idh"], packageName),
+			},
+			// idi := struct{ d int }{2}
+			// idj := idi.d
+			&contracts.HasField{
+				X:     *typevars.MakeVirtualVar(53),
+				Index: 0,
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeField(typevars.MakeVar(typevars.MakeVirtualVar(53).Name, packageName), "", 0),
+				Y: typevars.MakeConstant(
+					&gotypes.Builtin{Untyped: true, Def: "int"},
+				),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{
+						{
+							Name: "d",
+							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+						},
+					},
+				}),
+				Y: typevars.MakeVirtualVar(53),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{
+						{
+							Name: "d",
+							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+						},
+					},
+				}),
+				Y: typevars.MakeVar(vars["idi"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["idi"], packageName),
+				Field: "d",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["idi"], packageName), "d", 0),
+				Y: typevars.MakeVar(vars["idj"], packageName),
+			},
+			// idk := (interface {
+			// 	imethod() int
+			// })(&D3{})
+			// idl := idk.imethod()
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y: typevars.MakeVirtualVar(54),
+			},
+			&contracts.UnaryOp{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{},
+				}),
+				Y:       typevars.MakeVirtualVar(55),
+				OpToken: token.AND,
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeVirtualVar(55),
+				Y: typevars.MakeConstant(&gotypes.Interface{
+					Methods: []gotypes.InterfaceMethodsItem{
+						gotypes.InterfaceMethodsItem{
+							Name: "imethod",
+							Def: &gotypes.Function{
+								Package: packageName,
+								Results: []gotypes.DataType{
+									&gotypes.Builtin{Untyped: false, Def: "int"},
+								},
+							},
+						},
+					},
+				}),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Interface{
+					Methods: []gotypes.InterfaceMethodsItem{
+						gotypes.InterfaceMethodsItem{
+							Name: "imethod",
+							Def: &gotypes.Function{
+								Package: packageName,
+								Results: []gotypes.DataType{
+									&gotypes.Builtin{Untyped: false, Def: "int"},
+								},
+							},
+						},
+					},
+				}),
+				Y: typevars.MakeVar(vars["idk"], packageName),
+			},
+			&contracts.HasField{
+				X:     *typevars.MakeVar(vars["idk"], packageName),
+				Field: "imethod",
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeField(typevars.MakeVar(vars["idk"], packageName), "imethod", 0),
+				Y: typevars.MakeVirtualVar(56),
+			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(56)),
+				ArgsCount: 0,
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(56).Name, packageName, 0),
+				Y: typevars.MakeVar(vars["idl"], packageName),
+			},
+		},
+	}
+}
+
 func createEmptyTestSuite() *TestSuite {
 	return &TestSuite{
 		group:     "empty",
@@ -1119,6 +1490,8 @@ func TestDataTypes(t *testing.T) {
 		createPointersTestSuite(),
 		createIndexableTestSuite(),
 		createTypeCastingTestSuite(),
+		createFuncLiteralTestSuite(),
+		createSelectorsTestSuite(),
 	}
 
 	contractsList := config.ContractTable.Contracts()

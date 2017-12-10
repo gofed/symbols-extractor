@@ -32,6 +32,7 @@ var CGOType Type = "CGO"
 // - struct type expression
 type Constant struct {
 	gotypes.DataType
+	Package string
 }
 
 func (c *Constant) GetType() Type {
@@ -195,6 +196,13 @@ func MakeFunction(name, packageName string) *Function {
 	return &Function{
 		Name:    name,
 		Package: packageName,
+	}
+}
+
+func MakeVirtualFunction(v *Variable) *Function {
+	return &Function{
+		Name:    v.Name,
+		Package: v.Package,
 	}
 }
 
