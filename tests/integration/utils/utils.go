@@ -1,4 +1,4 @@
-package file
+package utils
 
 import (
 	"fmt"
@@ -6,15 +6,16 @@ import (
 	"go/token"
 	"os"
 	"path"
-	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
+	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
+	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	parsertypes "github.com/gofed/symbols-extractor/pkg/parser/types"
 )
 
@@ -30,11 +31,11 @@ func parseBuiltin(config *parsertypes.Config) error {
 		return fmt.Errorf("AST Parse error: %v", err)
 	}
 
-	payload, err := MakePayload(f)
+	payload, err := fileparser.MakePayload(f)
 	if err != nil {
 		return err
 	}
-	if err := NewParser(config).Parse(payload); err != nil {
+	if err := fileparser.NewParser(config).Parse(payload); err != nil {
 		return fmt.Errorf("Unable to parse file %v: %v", gofile, err)
 	}
 
@@ -48,16 +49,7 @@ func parseBuiltin(config *parsertypes.Config) error {
 	return nil
 }
 
-// TODO(jchaloup): replace this test with generated tests
-func TestDataTypes(t *testing.T) {
-	gopkg := "github.com/gofed/symbols-extractor/pkg/parser/testdata"
-	gofile := path.Join(os.Getenv("GOPATH"), "src", gopkg, "datatypes.go")
-
-	f, err := parser.ParseFile(token.NewFileSet(), gofile, nil, 0)
-	if err != nil {
-		t.Fatalf("AST Parse error: %v", err)
-	}
-
+func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error) {
 	gtable := global.New("")
 
 	config := &parsertypes.Config{
@@ -75,7 +67,7 @@ func TestDataTypes(t *testing.T) {
 	config.StmtParser = stmtparser.New(config)
 
 	if err := parseBuiltin(config); err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 
 	config = &parsertypes.Config{
@@ -92,11 +84,5 @@ func TestDataTypes(t *testing.T) {
 	config.ExprParser = exprparser.New(config)
 	config.StmtParser = stmtparser.New(config)
 
-	payload, err := MakePayload(f)
-	if err != nil {
-		t.Errorf("Unable to make a payload due to: %v", err)
-	}
-	if err := NewParser(config).Parse(payload); err != nil {
-		t.Errorf("Unable to parse file %v: %v", gofile, err)
-	}
+	return fileparser.NewParser(config), config, nil
 }

@@ -7,6 +7,8 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -199,19 +201,33 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				if name.Name == "_" {
 					continue
 				}
+				var sDef *symboltable.SymbolDef
 				if typeDef == nil {
-					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
+					sDef = &symboltable.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
 						Def:     valueExprAttr.DataTypeList[i],
+						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+					}
+					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X:            valueExprAttr.TypeVarList[i],
+						Y:            typevars.VariableFromSymbolDef(sDef),
+						ExpectedType: sDef.Def,
 					})
 				} else {
-					symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
+					sDef = &symboltable.SymbolDef{
 						Name:    name.Name,
 						Package: sp.PackageName,
 						Def:     typeDef,
+						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+					}
+					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X:            valueExprAttr.TypeVarList[i],
+						Y:            typevars.VariableFromSymbolDef(sDef),
+						ExpectedType: sDef.Def,
 					})
 				}
+				symbolsDef = append(symbolsDef, sDef)
 			}
 			return symbolsDef, nil
 		}
@@ -246,6 +262,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     typeDef,
+				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 			})
 			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				if builtin.Def == "iota" {
@@ -267,6 +284,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     valueExprAttr.DataTypeList[0],
+				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 			})
 		}
 	}
@@ -286,6 +304,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			Name:    spec.Names[i].Name,
 			Package: sp.PackageName,
 			Def:     typeDef,
+			Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 		})
 	}
 
@@ -384,15 +403,16 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	glog.Infof("Processing assignment statement  %#v\n", statement)
 
 	// define general Rhs index function
-	rhsIndexer := func(i int) (gotypes.DataType, error) {
+	rhsIndexer := func(i int) (gotypes.DataType, typevars.Interface, error) {
+		glog.Infof("Calling general Rhs index function at pos %v", statement.Pos())
 		defAttr, err := sp.ExprParser.Parse(statement.Rhs[i])
 		if err != nil {
-			return nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
+			return nil, nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
 		}
 		if len(defAttr.DataTypeList) != 1 {
-			return nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, defAttr.DataTypeList)
+			return nil, nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, defAttr.DataTypeList)
 		}
-		return defAttr.DataTypeList[0], err
+		return defAttr.DataTypeList[0], defAttr.TypeVarList[0], err
 	}
 
 	exprsSize := len(statement.Lhs)
@@ -432,15 +452,15 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					return fmt.Errorf("Number of expressions on the left-hand side differs from number of results of invocation on the right-hand side for: %#v vs. %#v", statement.Lhs, callExprDefAttr.DataTypeList)
 				}
 			}
-			rhsIndexer = func(i int) (gotypes.DataType, error) {
+			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
+				glog.Infof("Calling CallExpr Rhs index function")
 				if i < callExprDefLen {
-					return callExprDefAttr.DataTypeList[i], nil
+					return callExprDefAttr.DataTypeList[i], callExprDefAttr.TypeVarList[i], nil
 				}
 				if i == callExprDefLen && isCgo {
-					return &gotypes.Builtin{Def: "error"}, nil
+					return &gotypes.Builtin{Def: "error"}, &typevars.CGO{}, nil
 				}
-				// This will panic
-				return callExprDefAttr.DataTypeList[i], nil
+				panic("rhsIndexer: out of range")
 			}
 			rExprSize = len(callExprDefAttr.DataTypeList)
 		case *ast.IndexExpr:
@@ -457,7 +477,8 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			if _, err := sp.ExprParser.Parse(typeExpr.Index); err != nil {
 				return err
 			}
-			rhsIndexer = func(i int) (gotypes.DataType, error) {
+			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
+				glog.Infof("Calling IndexExpr Rhs index function")
 				if i == 0 {
 					// - map
 					// - identifier of map
@@ -467,43 +488,47 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 						fmt.Printf("\n\tHHHH: %v\n", string(byteSlice))
 					}
 					var indexedObject gotypes.DataType
+					var typeVarObject typevars.Interface
 					switch typeExpr := xDefAttr.DataTypeList[0].(type) {
 					case *gotypes.Identifier:
 						def, defType, err := sp.Lookup(typeExpr)
 						if err != nil {
-							return nil, err
+							return nil, nil, err
 						}
 						if !defType.IsDataType() {
-							return nil, fmt.Errorf("Expecting identifier of a data type, got %#v instead", defType)
+							return nil, nil, fmt.Errorf("Expecting identifier of a data type, got %#v instead", defType)
 						}
 						if def.Def == nil {
-							return nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
+							return nil, nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
 						}
 						indexedObject = def.Def
+						typeVarObject = typevars.VariableFromSymbolDef(def)
 					case *gotypes.Selector:
 						_, sd, err := sp.Config.RetrieveQidDataType(typeExpr)
 						if err != nil {
-							return nil, err
+							return nil, nil, err
 						}
 						if sd.Def == nil {
-							return nil, fmt.Errorf("Symbol %q of %q not fully processed", sd.Name, sd.Package)
+							return nil, nil, fmt.Errorf("Symbol %q of %q not fully processed", sd.Name, sd.Package)
 						}
 						indexedObject = sd.Def
+						typeVarObject = typevars.VariableFromSymbolDef(sd)
 					default:
 						indexedObject = xDefAttr.DataTypeList[0]
+						typeVarObject = xDefAttr.TypeVarList[0]
 					}
 
 					switch indexedObjectDef := indexedObject.(type) {
 					case *gotypes.Map:
-						return indexedObjectDef.Valuetype, nil
+						return indexedObjectDef.Valuetype, typeVarObject, nil
 					default:
 						panic(fmt.Errorf("Unsuported indexed object %#v", indexedObject))
 					}
 				}
 				if i == 1 {
-					return &gotypes.Builtin{Def: "bool"}, nil
+					return &gotypes.Builtin{Def: "bool"}, &typevars.Constant{DataType: &gotypes.Builtin{Def: "bool"}}, nil
 				}
-				return nil, fmt.Errorf("Rhs index %v out of range", i)
+				return nil, nil, fmt.Errorf("Rhs index %v out of range", i)
 			}
 			rExprSize = 2
 		case *ast.TypeAssertExpr:
@@ -521,14 +546,15 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			if err != nil {
 				return err
 			}
-			rhsIndexer = func(i int) (gotypes.DataType, error) {
+			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
+				glog.Infof("Calling TypeAssertExpr Rhs index function")
 				if i == 0 {
-					return typeDef, nil
+					return typeDef, &typevars.Constant{DataType: typeDef}, nil
 				}
 				if i == 1 {
-					return &gotypes.Builtin{Def: "bool"}, nil
+					return &gotypes.Builtin{Def: "bool"}, &typevars.Constant{DataType: &gotypes.Builtin{Def: "bool"}}, nil
 				}
-				return nil, fmt.Errorf("Rhs index %v out of range", i)
+				return nil, nil, fmt.Errorf("Rhs index %v out of range", i)
 			}
 			rExprSize = 2
 		default:
@@ -546,7 +572,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		// If the left-hand side id a selector (e.g. struct.field), we alredy know data type of the id.
 		// So, just store the field's data type into the allocated symbol table
 		//switch lhsExpr := expr.
-		rhsExpr, err := rhsIndexer(i)
+		rhsExpr, rhsTypeVar, err := rhsIndexer(i)
 		if err != nil {
 			return err
 		}
@@ -569,11 +595,30 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 
 			// TODO(jchaloup): If the statement.Tok is not token.DEFINE, don't add the variable to the symbol table.
 			//                 Instead, check the varible is of the same type (or compatible) as the already stored one.
+
+			glog.Infof("Adding contract for token %v", statement.Tok)
 			if statement.Tok == token.DEFINE {
-				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+				sDef := &symboltable.SymbolDef{
 					Name:    lhsExpr.Name,
 					Package: sp.PackageName,
 					Def:     rhsExpr,
+					Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, statement.Lhs[i].Pos()),
+				}
+				sp.SymbolTable.AddVariable(sDef)
+				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+					X:            rhsTypeVar,
+					Y:            typevars.VariableFromSymbolDef(sDef),
+					ExpectedType: sDef.Def,
+				})
+			} else {
+				sDef, err := sp.SymbolTable.LookupVariable(lhsExpr.Name)
+				if err != nil {
+					return err
+				}
+				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:            rhsTypeVar,
+					Y:            typevars.VariableFromSymbolDef(sDef),
+					ExpectedType: sDef.Def,
 				})
 			}
 		case *ast.SelectorExpr, *ast.StarExpr:
@@ -602,6 +647,7 @@ func (sp *Parser) parseGoStmt(statement *ast.GoStmt) error {
 }
 
 func (sp *Parser) parseBranchStmt(statement *ast.BranchStmt) error {
+	// TODO(jchaloup): just panic here!!!
 	glog.Infof("Processing branch statement  %#v\n", statement)
 	return nil
 }

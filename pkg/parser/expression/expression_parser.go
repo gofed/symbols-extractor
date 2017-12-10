@@ -8,6 +8,8 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
@@ -42,76 +44,136 @@ type Parser struct {
 // parseBasicLit consumes *ast.BasicLit and produces Builtin
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
+	var builtin *gotypes.Builtin
 	switch lit.Kind {
 	case token.INT:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "int", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "int", Untyped: true}
 	case token.FLOAT:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "float", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "float", Untyped: true}
 	case token.IMAG:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "imag", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "imag", Untyped: true}
 	case token.STRING:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "string", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "string", Untyped: true}
 	case token.CHAR:
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "char", Untyped: true}), nil
+		builtin = &gotypes.Builtin{Def: "char", Untyped: true}
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
+
+	return types.ExprAttributeFromDataType(builtin).AddTypeVar(&typevars.Constant{
+		DataType: builtin,
+	}), nil
 }
 
-func (ep *Parser) parseKeyValueLikeExpr(expr ast.Expr, litType gotypes.DataType) (*types.ExprAttribute, error) {
-	var valueExpr ast.Expr
-	if kvExpr, ok := expr.(*ast.KeyValueExpr); ok {
-		_, err := ep.Parse(kvExpr.Key)
+// to parse *gotypes.Array, *gotypes.Slice, *gotypes.Map
+func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.DataType) (*typevars.Constant, error) {
+	var valueTypeVar typevars.Interface
+	var keyTypeVar typevars.Interface
+	var valueType gotypes.DataType
+
+	switch elmExpr := litType.(type) {
+	case *gotypes.Slice:
+		valueType = elmExpr.Elmtype
+		valueTypeVar = &typevars.ListValue{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Elmtype,
+			},
+		}
+		keyTypeVar = &typevars.ListKey{}
+	case *gotypes.Array:
+		valueType = elmExpr.Elmtype
+		valueTypeVar = &typevars.ListValue{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Elmtype,
+			},
+		}
+		keyTypeVar = &typevars.ListKey{}
+	case *gotypes.Map:
+		valueType = elmExpr.Valuetype
+		valueTypeVar = &typevars.MapValue{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Valuetype,
+			},
+		}
+		keyTypeVar = &typevars.MapKey{
+			Constant: typevars.Constant{
+				DataType: elmExpr.Keytype,
+			},
+		}
+	default:
+		return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
+	}
+
+	for _, litElement := range litElements {
+		var valueExpr ast.Expr
+		if kvExpr, ok := litElement.(*ast.KeyValueExpr); ok {
+			attr, err := ep.Parse(kvExpr.Key)
+			if err != nil {
+				return nil, err
+			}
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            keyTypeVar,
+				Y:            attr.TypeVarList[0],
+				ExpectedType: attr.DataTypeList[0],
+			})
+			valueExpr = kvExpr.Value
+		} else {
+			valueExpr = litElement
+		}
+
+		if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
+			var typeDef gotypes.DataType
+			// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
+			if clExpr.Type == nil {
+				if pointer, ok := valueType.(*gotypes.Pointer); ok {
+					typeDef = pointer.Def
+					// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
+				} else {
+					typeDef = valueType
+				}
+			}
+			attr, err := ep.parseCompositeLit(clExpr, typeDef)
+			if err != nil {
+				return nil, err
+			}
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            valueTypeVar,
+				Y:            attr.TypeVarList[0],
+				ExpectedType: attr.DataTypeList[0],
+			})
+			continue
+		}
+
+		attr, err := ep.Parse(valueExpr)
 		if err != nil {
 			return nil, err
 		}
-		valueExpr = kvExpr.Value
-	} else {
-		valueExpr = expr
-	}
-
-	if clExpr, ok := valueExpr.(*ast.CompositeLit); ok {
-		var valueType gotypes.DataType
-		switch elmExpr := litType.(type) {
-		case *gotypes.Slice:
-			valueType = elmExpr.Elmtype
-		case *gotypes.Array:
-			valueType = elmExpr.Elmtype
-		case *gotypes.Map:
-			valueType = elmExpr.Valuetype
-		default:
-			return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
+		if len(attr.DataTypeList) != 1 {
+			return nil, fmt.Errorf("Expected single expression for KV value, got %#v", attr.DataTypeList)
 		}
 
-		var typeDef gotypes.DataType
-		// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
-		if clExpr.Type == nil {
-			if pointer, ok := valueType.(*gotypes.Pointer); ok {
-				typeDef = pointer.Def
-				// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
-			} else {
-				typeDef = valueType
-			}
-		}
-
-		return ep.parseCompositeLit(clExpr, typeDef)
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X:            valueTypeVar,
+			Y:            attr.TypeVarList[0],
+			ExpectedType: attr.DataTypeList[0],
+		})
 	}
 
-	attr, err := ep.Parse(valueExpr)
-	if err != nil {
-		return nil, err
-	}
-	if len(attr.DataTypeList) != 1 {
-		return nil, fmt.Errorf("Expected single expression for KV value, got %#v", attr.DataTypeList)
-	}
-	return attr, nil
+	return &typevars.Constant{
+		DataType: litType,
+	}, nil
 }
 
-// TODO(jchaloup): produces ExprAttribute struct with extracted attributes
-func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) error {
+// *gotypes.Struct
+func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) (*typevars.Constant, error) {
+	structTypeVar := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
 	fieldCounter := 0
 	fieldLen := len(structDef.Fields)
 	for _, litElement := range lit.Elts {
+		var fieldTypeVar *typevars.Field
 		var valueExpr ast.Expr
 		// if the struct fields name are omitted, the order matters
 		// TODO(jchaloup): should check if all elements are KeyValueExpr or not (otherwise go compilation fails)
@@ -119,32 +181,56 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 			// The field must be an identifier
 			keyDefIdentifier, ok := kvExpr.Key.(*ast.Ident)
 			if !ok {
-				return fmt.Errorf("Struct's field %#v is not an identifier", litElement)
+				return nil, fmt.Errorf("Struct's field %#v is not an identifier", litElement)
 			}
 			if structSymbol != nil {
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
 			}
+			ep.Config.ContractTable.AddContract(&contracts.HasField{
+				X:     structTypeVar,
+				Field: keyDefIdentifier.Name,
+			})
+			fieldTypeVar = typevars.MakeField(structTypeVar, keyDefIdentifier.Name, 0)
 			valueExpr = kvExpr.Value
 		} else {
 			if fieldCounter >= fieldLen {
-				return fmt.Errorf("Number of fields of the CL is greater than the number of fields of underlying struct %#v", structDef)
+				return nil, fmt.Errorf("Number of fields of the CL is greater than the number of fields of underlying struct %#v", structDef)
 			}
 			if structSymbol != nil {
 				// TODO(jchaloup): Should we count the anonymous field as well? Maybe make a AddDataTypeAnonymousField?
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
 			}
+			ep.Config.ContractTable.AddContract(&contracts.HasField{
+				X:     structTypeVar,
+				Index: fieldCounter,
+			})
+			fieldTypeVar = typevars.MakeField(structTypeVar, "", fieldCounter)
 			valueExpr = litElement
 		}
 
 		// process the field value
-		_, err := ep.Parse(valueExpr)
+		attr, err := ep.Parse(valueExpr)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X:            fieldTypeVar,
+			Y:            attr.TypeVarList[0],
+			ExpectedType: attr.DataTypeList[0],
+		})
 		fieldCounter++
 	}
 
-	return nil
+	ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+		X: &typevars.Constant{
+			DataType: structDef,
+		},
+		Y: structTypeVar,
+	})
+
+	return &typevars.Constant{
+		DataType: structDef,
+	}, nil
 }
 
 func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprAttribute, error) {
@@ -172,7 +258,6 @@ func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprA
 }
 
 // parseCompositeLit consumes ast.CompositeLit and produces data type of the root composite literal
-// TODO(jchaloup): for each composite literal generate a data type contract
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (*types.ExprAttribute, error) {
 	glog.Infof("Processing CompositeLit: %#v\n", lit)
 	// https://golang.org/ref/spec#Composite_literals
@@ -225,25 +310,29 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 		return nil, err
 	}
 	glog.Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
+
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
+	var typeVar *typevars.Constant
 	switch litTypeExpr := nonIdentLitTypeDef.DataTypeList[0].(type) {
 	case *gotypes.Struct:
 		// anonymous structure -> we can ignore field's allocation
-		if err := ep.parseCompositeLitStructElements(lit, litTypeExpr, nil); err != nil {
+		var err error
+		typeVar, err = ep.parseCompositeLitStructElements(lit, litTypeExpr, nil)
+		if err != nil {
 			return nil, err
 		}
 	case *gotypes.Array, *gotypes.Slice, *gotypes.Map:
 		glog.Infof("parseCompositeLitArrayLikeElements: %#v\n", lit)
-		for _, litElement := range lit.Elts {
-			if _, err := ep.parseKeyValueLikeExpr(litElement, nonIdentLitTypeDef.DataTypeList[0]); err != nil {
-				return nil, err
-			}
+		var err error
+		typeVar, err = ep.parseKeyValueLikeExpr(lit.Elts, nonIdentLitTypeDef.DataTypeList[0])
+		if err != nil {
+			return nil, err
 		}
 	default:
 		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef.DataTypeList[0]))
 	}
 
-	return types.ExprAttributeFromDataType(litTypedef), nil
+	return types.ExprAttributeFromDataType(litTypedef).AddTypeVar(typeVar), nil
 }
 
 // parseIdentifier consumes ast.Ident and produces:
@@ -268,14 +357,21 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		postponedErr = fmt.Errorf("parseIdentifier: Symbol %q not yet processed", ident.Name)
 	} else {
 		// If it is a variable, return its definition
-		if def, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
+		if def, st, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
 			byteSlice, _ := json.Marshal(def)
 			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
 			// The data type of the variable is not accounted as it is not implicitely used
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			return types.ExprAttributeFromDataType(def.Def), nil
+			if st == symboltable.FunctionSymbol {
+				return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
+					typevars.FunctionFromSymbolDef(def),
+				), nil
+			}
+			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
+				typevars.VariableFromSymbolDef(def),
+			), nil
 		}
 	}
 
@@ -291,16 +387,24 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		case symboltable.VariableSymbol:
 			switch ident.Name {
 			case "true", "false":
-				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}), nil
+				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+				), nil
 			case "nil":
-				return types.ExprAttributeFromDataType(&gotypes.Nil{}), nil
+				return types.ExprAttributeFromDataType(&gotypes.Nil{}).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Nil{}),
+				), nil
 			case "iota":
-				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "iota"}), nil
+				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "iota"}).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Builtin{Def: "iota"}),
+				), nil
 			default:
 				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
 			}
 		case symboltable.FunctionSymbol:
-			return types.ExprAttributeFromDataType(symbolDef.Def), nil
+			return types.ExprAttributeFromDataType(symbolDef.Def).AddTypeVar(
+				typevars.FunctionFromSymbolDef(symbolDef),
+			), nil
 		default:
 			return nil, fmt.Errorf("Unsupported symbol type: %v", symbolType)
 		}
@@ -330,12 +434,23 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		return nil, fmt.Errorf("Operand of an unary operator is not a single value")
 	}
 
+	y := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
+	var yAttr *types.ExprAttribute
+
 	// TODO(jchaloup): check the token is really a unary operator
 	// TODO(jchaloup): add the missing unary operator tokens
 	switch expr.Op {
 	// variable address
 	case token.AND:
-		return types.ExprAttributeFromDataType(&gotypes.Pointer{Def: attr.DataTypeList[0]}), nil
+		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+			OpToken: expr.Op,
+			X:       attr.TypeVarList[0],
+			Y:       y,
+		})
+		yAttr = types.ExprAttributeFromDataType(&gotypes.Pointer{Def: attr.DataTypeList[0]})
 	// channel
 	case token.ARROW:
 		nonIdentDefAttr, err := ep.findFirstNonidDataType(attr.DataTypeList[0])
@@ -345,13 +460,25 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		if nonIdentDefAttr.DataTypeList[0].GetType() != gotypes.ChannelType {
 			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead at %v", nonIdentDefAttr.DataTypeList[0].GetType(), expr.Pos())
 		}
-		return types.ExprAttributeFromDataType(nonIdentDefAttr.DataTypeList[0].(*gotypes.Channel).Value), nil
+		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+			OpToken: expr.Op,
+			X:       attr.TypeVarList[0],
+			Y:       y,
+		})
+		yAttr = types.ExprAttributeFromDataType(nonIdentDefAttr.DataTypeList[0].(*gotypes.Channel).Value)
 		// other
 	case token.XOR, token.OR, token.SUB, token.NOT, token.ADD:
-		return attr, nil
+		// is token.OR really a unary operator?
+		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+			OpToken: expr.Op,
+			X:       attr.TypeVarList[0],
+			Y:       y,
+		})
+		yAttr = types.ExprAttributeFromDataType(attr.DataTypeList[0])
 	default:
 		return nil, fmt.Errorf("Unary operator %#v (%#v) not recognized", expr.Op, token.ADD)
 	}
+	return yAttr.AddTypeVar(y), nil
 }
 
 // parseBinaryExpr consumes ast.BinaryExpr and produces:
@@ -414,7 +541,16 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		// As the list of all data types is read from the builtin package,
 		// it is not possible to keep a clean solution and provide
 		// the check for the operands validity at the same time.
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}), nil
+		z := &typevars.Variable{
+			Name: ep.Config.ContractTable.NewVariable(),
+		}
+		ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+			OpToken: expr.Op,
+			X:       xAttr.TypeVarList[0],
+			Y:       yAttr.TypeVarList[0],
+			Z:       z,
+		})
+		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(z), nil
 	}
 
 	// If both types are built-in, just return built-in
@@ -433,12 +569,21 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				// The right operand can be ignored (it is always converted to an integer).
 				// If the left operand is untyped int => untyped int (or int for non-constant expressions)
 				// if the left operand is typed int => return int
+				z := &typevars.Variable{
+					Name: ep.Config.ContractTable.NewVariable(),
+				}
+				ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+					OpToken: expr.Op,
+					X:       xAttr.TypeVarList[0],
+					Y:       yAttr.TypeVarList[0],
+					Z:       z,
+				})
 				if xt.Untyped {
 					// const a = 8.0 << 1
 					// a is of type int, checked at https://play.golang.org/
-					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "int", Untyped: true}), nil
+					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "int", Untyped: true}).AddTypeVar(z), nil
 				}
-				return types.ExprAttributeFromDataType(xt), nil
+				return types.ExprAttributeFromDataType(xt).AddTypeVar(z), nil
 			case token.AND, token.OR, token.MUL, token.SUB, token.QUO, token.ADD, token.AND_NOT, token.REM, token.XOR:
 				// The same reasoning as with the relational operators
 				// Experiments:
@@ -446,39 +591,57 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				if xt.Untyped && yt.Untyped {
 
 				}
+				z := &typevars.Variable{
+					Name: ep.Config.ContractTable.NewVariable(),
+				}
+				ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+					OpToken: expr.Op,
+					X:       xAttr.TypeVarList[0],
+					Y:       yAttr.TypeVarList[0],
+					Z:       z,
+				})
 				if xt.Untyped {
-					return types.ExprAttributeFromDataType(yt), nil
+					return types.ExprAttributeFromDataType(yt).AddTypeVar(z), nil
 				}
 				if yt.Untyped {
-					return types.ExprAttributeFromDataType(xt), nil
+					return types.ExprAttributeFromDataType(xt).AddTypeVar(z), nil
 				}
 				// byte(2)&uint8(3) is uint8
 				if (xt.Def == "byte" && yt.Def == "uint8") || (yt.Def == "byte" && xt.Def == "uint8") {
-					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}), nil
+					return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(z), nil
 				}
 			}
 			return nil, fmt.Errorf("Binary operation %q over two different built-in types: %q != %q", expr.Op, xt, yt)
 		}
+		z := &typevars.Variable{
+			Name: ep.Config.ContractTable.NewVariable(),
+		}
+		ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+			OpToken: expr.Op,
+			X:       xAttr.TypeVarList[0],
+			Y:       yAttr.TypeVarList[0],
+			Z:       z,
+		})
 		if xt.Untyped {
 			{
 				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped})
 				glog.Infof("xx+yy: %v\n", string(byteSlice))
 			}
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}), nil
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: yt.Untyped}).AddTypeVar(z), nil
 		}
 		if yt.Untyped {
 			{
 				byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped})
 				glog.Infof("xx+yy: %v\n", string(byteSlice))
 			}
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}), nil
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def, Untyped: xt.Untyped}).AddTypeVar(z), nil
 		}
 		// both operands are typed => Untyped = false
 		{
 			byteSlice, _ := json.Marshal(&gotypes.Builtin{Def: xt.Def})
 			glog.Infof("xx+yy: %v\n", string(byteSlice))
 		}
-		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def}), nil
+		return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: xt.Def}).AddTypeVar(z), nil
 	}
 
 	glog.Infof("Binaryexpr.x: %#v\nBinaryexpr.y: %#v\n", xAttr.DataTypeList[0], yAttr.DataTypeList[0])
@@ -523,15 +686,25 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		return nil, fmt.Errorf("At least one operand of a binary expression has to be an identifier or a qualified identifier")
 	}
 
+	z := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+	ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
+		OpToken: expr.Op,
+		X:       xAttr.TypeVarList[0],
+		Y:       yAttr.TypeVarList[0],
+		Z:       z,
+	})
+
 	// Even here we assume existence of untyped constants.
 	// If there is only one identifier it means the other operand is a built-in type.
 	// Assuming the code is written correctly (it compiles), resulting data type of the operation
 	// is always the identifier.
 	// TODO(jchaloup): if an operand is a data type identifier, we need to return the data type itself, not its definition
 	if xIsIdentifier {
-		return types.ExprAttributeFromDataType(xIdent), nil
+		return types.ExprAttributeFromDataType(xIdent).AddTypeVar(z), nil
 	}
-	return types.ExprAttributeFromDataType(yIdent), nil
+	return types.ExprAttributeFromDataType(yIdent).AddTypeVar(z), nil
 }
 
 // parseStarExpr consumes ast.StarExpr and produces:
@@ -553,7 +726,19 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (*types.ExprAttribute, error
 	if !ok {
 		return nil, fmt.Errorf("Accessing a value of non-pointer type: %#v", attr.DataTypeList[0])
 	}
-	return types.ExprAttributeFromDataType(val.Def), nil
+	ep.Config.ContractTable.AddContract(&contracts.IsDereferenceable{
+		X: attr.TypeVarList[0],
+	})
+
+	y := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+	ep.Config.ContractTable.AddContract(&contracts.DereferenceOf{
+		X: attr.TypeVarList[0],
+		Y: y,
+	})
+
+	return types.ExprAttributeFromDataType(val.Def).AddTypeVar(y), nil
 }
 
 // parseParenExpr consumes ast.Expr and drops direct sequence of parenthesis
@@ -721,7 +906,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
-	processArgs := func(args []ast.Expr, params []gotypes.DataType) error {
+	// params = list of function/method parameters definition (from its signature)
+	processArgs := func(functionTypeVar *typevars.Function, args []ast.Expr, params []gotypes.DataType) error {
 		// TODO(jchaloup): check the arguments can be assigned to the parameters
 		// TODO(jchaloup): generate type contract for each argument
 		if params != nil {
@@ -730,27 +916,61 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				if err != nil {
 					return err
 				}
+				// e.g. f(...) (a, b, c); g(a,b,c) ...; g(f(...))
 				if len(params) == len(attr.DataTypeList) {
+					for i := range attr.DataTypeList {
+						if functionTypeVar != nil {
+							ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+								X: attr.TypeVarList[i],
+								Y: &typevars.Argument{
+									Function: *functionTypeVar,
+									Index:    i,
+								},
+								ExpectedType: attr.DataTypeList[i],
+							})
+						}
+					}
 					return nil
 				}
 				if len(attr.DataTypeList) != 1 {
 					return fmt.Errorf("Argument %#v of a call expression does not have one return value", args[0])
 				}
+
+				// E.g. func f(a string, b ...int) called as f("aaa"), the 'b' is nil then
+				if functionTypeVar != nil {
+					ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X: attr.TypeVarList[0],
+						Y: &typevars.Argument{
+							Function: *functionTypeVar,
+							Index:    0,
+						},
+						ExpectedType: attr.DataTypeList[0],
+					})
+				}
 				return nil
 			}
 		}
-		for _, arg := range args {
+		for i, arg := range args {
 			// an argument is passed to the function so its data type does not affect the result data type of the call
 			attr, err := ep.Parse(arg)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("attr: %#v\terr: %v\n", attr, err)
+
 			if attr == nil || len(attr.DataTypeList) != 1 {
 				return fmt.Errorf("Argument %#v of a call expression does not have one return value", arg)
 			}
-			// TODO(jchaloup): data type of the argument itself can be propagated to the function/method
-			// to provide more information about the type if the function parameter is an interface.
+
+			if functionTypeVar != nil {
+				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X: attr.TypeVarList[0],
+					Y: &typevars.Argument{
+						Function: *functionTypeVar,
+						Index:    i,
+					},
+					ExpectedType: attr.DataTypeList[0],
+				})
+			}
 		}
 		return nil
 	}
@@ -767,10 +987,25 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		if err != nil {
 			return nil, err
 		}
-		if err := processArgs(expr.Args, nil); err != nil {
+
+		attr, err := ep.Parse(expr.Args[0])
+		if err != nil {
 			return nil, err
 		}
-		return types.ExprAttributeFromDataType(def), nil
+
+		if attr == nil || len(attr.DataTypeList) != 1 {
+			return nil, fmt.Errorf("Argument %#v of a call expression does not have one return value", expr.Args[0])
+		}
+
+		y := typevars.MakeConstant(def)
+
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X:            attr.TypeVarList[0],
+			Y:            y,
+			ExpectedType: attr.DataTypeList[0],
+		})
+
+		return types.ExprAttributeFromDataType(def).AddTypeVar(y), nil
 	}
 	glog.Infof("isDataType of %#v is false", expr.Fun)
 
@@ -785,9 +1020,11 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		return nil, err
 	}
 
+	var params []gotypes.DataType
+	var results []gotypes.DataType
+
 	// a) f1() (int, int), f2(int, int) => f2(f1())
 	// b) f(arg, arg, arg) => f(a,a,a)
-
 	switch funcType := funcDefAttr.DataTypeList[0].(type) {
 	case *gotypes.Function:
 		// built-in make or new?
@@ -800,25 +1037,21 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				switch arglen := len(expr.Args); arglen {
 				case 1:
 					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
-					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-					return types.ExprAttributeFromDataType(typeDef), err
 				case 2:
 					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
-					if err := processArgs([]ast.Expr{expr.Args[1]}, nil); err != nil {
+					if err := processArgs(typevars.MakeFunction("make", "builtin"), []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
-					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-					return types.ExprAttributeFromDataType(typeDef), err
 				case 3:
 					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
-					if err := processArgs([]ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+					if err := processArgs(typevars.MakeFunction("make", "builtin"), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
-					typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-					return types.ExprAttributeFromDataType(typeDef), err
 				default:
 					return nil, fmt.Errorf("Expecting 1, 2 or 3 arguments of built-in function make, got %q instead", arglen)
 				}
+				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(typevars.MakeConstant(typeDef)), err
 			case "new":
 				// The new built-in function allocates memory. The first argument is a type,
 				// not a value, and the value returned is a pointer to a newly
@@ -827,41 +1060,95 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					return nil, fmt.Errorf("Len of new args != 1, it is %#v", expr.Args)
 				}
 				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-				return types.ExprAttributeFromDataType(&gotypes.Pointer{Def: typeDef}), err
+				return types.ExprAttributeFromDataType(
+					&gotypes.Pointer{Def: typeDef},
+				).AddTypeVar(
+					typevars.MakeConstant(&gotypes.Pointer{Def: typeDef}),
+				), err
 			}
 		}
-		if err := processArgs(expr.Args, funcType.Params); err != nil {
-			return nil, err
-		}
-		return types.ExprAttributeFromDataType(funcType.Results...), nil
+
+		params = funcType.Params
+		results = funcType.Results
 	case *gotypes.Method:
-		if err := processArgs(expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
-			return nil, err
-		}
-		return types.ExprAttributeFromDataType(funcType.Def.(*gotypes.Function).Results...), nil
+		params = funcType.Def.(*gotypes.Function).Params
+		results = funcType.Def.(*gotypes.Function).Results
 	default:
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
+
+	var f *typevars.Function
+	switch d := attr.TypeVarList[0].(type) {
+	case *typevars.Function:
+		f = d
+	case *typevars.Variable:
+		f = typevars.MakeFunction(d.Name, d.Package)
+	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
+		newVar := ep.Config.ContractTable.NewVariable()
+		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeVar(newVar, ep.Config.PackageName),
+		})
+		f = typevars.MakeFunction(newVar, ep.Config.PackageName)
+	default:
+		panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
+	}
+
+	ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+		F:         f,
+		ArgsCount: len(expr.Args),
+	})
+
+	if err := processArgs(f, expr.Args, params); err != nil {
+		return nil, err
+	}
+
+	outputAttr := types.ExprAttributeFromDataType(results...)
+	for i := range results {
+		z := &typevars.ReturnType{
+			Function: *f,
+			Index:    i,
+		}
+		outputAttr.AddTypeVar(z)
+	}
+	return outputAttr, nil
 }
 
 // parseSliceExpr consumes ast.SliceExpr and produces a data type of its slice value
 // Assumptions:
 // - All Low, High, Max expression are valid slice indexes
 func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, error) {
+	// From https://golang.org/ref/spec#Slice_types:
+	// 		"The elements can be addressed by integer indices 0 through len(s)-1."
 	if expr.Low != nil {
-		if _, err := ep.Parse(expr.Low); err != nil {
+		attr, err := ep.Parse(expr.Low)
+		if err != nil {
 			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
 	}
 	if expr.High != nil {
-		if _, err := ep.Parse(expr.High); err != nil {
+		attr, err := ep.Parse(expr.High)
+		if err != nil {
 			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
 	}
 	if expr.Max != nil {
-		if _, err := ep.Parse(expr.Max); err != nil {
+		attr, err := ep.Parse(expr.Max)
+		if err != nil {
 			return nil, err
 		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
 	}
 
 	exprDefAttr, err := ep.Parse(expr.X)
@@ -872,6 +1159,10 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, err
 	if len(exprDefAttr.DataTypeList) != 1 {
 		return nil, fmt.Errorf("SliceExpr is not a single argument")
 	}
+
+	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
+		X: exprDefAttr.TypeVarList[0],
+	})
 
 	return exprDefAttr, nil
 }
@@ -916,7 +1207,15 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 	}
 
 	def, err := ep.TypeParser.Parse(expr.Type)
-	return types.ExprAttributeFromDataType(def), err
+	newVar := ep.Config.ContractTable.NewVariable()
+	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+		X: typevars.MakeConstant(def),
+		Y: typevars.MakeFunction(newVar, ep.Config.PackageName),
+	})
+
+	return types.ExprAttributeFromDataType(def).AddTypeVar(
+		typevars.MakeFunction(newVar, ep.Config.PackageName),
+	), err
 }
 
 // parseStructType consumes ast.StructType and produces data type corresponding to struct definition
@@ -1280,7 +1579,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 	return nil, fmt.Errorf("Unable to find a method %v in interface %#v", method, interfaceDefsymbol)
 }
 
-func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *gotypes.Function, error) {
+func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *types.ExprAttribute, error) {
 	parExpr, ok := expr.X.(*ast.ParenExpr)
 	if !ok {
 		return false, nil, nil
@@ -1345,7 +1644,27 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *goty
 	if !ok {
 		return false, nil, fmt.Errorf("Expected a method %q of data type %v, got %#v instead", expr.Sel.Name, typeSymbolDef.Name, methodDefAttr.DataTypeList[0])
 	}
-	return true, method.Def.(*gotypes.Function), nil
+
+	y := &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
+	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+		X: &typevars.Constant{
+			DataType: typeSymbolDef.Def,
+			Package:  typeSymbolDef.Package,
+		},
+		Y: y,
+	})
+
+	ep.Config.ContractTable.AddContract(&contracts.HasField{
+		X:     y,
+		Field: expr.Sel.Name,
+	})
+
+	return true, types.ExprAttributeFromDataType(method.Def.(*gotypes.Function)).AddTypeVar(
+		typevars.MakeField(y, expr.Sel.Name, 0),
+	), nil
 }
 
 // parseSelectorExpr consumes ast.SelectorExpr and produces:
@@ -1368,7 +1687,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		return nil, err
 	}
 	if hasMethod {
-		return types.ExprAttributeFromDataType(function), nil
+		return function, nil
 	}
 	// X.Sel a.k.a Prefix.Item
 	xDefAttr, xErr := ep.Parse(expr.X)
@@ -1380,7 +1699,10 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 	byteSlice, _ := json.Marshal(xDefAttr.DataTypeList[0])
-	glog.Infof("SelectorExpr.X: %#v\tfield:%#v\t\t%v at %v\n", xDefAttr.DataTypeList[0], expr.Sel, string(byteSlice), expr.Pos())
+	glog.Infof("\n\nSelectorExpr.X:\n\t%#v\n\tTypeVar: %#v\n\tfield:%#v\n\t%v at %v\n", xDefAttr.DataTypeList[0], xDefAttr.TypeVarList[0], expr.Sel, string(byteSlice), expr.Pos())
+
+	var outputAttr *types.ExprAttribute
+	var outputField string
 
 	// The struct and an interface are the only data type from which a field/method is retriveable
 	switch xType := xDefAttr.DataTypeList[0].(type) {
@@ -1401,7 +1723,9 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		// TODO(jchaloup): check if the packageIdent is a global variable, method, function or a data type
 		//                 based on that, use the corresponding Add method
 		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name, "")
-		return types.ExprAttributeFromDataType(packageIdent.Def), nil
+		return types.ExprAttributeFromDataType(packageIdent.Def).AddTypeVar(
+			typevars.VariableFromSymbolDef(packageIdent),
+		), nil
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {
 		case *gotypes.Identifier:
@@ -1418,13 +1742,21 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 				byteSlice, _ := json.Marshal(structDefsymbol)
 				glog.Infof("Struct retrieved: %v\n", string(byteSlice))
 			}
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: symbolTable,
 				dataTypeDef: structDefsymbol,
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Selector:
 			// qid to different package
+			// TODO(jchaloup): create a contract once the multi-package contracts collecting is implemented
 			pq, ok := def.Prefix.(*gotypes.Packagequalifier)
 			if !ok {
 				return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-qualified struct data type: %#v", expr.Sel.Name, def)
@@ -1433,18 +1765,28 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			if err != nil {
 				return nil, err
 			}
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: symbolTable,
 				dataTypeDef: structDefsymbol,
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Struct:
 			// anonymous struct
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: ep.SymbolTable,
 				dataTypeDef: &symboltable.SymbolDef{Def: def},
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		default:
 			return nil, fmt.Errorf("Trying to retrieve a %q field from a pointer to non-struct data type: %#v", expr.Sel.Name, xType.Def)
 		}
@@ -1459,21 +1801,36 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		}
 		switch defSymbol.Def.(type) {
 		case *gotypes.Struct:
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: symbolTable,
 				dataTypeDef: defSymbol,
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Interface:
-			return ep.retrieveInterfaceMethod(symbolTable, defSymbol, expr.Sel.Name)
+			attr, err := ep.retrieveInterfaceMethod(symbolTable, defSymbol, expr.Sel.Name)
+			if err != nil {
+				return attr, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Identifier:
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable:    symbolTable,
 				dataTypeDef:    defSymbol,
 				field:          &ast.Ident{Name: expr.Sel.Name},
 				fieldsOnly:     true,
 				dropFieldsOnly: true,
 			})
+			if err != nil {
+				return attr, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		default:
 			// check data types with receivers
 			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", expr.Sel.Name, xType)
@@ -1481,11 +1838,12 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			if err != nil {
 				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v at %v: %v", defSymbol, expr.Pos(), err)
 			}
-			return types.ExprAttributeFromDataType(def.Def), nil
+			outputAttr = types.ExprAttributeFromDataType(def.Def)
+			outputField = expr.Sel.Name
 		}
 	// anonymous struct
 	case *gotypes.Struct:
-		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: ep.SymbolTable,
 			dataTypeDef: &symboltable.SymbolDef{
 				Name:    "",
@@ -1494,24 +1852,39 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			},
 			field: &ast.Ident{Name: expr.Sel.Name},
 		})
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous
-		return ep.retrieveInterfaceMethod(ep.SymbolTable, &symboltable.SymbolDef{
+		attr, err := ep.retrieveInterfaceMethod(ep.SymbolTable, &symboltable.SymbolDef{
 			Name:    "",
 			Package: "",
 			Def:     xType,
 		}, expr.Sel.Name)
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	case *gotypes.Selector:
 		// qid.structtype expected
 		st, sd, err := ep.retrieveQidDataType(xType.Prefix, &ast.Ident{Name: xType.Item})
 		if err != nil {
 			return nil, err
 		}
-		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: st,
 			dataTypeDef: sd,
 			field:       &ast.Ident{Name: expr.Sel.Name},
 		})
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	case *gotypes.Builtin:
 		// Check if the built-in type has some methods
 		table, err := ep.GlobalSymbolTable.Lookup("builtin")
@@ -1522,15 +1895,29 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		if err != nil {
 			return nil, err
 		}
-		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: table,
 			dataTypeDef: def,
 			field:       &ast.Ident{Name: expr.Sel.Name},
 			methodsOnly: true,
 		})
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	default:
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v at %v", expr.Sel.Name, xDefAttr.DataTypeList[0], expr.Pos())
 	}
+
+	ep.Config.ContractTable.AddContract(&contracts.HasField{
+		X:     xDefAttr.TypeVarList[0],
+		Field: outputField,
+	})
+
+	return outputAttr.AddTypeVar(
+		typevars.MakeField(xDefAttr.TypeVarList[0], outputField, 0),
+	), nil
 }
 
 // parseIndexExpr consumes ast.IndexExpr and produces:
@@ -1543,7 +1930,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	glog.Infof("Processing IndexExpr: %#v\n", expr)
 	// X[Index]
 	// The Index can be a simple literal or another compound expression
-	_, indexErr := ep.Parse(expr.Index)
+	indexAttr, indexErr := ep.Parse(expr.Index)
 	if indexErr != nil {
 		return nil, indexErr
 	}
@@ -1606,29 +1993,63 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 		}
 	}
 
+	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
+		X: xDefAttr.TypeVarList[0],
+	})
+
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
 	switch xType := indexExpr.(type) {
 	case *gotypes.Map:
-		return types.ExprAttributeFromDataType(xType.Valuetype), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeMapKey(indexAttr.DataTypeList[0]),
+		})
+		y := typevars.MakeMapValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Valuetype).AddTypeVar(y), nil
 	case *gotypes.Array:
-		return types.ExprAttributeFromDataType(xType.Elmtype), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
+		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Slice:
-		return types.ExprAttributeFromDataType(xType.Elmtype), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
+		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Builtin:
 		if xType.Def == "string" {
 			// Checked at https://play.golang.org/
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}), nil
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X: indexAttr.TypeVarList[0],
+				Y: typevars.MakeListKey(),
+			})
+			y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
 	case *gotypes.Identifier:
 		if xType.Def == "string" && xType.Package == "builtin" {
 			// Checked at https://play.golang.org/
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}), nil
+			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X: indexAttr.TypeVarList[0],
+				Y: typevars.MakeListKey(),
+			})
+			y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
 	case *gotypes.Ellipsis:
-		return types.ExprAttributeFromDataType(xType.Def), nil
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: indexAttr.TypeVarList[0],
+			Y: typevars.MakeListKey(),
+		})
+		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		return types.ExprAttributeFromDataType(xType.Def).AddTypeVar(y), nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v at %v", xDefAttr.DataTypeList[0], expr.Pos()))
 	}
@@ -1638,7 +2059,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttribute, error) {
 	glog.Infof("Processing TypeAssertExpr: %#v\n", expr)
 	// X.(Type)
-	_, xErr := ep.Parse(expr.X)
+	attr, xErr := ep.Parse(expr.X)
 	if xErr != nil {
 		return nil, xErr
 	}
@@ -1660,7 +2081,15 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttr
 		return nil, err
 	}
 
-	return types.ExprAttributeFromDataType(def), nil
+	y := typevars.MakeConstant(def)
+
+	ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+		X:            attr.TypeVarList[0],
+		Y:            y,
+		ExpectedType: attr.DataTypeList[0],
+	})
+
+	return types.ExprAttributeFromDataType(def).AddTypeVar(y), nil
 }
 
 func (ep *Parser) Parse(expr ast.Expr) (*types.ExprAttribute, error) {

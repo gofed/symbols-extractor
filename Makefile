@@ -112,7 +112,7 @@ goenv:
 
 build:
 	$(RMLOG)
-	$(GO_BUILD) $(GO_BUILD_FLAGS) -o $(EXTRACT) $(PROJECT_ROOT)/cmd $(WLOG)
+	$(GO_BUILD) $(GO_BUILD_FLAGS) -o extract $(PROJECT_ROOT)/cmd $(WLOG)
 
 test:
 	$(RMLOG)
@@ -125,6 +125,9 @@ test:
             $(GLOG_FLAGS) $(WLOG)
 	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/statement \
             $(GLOG_FLAGS) $(WLOG)
+
+integration:
+	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/tests/integration $(GLOG_FLAGS) $(WLOG)
 
 gen:
 	./gentypes.sh
