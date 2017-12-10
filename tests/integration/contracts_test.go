@@ -1172,6 +1172,10 @@ func createSelectorsTestSuite() *TestSuite {
 				X: typevars.MakeField(typevars.MakeVar(vars["mA"], packageName), "method", 0),
 				Y: typevars.MakeVirtualVar(42),
 			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(42)),
+				ArgsCount: 0,
+			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeReturn(typevars.MakeVirtualVar(42).Name, packageName, 0),
 				Y: typevars.MakeVar(vars["mB"], packageName),
@@ -1235,6 +1239,10 @@ func createSelectorsTestSuite() *TestSuite {
 				X: typevars.MakeField(typevars.MakeVar(vars["ida"], packageName), "imethod", 0),
 				Y: typevars.MakeVirtualVar(47),
 			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(47)),
+				ArgsCount: 0,
+			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeReturn(typevars.MakeVirtualVar(47).Name, packageName, 0),
 				Y: typevars.MakeVar(vars["idb"], packageName),
@@ -1257,6 +1265,10 @@ func createSelectorsTestSuite() *TestSuite {
 			&contracts.PropagatesTo{
 				X: typevars.MakeField(typevars.MakeVar(vars["idc"], packageName), "imethod", 0),
 				Y: typevars.MakeVirtualVar(49),
+			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(49)),
+				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeReturn(typevars.MakeVirtualVar(49).Name, packageName, 0),
@@ -1334,6 +1346,10 @@ func createSelectorsTestSuite() *TestSuite {
 			&contracts.PropagatesTo{
 				X: typevars.MakeField(typevars.MakeVar(vars["idg"], packageName), "imethod", 0),
 				Y: typevars.MakeVirtualVar(52),
+			},
+			&contracts.IsInvocable{
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(52)),
+				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeReturn(typevars.MakeVirtualVar(52).Name, packageName, 0),

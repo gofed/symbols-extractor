@@ -1020,9 +1020,11 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		return nil, err
 	}
 
+	var params []gotypes.DataType
+	var results []gotypes.DataType
+
 	// a) f1() (int, int), f2(int, int) => f2(f1())
 	// b) f(arg, arg, arg) => f(a,a,a)
-
 	switch funcType := funcDefAttr.DataTypeList[0].(type) {
 	case *gotypes.Function:
 		// built-in make or new?
@@ -1065,77 +1067,51 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				), err
 			}
 		}
-		// The attr.TypeVarList[0] must be typevars.Function or typevars.variable
-		var f *typevars.Function
-		switch d := attr.TypeVarList[0].(type) {
-		case *typevars.Function:
-			f = d
-		case *typevars.Variable:
-			f = typevars.MakeFunction(d.Name, d.Package)
-		case *typevars.Field:
-			newVar := ep.Config.ContractTable.NewVariable()
-			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-				X: d,
-				Y: typevars.MakeVar(newVar, ep.Config.PackageName),
-			})
-			f = typevars.MakeFunction(newVar, ep.Config.PackageName)
-		default:
-			panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
-		}
 
-		ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
-			F:         f,
-			ArgsCount: len(expr.Args),
-		})
-
-		if err := processArgs(f, expr.Args, funcType.Params); err != nil {
-			return nil, err
-		}
-
-		attr := types.ExprAttributeFromDataType(funcType.Results...)
-		for i := range funcType.Results {
-			z := &typevars.ReturnType{
-				Function: *f,
-				Index:    i,
-			}
-			attr.AddTypeVar(z)
-		}
-		return attr, nil
+		params = funcType.Params
+		results = funcType.Results
 	case *gotypes.Method:
-
-		var f *typevars.Function
-		switch d := attr.TypeVarList[0].(type) {
-		case *typevars.Function:
-			f = d
-		case *typevars.Variable:
-			f = typevars.MakeFunction(d.Name, d.Package)
-		case *typevars.Field:
-			newVar := ep.Config.ContractTable.NewVariable()
-			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-				X: d,
-				Y: typevars.MakeVar(newVar, ep.Config.PackageName),
-			})
-			f = typevars.MakeFunction(newVar, ep.Config.PackageName)
-		default:
-			panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
-		}
-
-		if err := processArgs(f, expr.Args, funcType.Def.(*gotypes.Function).Params); err != nil {
-			return nil, err
-		}
-
-		attr := types.ExprAttributeFromDataType(funcType.Def.(*gotypes.Function).Results...)
-		for i := range funcType.Def.(*gotypes.Function).Results {
-			z := &typevars.ReturnType{
-				Function: *f,
-				Index:    i,
-			}
-			attr.AddTypeVar(z)
-		}
-		return attr, nil
+		params = funcType.Def.(*gotypes.Function).Params
+		results = funcType.Def.(*gotypes.Function).Results
 	default:
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
+
+	var f *typevars.Function
+	switch d := attr.TypeVarList[0].(type) {
+	case *typevars.Function:
+		f = d
+	case *typevars.Variable:
+		f = typevars.MakeFunction(d.Name, d.Package)
+	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
+		newVar := ep.Config.ContractTable.NewVariable()
+		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X: attr.TypeVarList[0],
+			Y: typevars.MakeVar(newVar, ep.Config.PackageName),
+		})
+		f = typevars.MakeFunction(newVar, ep.Config.PackageName)
+	default:
+		panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
+	}
+
+	ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+		F:         f,
+		ArgsCount: len(expr.Args),
+	})
+
+	if err := processArgs(f, expr.Args, params); err != nil {
+		return nil, err
+	}
+
+	outputAttr := types.ExprAttributeFromDataType(results...)
+	for i := range results {
+		z := &typevars.ReturnType{
+			Function: *f,
+			Index:    i,
+		}
+		outputAttr.AddTypeVar(z)
+	}
+	return outputAttr, nil
 }
 
 // parseSliceExpr consumes ast.SliceExpr and produces a data type of its slice value
@@ -1747,7 +1723,9 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		// TODO(jchaloup): check if the packageIdent is a global variable, method, function or a data type
 		//                 based on that, use the corresponding Add method
 		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name, "")
-		return types.ExprAttributeFromDataType(packageIdent.Def), nil
+		return types.ExprAttributeFromDataType(packageIdent.Def).AddTypeVar(
+			typevars.VariableFromSymbolDef(packageIdent),
+		), nil
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {
 		case *gotypes.Identifier:
@@ -1787,11 +1765,16 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			if err != nil {
 				return nil, err
 			}
-			return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: symbolTable,
 				dataTypeDef: structDefsymbol,
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
+			if err != nil {
+				return nil, err
+			}
+			outputAttr = attr
+			outputField = expr.Sel.Name
 		case *gotypes.Struct:
 			// anonymous struct
 			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
@@ -1892,11 +1875,16 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		if err != nil {
 			return nil, err
 		}
-		return ep.retrieveDataTypeField(&dataTypeFieldAccessor{
+		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: st,
 			dataTypeDef: sd,
 			field:       &ast.Ident{Name: expr.Sel.Name},
 		})
+		if err != nil {
+			return nil, err
+		}
+		outputAttr = attr
+		outputField = expr.Sel.Name
 	case *gotypes.Builtin:
 		// Check if the built-in type has some methods
 		table, err := ep.GlobalSymbolTable.Lookup("builtin")

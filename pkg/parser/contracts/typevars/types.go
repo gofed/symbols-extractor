@@ -107,6 +107,8 @@ func TypeVar2String(tv Interface) string {
 			return fmt.Sprintf("TypeVar.Field: %#v at index %v", d.Interface, d.Index)
 		}
 		return fmt.Sprintf("TypeVar.Field: %#v with field %q", d.Interface, d.Name)
+	case *CGO:
+		return fmt.Sprintf("TypeVar.CGO")
 	default:
 		fmt.Printf("\nTypeVar %#v\n\n", tv)
 		panic("Unrecognized TypeVar")
