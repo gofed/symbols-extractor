@@ -127,7 +127,7 @@ test:
             $(GLOG_FLAGS) $(WLOG)
 
 integration:
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/tests/integration $(GLOG_FLAGS) $(WLOG)
+	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/tests/integration/contracts $(GLOG_FLAGS) $(WLOG)
 
 gen:
 	./gentypes.sh
