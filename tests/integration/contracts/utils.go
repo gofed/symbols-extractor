@@ -12,9 +12,7 @@ import (
 	"github.com/gofed/symbols-extractor/tests/integration/utils"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
-
-func compareContracts(t *testing.T, gopkg, filename string, tests []contracts.Contract) {
+func CompareContracts(t *testing.T, gopkg, filename string, tests []contracts.Contract) {
 	gofile := path.Join(os.Getenv("GOPATH"), "src", gopkg, filename)
 
 	f, err := parser.ParseFile(token.NewFileSet(), gofile, nil, 0)
@@ -43,7 +41,7 @@ func compareContracts(t *testing.T, gopkg, filename string, tests []contracts.Co
 	if len(contractsList) < testsTotal {
 		t.Errorf("Expected at least %v contracts, got %v instead", testsTotal, len(contractsList))
 	}
-
+	t.Logf("Got %v tests, %v contracts", testsTotal, len(contractsList))
 	c := 0
 	for j, exp := range tests {
 		t.Logf("Checking %v-th contract: %v\n", j, contracts.Contract2String(contractsList[c]))

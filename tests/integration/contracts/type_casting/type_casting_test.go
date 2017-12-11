@@ -6,14 +6,17 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
+
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
 
 func TestTypeCastingContracts(t *testing.T) {
 	var vars = map[string]string{
 		"asA": ":64:asA",
 		"asB": ":79:asB",
 	}
-	compareContracts(
+	utils.CompareContracts(
 		t,
 		packageName,
 		"type_casting.go",

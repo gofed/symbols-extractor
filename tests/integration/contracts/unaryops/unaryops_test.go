@@ -7,7 +7,10 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
+
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
 
 func TestUnaryOpContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -20,7 +23,7 @@ func TestUnaryOpContracts(t *testing.T) {
 		"uopc":     ":134:uopc",
 		"uopd":     ":149:uopd",
 	}
-	compareContracts(
+	utils.CompareContracts(
 		t,
 		packageName,
 		"unaryop.go",
@@ -55,10 +58,9 @@ func TestUnaryOpContracts(t *testing.T) {
 			//
 			// chanValA := <-chanA
 			//
-			&contracts.UnaryOp{
-				X:       typevars.MakeVar(vars["chanA"], packageName),
-				Y:       typevars.MakeVirtualVar(2),
-				OpToken: token.ARROW,
+			&contracts.IsReceiveableFrom{
+				X: typevars.MakeVar(vars["chanA"], packageName),
+				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),

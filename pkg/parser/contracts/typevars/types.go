@@ -24,6 +24,8 @@ var ListKeyType Type = "ListKey"
 var ListValueType Type = "ListValue"
 var FieldType Type = "Field"
 var CGOType Type = "CGO"
+var RangeKeyType Type = "RangeKey"
+var RangeValueType Type = "RangeValue"
 
 // Constant to represent:
 // - basic literal type
@@ -89,13 +91,17 @@ func TypeVar2String(tv Interface) string {
 	case *Variable:
 		return fmt.Sprintf("TypeVar.Variable: (%v) %v", d.Package, d.Name)
 	case *ListKey:
-		return fmt.Sprintf("TypeVar.ListKey: int")
+		return fmt.Sprintf("TypeVar.ListKey: integer type")
 	case *ListValue:
-		return fmt.Sprintf("TypeVar.ListValue: %#v", d.Constant.DataType)
+		return fmt.Sprintf("TypeVar.ListValue: %#v", d.Interface)
 	case *MapKey:
-		return fmt.Sprintf("TypeVar.MapKey: %#v", d.Constant.DataType)
+		return fmt.Sprintf("TypeVar.MapKey: %#v", d.Interface)
 	case *MapValue:
-		return fmt.Sprintf("TypeVar.MapValue: %#v", d.Constant.DataType)
+		return fmt.Sprintf("TypeVar.MapValue: %#v", d.Interface)
+	case *RangeKey:
+		return fmt.Sprintf("TypeVar.RangeKey: %#v", d.Interface)
+	case *RangeValue:
+		return fmt.Sprintf("TypeVar.RangeValue: %#v", d.Interface)
 	case *Function:
 		return fmt.Sprintf("TypeVar.Function: (%v) %v", d.Package, d.Name)
 	case *ReturnType:
@@ -122,7 +128,7 @@ func (l *ListKey) GetType() Type {
 }
 
 type ListValue struct {
-	Constant
+	Interface
 }
 
 func (l *ListValue) GetType() Type {
@@ -130,7 +136,7 @@ func (l *ListValue) GetType() Type {
 }
 
 type MapKey struct {
-	Constant
+	Interface
 }
 
 func (m *MapKey) GetType() Type {
@@ -138,11 +144,27 @@ func (m *MapKey) GetType() Type {
 }
 
 type MapValue struct {
-	Constant
+	Interface
 }
 
 func (m *MapValue) GetType() Type {
 	return MapValueType
+}
+
+type RangeKey struct {
+	Interface
+}
+
+func (m *RangeKey) GetType() Type {
+	return RangeKeyType
+}
+
+type RangeValue struct {
+	Interface
+}
+
+func (m *RangeValue) GetType() Type {
+	return RangeValueType
 }
 
 type Function struct {
@@ -226,24 +248,53 @@ func MakeListKey() *ListKey {
 	return &ListKey{}
 }
 
-func MakeListValue(datatype gotypes.DataType) *ListValue {
+func MakeListValue(i Interface) *ListValue {
 	return &ListValue{
-		Constant: *MakeConstant(datatype),
+		Interface: i,
 	}
 }
 
-func MakeMapKey(datatype gotypes.DataType) *MapKey {
+func MakeConstantListValue(datatype gotypes.DataType) *ListValue {
+	return &ListValue{
+		Interface: MakeConstant(datatype),
+	}
+}
+
+func MakeMapKey(i Interface) *MapKey {
 	return &MapKey{
-		Constant: *MakeConstant(datatype),
+		Interface: i,
 	}
 }
 
-func MakeMapValue(datatype gotypes.DataType) *MapValue {
+func MakeConstantMapKey(datatype gotypes.DataType) *MapKey {
+	return &MapKey{
+		Interface: MakeConstant(datatype),
+	}
+}
+
+func MakeMapValue(i Interface) *MapValue {
 	return &MapValue{
-		Constant: *MakeConstant(datatype),
+		Interface: i,
 	}
 }
 
+func MakeRangeKey(i Interface) *RangeKey {
+	return &RangeKey{
+		Interface: i,
+	}
+}
+
+func MakeRangeValue(i Interface) *RangeValue {
+	return &RangeValue{
+		Interface: i,
+	}
+}
+
+func MakeConstantMapValue(datatype gotypes.DataType) *MapValue {
+	return &MapValue{
+		Interface: MakeConstant(datatype),
+	}
+}
 func MakeField(i Interface, field string, index int) *Field {
 	return &Field{
 		Interface: i,
