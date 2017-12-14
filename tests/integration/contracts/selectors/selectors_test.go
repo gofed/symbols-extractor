@@ -7,7 +7,10 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
+
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
 
 func TestSelectorsTypes(t *testing.T) {
 	var vars = map[string]string{
@@ -29,7 +32,7 @@ func TestSelectorsTypes(t *testing.T) {
 		"idk": ":776:idk",
 		"idl": ":824:idl",
 	}
-	compareContracts(t,
+	utils.CompareContracts(t,
 		packageName,
 		"selectors.go",
 		[]contracts.Contract{

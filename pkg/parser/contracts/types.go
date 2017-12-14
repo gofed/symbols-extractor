@@ -25,6 +25,10 @@ var ReferenceOfType Type = "referenceof"
 var IsDereferenceableType Type = "Isdereferenceable"
 var DereferenceOfType Type = "dereferenceOf"
 var IsIndexableType Type = "isindexable"
+var IsSendableToType Type = "issendableto"
+var IsReceiveableFromType Type = "isreceiveablefrom"
+var IsIncDecableType Type = "isincdecable"
+var IsRangeableType Type = "israngeable"
 
 func Contract2String(c Contract) string {
 	switch d := c.(type) {
@@ -35,7 +39,7 @@ func Contract2String(c Contract) string {
 	case *PropagatesTo:
 		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%#v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
 	case *IsCompatibleWith:
-		return fmt.Sprintf("IsCompatibleWith:\n\tX=%v\n\tY=%v\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
+		return fmt.Sprintf("IsCompatibleWith:\n\tX=%v\n\tY=%v\n\tWeak=%v\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.Weak, d.ExpectedType)
 	case *IsInvocable:
 		return fmt.Sprintf("IsInvocable:\n\tF=%v,\n\targCount=%v", typevars.TypeVar2String(d.F), d.ArgsCount)
 	case *IsReferenceable:
@@ -50,6 +54,14 @@ func Contract2String(c Contract) string {
 		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v", typevars.TypeVar2String(d.X), d.Field, d.Index)
 	case *IsIndexable:
 		return fmt.Sprintf("IsIndexable:\n\tX=%v", typevars.TypeVar2String(d.X))
+	case *IsSendableTo:
+		return fmt.Sprintf("IsSendableTo:\n\tX=%v\n\tY=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y))
+	case *IsReceiveableFrom:
+		return fmt.Sprintf("IsReceiveableFrom:\n\tX=%v\n\tY=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y))
+	case *IsIncDecable:
+		return fmt.Sprintf("IsIncDecable:\n\tX=%v", typevars.TypeVar2String(d.X))
+	case *IsRangeable:
+		return fmt.Sprintf("IsRangeable:\n\tX=%v", typevars.TypeVar2String(d.X))
 	default:
 		panic(fmt.Sprintf("Contract %#v not recognized", c))
 	}
@@ -82,6 +94,9 @@ type PropagatesTo struct {
 type IsCompatibleWith struct {
 	X, Y         typevars.Interface
 	ExpectedType gotypes.DataType
+	// As long as MapKey is compatible with integer, it is compatible with ListKey as well
+	// TODO(jchaloup): make sure this principle is applied during the compatibility analysis
+	Weak bool
 }
 
 type IsInvocable struct {
@@ -112,6 +127,22 @@ type DereferenceOf struct {
 }
 
 type IsIndexable struct {
+	X typevars.Interface
+}
+
+type IsSendableTo struct {
+	X, Y typevars.Interface
+}
+
+type IsReceiveableFrom struct {
+	X, Y typevars.Interface
+}
+
+type IsIncDecable struct {
+	X typevars.Interface
+}
+
+type IsRangeable struct {
 	X typevars.Interface
 }
 
@@ -157,4 +188,20 @@ func (i *DereferenceOf) GetType() Type {
 
 func (i *IsIndexable) GetType() Type {
 	return IsIndexableType
+}
+
+func (i *IsSendableTo) GetType() Type {
+	return IsSendableToType
+}
+
+func (i *IsReceiveableFrom) GetType() Type {
+	return IsReceiveableFromType
+}
+
+func (i *IsIncDecable) GetType() Type {
+	return IsIncDecableType
+}
+
+func (i *IsRangeable) GetType() Type {
+	return IsRangeableType
 }

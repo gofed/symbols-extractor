@@ -7,7 +7,10 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
+
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
 
 func TestPointersContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -15,7 +18,7 @@ func TestPointersContracts(t *testing.T) {
 		"ra": ":52:ra",
 		"da": ":75:da",
 	}
-	compareContracts(
+	utils.CompareContracts(
 		t,
 		packageName,
 		"pointers.go",

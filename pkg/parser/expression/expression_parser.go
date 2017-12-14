@@ -75,7 +75,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.
 	case *gotypes.Slice:
 		valueType = elmExpr.Elmtype
 		valueTypeVar = &typevars.ListValue{
-			Constant: typevars.Constant{
+			Interface: &typevars.Constant{
 				DataType: elmExpr.Elmtype,
 			},
 		}
@@ -83,7 +83,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.
 	case *gotypes.Array:
 		valueType = elmExpr.Elmtype
 		valueTypeVar = &typevars.ListValue{
-			Constant: typevars.Constant{
+			Interface: &typevars.Constant{
 				DataType: elmExpr.Elmtype,
 			},
 		}
@@ -91,12 +91,12 @@ func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.
 	case *gotypes.Map:
 		valueType = elmExpr.Valuetype
 		valueTypeVar = &typevars.MapValue{
-			Constant: typevars.Constant{
+			Interface: &typevars.Constant{
 				DataType: elmExpr.Valuetype,
 			},
 		}
 		keyTypeVar = &typevars.MapKey{
-			Constant: typevars.Constant{
+			Interface: &typevars.Constant{
 				DataType: elmExpr.Keytype,
 			},
 		}
@@ -460,10 +460,9 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		if nonIdentDefAttr.DataTypeList[0].GetType() != gotypes.ChannelType {
 			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead at %v", nonIdentDefAttr.DataTypeList[0].GetType(), expr.Pos())
 		}
-		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
-			OpToken: expr.Op,
-			X:       attr.TypeVarList[0],
-			Y:       y,
+		ep.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
+			X: attr.TypeVarList[0],
+			Y: y,
 		})
 		yAttr = types.ExprAttributeFromDataType(nonIdentDefAttr.DataTypeList[0].(*gotypes.Channel).Value)
 		// other
@@ -2003,23 +2002,23 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	case *gotypes.Map:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
-			Y: typevars.MakeMapKey(indexAttr.DataTypeList[0]),
+			Y: typevars.MakeMapKey(indexAttr.TypeVarList[0]),
 		})
-		y := typevars.MakeMapValue(xDefAttr.DataTypeList[0])
+		y := typevars.MakeMapValue(xDefAttr.TypeVarList[0])
 		return types.ExprAttributeFromDataType(xType.Valuetype).AddTypeVar(y), nil
 	case *gotypes.Array:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
 		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Slice:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
 		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Builtin:
 		if xType.Def == "string" {
@@ -2028,7 +2027,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 				X: indexAttr.TypeVarList[0],
 				Y: typevars.MakeListKey(),
 			})
-			y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+			y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
 			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
@@ -2039,7 +2038,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 				X: indexAttr.TypeVarList[0],
 				Y: typevars.MakeListKey(),
 			})
-			y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+			y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
 			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
@@ -2048,7 +2047,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(xDefAttr.DataTypeList[0])
+		y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
 		return types.ExprAttributeFromDataType(xType.Def).AddTypeVar(y), nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v at %v", xDefAttr.DataTypeList[0], expr.Pos()))

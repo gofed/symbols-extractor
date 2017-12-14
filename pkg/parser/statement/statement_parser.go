@@ -258,11 +258,17 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 		}
 		glog.Infof("valueExpr: %#v\ttypeDef: %#v\n", valueExprAttr.DataTypeList, typeDef)
 		if typeDef != nil {
-			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
+			sDef := &symboltable.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     typeDef,
 				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
+			}
+			symbolsDef = append(symbolsDef, sDef)
+			sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            valueExprAttr.TypeVarList[0],
+				Y:            typevars.VariableFromSymbolDef(sDef),
+				ExpectedType: sDef.Def,
 			})
 			if builtin, ok := valueExprAttr.DataTypeList[0].(*gotypes.Builtin); ok {
 				if builtin.Def == "iota" {
@@ -280,11 +286,17 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 				}
 				sp.lastConstType = builtin
 			}
-			symbolsDef = append(symbolsDef, &symboltable.SymbolDef{
+			sDef := &symboltable.SymbolDef{
 				Name:    spec.Names[i].Name,
 				Package: sp.PackageName,
 				Def:     valueExprAttr.DataTypeList[0],
 				Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
+			}
+			symbolsDef = append(symbolsDef, sDef)
+			sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X:            valueExprAttr.TypeVarList[0],
+				Y:            typevars.VariableFromSymbolDef(sDef),
+				ExpectedType: sDef.Def,
 			})
 		}
 	}
@@ -306,6 +318,7 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 			Def:     typeDef,
 			Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
 		})
+		// Only variable declaration => do not generate any contracts
 	}
 
 	return symbolsDef, nil
@@ -381,13 +394,21 @@ func (sp *Parser) parseExprStmt(statement *ast.ExprStmt) error {
 
 func (sp *Parser) parseSendStmt(statement *ast.SendStmt) error {
 	glog.Infof("Processing statement statement  %#v\n", statement)
-	if _, err := sp.ExprParser.Parse(statement.Chan); err != nil {
+	chanAttr, err := sp.ExprParser.Parse(statement.Chan)
+	if err != nil {
 		return err
 	}
 	// TODO(jchaloup): should check the statement.Chan type is really a channel.
-	if _, err := sp.ExprParser.Parse(statement.Value); err != nil {
+	valueAttr, err := sp.ExprParser.Parse(statement.Value)
+	if err != nil {
 		return err
 	}
+
+	sp.Config.ContractTable.AddContract(&contracts.IsSendableTo{
+		X: valueAttr.TypeVarList[0],
+		Y: chanAttr.TypeVarList[0],
+	})
+
 	return nil
 }
 
@@ -395,8 +416,16 @@ func (sp *Parser) parseIncDecStmt(statement *ast.IncDecStmt) error {
 	glog.Infof("Processing inc dec statement  %#v\n", statement)
 	// both --,++ has no type information
 	// TODO(jchaloup): check the --/++ can be carried over the statement.X
-	_, err := sp.ExprParser.Parse(statement.X)
-	return err
+	attr, err := sp.ExprParser.Parse(statement.X)
+	if err != nil {
+		return err
+	}
+
+	sp.Config.ContractTable.AddContract(&contracts.IsIncDecable{
+		X: attr.TypeVarList[0],
+	})
+
+	return nil
 }
 
 func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
@@ -467,63 +496,23 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			if exprsSize != 2 {
 				return fmt.Errorf("Expecting two expression on the RHS when accessing an index expression for val, ok = indexexpr[key], got %#v instead", statement.Lhs)
 			}
-			xDefAttr, err := sp.ExprParser.Parse(typeExpr.X)
-			if err != nil {
-				return err
-			}
-			if len(xDefAttr.DataTypeList) != 1 {
-				return fmt.Errorf("Index expression is not a single expression: %#v", xDefAttr.DataTypeList)
-			}
-			if _, err := sp.ExprParser.Parse(typeExpr.Index); err != nil {
-				return err
-			}
+
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
-				glog.Infof("Calling IndexExpr Rhs index function")
+				glog.Infof("Calling IndexExpr Rhs index function, i = %v", i)
 				if i == 0 {
-					// - map
-					// - identifier of map
-					// - qid.id of map
-					{
-						byteSlice, _ := json.Marshal(xDefAttr.DataTypeList[0])
-						fmt.Printf("\n\tHHHH: %v\n", string(byteSlice))
+					defAttr, err := sp.ExprParser.Parse(statement.Rhs[i])
+					if err != nil {
+						return nil, nil, fmt.Errorf("Error when parsing Rhs[%v] expression of %#v: %v at %v", i, statement, err, statement.Pos())
 					}
-					var indexedObject gotypes.DataType
-					var typeVarObject typevars.Interface
-					switch typeExpr := xDefAttr.DataTypeList[0].(type) {
-					case *gotypes.Identifier:
-						def, defType, err := sp.Lookup(typeExpr)
-						if err != nil {
-							return nil, nil, err
-						}
-						if !defType.IsDataType() {
-							return nil, nil, fmt.Errorf("Expecting identifier of a data type, got %#v instead", defType)
-						}
-						if def.Def == nil {
-							return nil, nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
-						}
-						indexedObject = def.Def
-						typeVarObject = typevars.VariableFromSymbolDef(def)
-					case *gotypes.Selector:
-						_, sd, err := sp.Config.RetrieveQidDataType(typeExpr)
-						if err != nil {
-							return nil, nil, err
-						}
-						if sd.Def == nil {
-							return nil, nil, fmt.Errorf("Symbol %q of %q not fully processed", sd.Name, sd.Package)
-						}
-						indexedObject = sd.Def
-						typeVarObject = typevars.VariableFromSymbolDef(sd)
-					default:
-						indexedObject = xDefAttr.DataTypeList[0]
-						typeVarObject = xDefAttr.TypeVarList[0]
+					{
+						byteSlice, _ := json.Marshal(defAttr.DataTypeList[0])
+						glog.Infof("\n\tHHHH: %v\n", string(byteSlice))
+					}
+					if len(defAttr.DataTypeList) != 1 {
+						return nil, nil, fmt.Errorf("Assignment element at pos %v does not return a single result: %#v", i, defAttr.DataTypeList)
 					}
 
-					switch indexedObjectDef := indexedObject.(type) {
-					case *gotypes.Map:
-						return indexedObjectDef.Valuetype, typeVarObject, nil
-					default:
-						panic(fmt.Errorf("Unsuported indexed object %#v", indexedObject))
-					}
+					return defAttr.DataTypeList[0], defAttr.TypeVarList[0], err
 				}
 				if i == 1 {
 					return &gotypes.Builtin{Def: "bool"}, &typevars.Constant{DataType: &gotypes.Builtin{Def: "bool"}}, nil
@@ -549,7 +538,13 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
 				glog.Infof("Calling TypeAssertExpr Rhs index function")
 				if i == 0 {
-					return typeDef, &typevars.Constant{DataType: typeDef}, nil
+					y := typevars.MakeConstant(typeDef)
+					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X:            xDefAttr.TypeVarList[0],
+						Y:            y,
+						ExpectedType: typeDef,
+					})
+					return typeDef, y, nil
 				}
 				if i == 1 {
 					return &gotypes.Builtin{Def: "bool"}, &typevars.Constant{DataType: &gotypes.Builtin{Def: "bool"}}, nil
@@ -622,17 +617,26 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 				})
 			}
 		case *ast.SelectorExpr, *ast.StarExpr:
-			_, err := sp.ExprParser.Parse(statement.Lhs[i])
+			attr, err := sp.ExprParser.Parse(statement.Lhs[i])
 			if err != nil {
 				return nil
 			}
+			sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            rhsTypeVar,
+				Y:            attr.TypeVarList[0],
+				ExpectedType: attr.DataTypeList[0],
+			})
 		case *ast.IndexExpr:
-			if _, err := sp.ExprParser.Parse(lhsExpr.X); err != nil {
+			// This goes straight to the indexExpr parsing method
+			attr, err := sp.ExprParser.Parse(lhsExpr)
+			if err != nil {
 				return nil
 			}
-			if _, err := sp.ExprParser.Parse(lhsExpr.Index); err != nil {
-				return nil
-			}
+			sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X:            rhsTypeVar,
+				Y:            attr.TypeVarList[0],
+				ExpectedType: attr.DataTypeList[0],
+			})
 		default:
 			return fmt.Errorf("Lhs[%v] of an assignment type %#v is not recognized", i, statement.Lhs[i])
 		}
@@ -666,11 +670,15 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 		}
 	}
 
-	if statement.Tag != nil {
-		_, err := sp.ExprParser.Parse(statement.Tag)
+	var stmtTagTypeVar typevars.Interface
+	if statement.Tag == nil {
+		stmtTagTypeVar = typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"})
+	} else {
+		attr, err := sp.ExprParser.Parse(statement.Tag)
 		if err != nil {
 			return err
 		}
+		stmtTagTypeVar = attr.TypeVarList[0]
 	}
 
 	for _, stmt := range statement.Body.List {
@@ -679,9 +687,14 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 			return fmt.Errorf("Expected *ast.CaseClause in switch's body. Got %#v\n", stmt)
 		}
 		for _, caseExpr := range caseStmt.List {
-			if _, err := sp.ExprParser.Parse(caseExpr); err != nil {
+			caseAttr, err := sp.ExprParser.Parse(caseExpr)
+			if err != nil {
 				return nil
 			}
+			sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+				X: caseAttr.TypeVarList[0],
+				Y: stmtTagTypeVar,
+			})
 		}
 
 		if caseStmt.Body != nil {
@@ -698,6 +711,11 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 
 func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 	glog.Infof("Processing type switch statement  %#v\n", statement)
+	// TypeSwitchStmt  = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
+	// TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
+	// TypeCaseClause  = TypeSwitchCase ":" StatementList .
+	// TypeSwitchCase  = "case" TypeList | "default" .
+	// TypeList        = Type { "," Type } .
 	if statement.Init != nil {
 		sp.SymbolTable.Push()
 		defer sp.SymbolTable.Pop()
@@ -711,6 +729,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 	defer sp.SymbolTable.Pop()
 
 	var rhsIdentifier *gotypes.Identifier
+	var typeTypeVar typevars.Interface
 
 	switch assignStmt := statement.Assign.(type) {
 	case *ast.AssignStmt:
@@ -732,9 +751,11 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 		if typeAssert.Type != nil {
 			glog.Warningf("type assert type is not set to literal 'type'. It is %#v instead\n", typeAssert.Type)
 		}
-		if _, err := sp.ExprParser.Parse(typeAssert.X); err != nil {
+		typeAttr, err := sp.ExprParser.Parse(typeAssert.X)
+		if err != nil {
 			return nil
 		}
+		typeTypeVar = typeAttr.TypeVarList[0]
 
 		ident, ok := assignStmt.Lhs[0].(*ast.Ident)
 		if !ok {
@@ -755,9 +776,11 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 		if typeAssert.Type != nil {
 			glog.Warningf("type assert type is not set to literal 'type'. It is %#v instead\n", typeAssert.Type)
 		}
-		if _, err := sp.ExprParser.Parse(typeAssert.X); err != nil {
+		typeAttr, err := sp.ExprParser.Parse(typeAssert.X)
+		if err != nil {
 			return nil
 		}
+		typeTypeVar = typeAttr.TypeVarList[0]
 	default:
 		return fmt.Errorf("Unsupported statement in type switch")
 	}
@@ -773,15 +796,30 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 			// in case there are at least two data types (or none = default case), the type is interface{}
 			if len(caseStmt.List) != 1 {
 				for _, caseExpr := range caseStmt.List {
-					if _, err := sp.TypeParser.Parse(caseExpr); err != nil {
+					rhsType, err := sp.TypeParser.Parse(caseExpr)
+					if err != nil {
 						return err
 					}
+					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X:    typevars.MakeConstant(rhsType),
+						Y:    typeTypeVar,
+						Weak: true,
+					})
 				}
 				if rhsIdentifier != nil {
-					sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+					sDef := &symboltable.SymbolDef{
 						Name:    rhsIdentifier.Def,
 						Package: "",
 						Def:     &gotypes.Interface{},
+						// The Pos in this context is not applicable to the typevars in each
+						// case block the rhsIdentifier.Def has different scope
+						// TODO(jchaloup): find a different way to state the position of the rhsIdentifier
+						Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
+					}
+					sp.SymbolTable.AddVariable(sDef)
+					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X: typevars.MakeConstant(&gotypes.Interface{}),
+						Y: typevars.VariableFromSymbolDef(sDef),
 					})
 				}
 			} else {
@@ -789,11 +827,25 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 				if err != nil {
 					return err
 				}
+				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:    typevars.MakeConstant(rhsType),
+					Y:    typeTypeVar,
+					Weak: true,
+				})
 				if rhsIdentifier != nil {
-					sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+					sDef := &symboltable.SymbolDef{
 						Name:    rhsIdentifier.Def,
 						Package: "",
 						Def:     rhsType,
+						// The Pos in this context is not applicable to the typevars in each
+						// case block the rhsIdentifier.Def has different scope
+						// TODO(jchaloup): find a different way to state the position of the rhsIdentifier
+						Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
+					}
+					sp.SymbolTable.AddVariable(sDef)
+					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X: typevars.MakeConstant(rhsType),
+						Y: typevars.VariableFromSymbolDef(sDef),
 					})
 				}
 			}
@@ -837,18 +889,25 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 
 			// default has empty Comm
 			if commClause.Comm != nil {
+				glog.Infof("commClause.Comm: %#v", commClause.Comm)
 				switch clause := commClause.Comm.(type) {
 				case *ast.ExprStmt:
 					if _, err := sp.ExprParser.Parse(clause.X); err != nil {
 						return err
 					}
 				case *ast.SendStmt:
-					if _, err := sp.ExprParser.Parse(clause.Chan); err != nil {
+					sendChanAtrr, err := sp.ExprParser.Parse(clause.Chan)
+					if err != nil {
 						return err
 					}
-					if _, err := sp.ExprParser.Parse(clause.Value); err != nil {
+					sendValueAtrr, err := sp.ExprParser.Parse(clause.Value)
+					if err != nil {
 						return err
 					}
+					sp.Config.ContractTable.AddContract(&contracts.IsSendableTo{
+						X: sendValueAtrr.TypeVarList[0],
+						Y: sendChanAtrr.TypeVarList[0],
+					})
 				case *ast.AssignStmt:
 					if len(clause.Rhs) != 1 {
 						return fmt.Errorf("Expecting a single expression on the RHS of a clause assigment")
@@ -881,6 +940,14 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 					case 0:
 						return fmt.Errorf("Expecting at least one expression on the LHS of a clause assigment")
 					case 1:
+						y := &typevars.Variable{
+							Name: sp.Config.ContractTable.NewVariable(),
+						}
+						sp.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
+							X: rhsExprAttr.TypeVarList[0],
+							Y: y,
+						})
+
 						if clause.Tok == token.DEFINE {
 							// All LHS expressions must be identifiers
 							// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
@@ -888,10 +955,26 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 							if !ok {
 								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
 							}
-							sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+							sDef := &symboltable.SymbolDef{
 								Name:    ident.Name,
 								Package: sp.PackageName,
 								Def:     rhsChannel.Value,
+								Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, ident.Pos()),
+							}
+							sp.SymbolTable.AddVariable(sDef)
+
+							sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+								X: y,
+								Y: typevars.VariableFromSymbolDef(sDef),
+							})
+						} else {
+							assignAttr, err := sp.ExprParser.Parse(clause.Lhs[0])
+							if err != nil {
+								return err
+							}
+							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+								X: y,
+								Y: assignAttr.TypeVarList[0],
 							})
 						}
 					case 2:
@@ -899,6 +982,13 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 						// See http://www.tapirgames.com/blog/golang-block-and-scope
 						// If an ordinary assignment (with = symbol) is used, all variables/selectors(and other assignable expression) must be already defined,
 						// so they are not included as new variables.
+						y := &typevars.Variable{
+							Name: sp.Config.ContractTable.NewVariable(),
+						}
+						sp.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
+							X: rhsExprAttr.TypeVarList[0],
+							Y: y,
+						})
 						if clause.Tok == token.DEFINE {
 							// All LHS expressions must be identifiers
 							// TODO(jchaloup): the expression can be surrounded by parenthesis!!! Make sure they are checked as well
@@ -911,16 +1001,45 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 								return fmt.Errorf("Expecting an identifier in select clause due to := assignment")
 							}
 
-							sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+							sDef1 := &symboltable.SymbolDef{
 								Name:    ident1.Name,
 								Package: sp.PackageName,
 								Def:     rhsChannel.Value,
+								Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, ident1.Pos()),
+							}
+							sp.SymbolTable.AddVariable(sDef1)
+							sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+								X: y,
+								Y: typevars.VariableFromSymbolDef(sDef1),
 							})
 
-							sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+							sDef2 := &symboltable.SymbolDef{
 								Name:    ident2.Name,
 								Package: sp.PackageName,
 								Def:     &gotypes.Builtin{Def: "bool"},
+								Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, ident2.Pos()),
+							}
+							sp.SymbolTable.AddVariable(sDef2)
+							sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+								X: typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+								Y: typevars.VariableFromSymbolDef(sDef2),
+							})
+						} else {
+							assignAttr, err := sp.ExprParser.Parse(clause.Lhs[0])
+							if err != nil {
+								return err
+							}
+							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+								X: y,
+								Y: assignAttr.TypeVarList[0],
+							})
+							assignOkAttr, err := sp.ExprParser.Parse(clause.Lhs[1])
+							if err != nil {
+								return err
+							}
+							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+								X: typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+								Y: assignOkAttr.TypeVarList[0],
 							})
 						}
 					default:
@@ -982,66 +1101,69 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 
 	sp.SymbolTable.Push()
 	defer sp.SymbolTable.Pop()
+	fmt.Printf("RangeStmt.X = xExprAttr: %#v\n", xExprAttr)
+	sp.Config.ContractTable.AddContract(&contracts.IsRangeable{
+		X: xExprAttr.TypeVarList[0],
+	})
 
-	if statement.Tok == token.DEFINE {
+	var rangeExpr gotypes.DataType
+	// over-approximation but given we run the go build before the procesing
+	// this is a valid processing
+	pointer, ok := xExprAttr.DataTypeList[0].(*gotypes.Pointer)
+	if ok {
+		rangeExpr = pointer.Def
+	} else {
+		rangeExpr = xExprAttr.DataTypeList[0]
+	}
 
-		var rangeExpr gotypes.DataType
-		// over-approximation but given we run the go build before the procesing
-		// this is a valid processing
-		pointer, ok := xExprAttr.DataTypeList[0].(*gotypes.Pointer)
-		if ok {
-			rangeExpr = pointer.Def
-		} else {
-			rangeExpr = xExprAttr.DataTypeList[0]
+	// Identifier or a qid.Identifier
+	rangeExpr, err = sp.Config.FindFirstNonidDataType(rangeExpr)
+	if err != nil {
+		return err
+	}
+
+	var key, value gotypes.DataType
+	// From https://golang.org/ref/spec#For_range
+	//
+	// Range expression                          1st value          2nd value
+	//
+	// array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
+	// string          s  string type            index    i  int    see below  rune
+	// map             m  map[K]V                key      k  K      m[k]       V
+	// channel         c  chan E, <-chan E       element  e  E
+	switch xExprType := rangeExpr.(type) {
+	case *gotypes.Array:
+		key = &gotypes.Builtin{Def: "int"}
+		value = xExprType.Elmtype
+	case *gotypes.Slice:
+		key = &gotypes.Builtin{Def: "int"}
+		value = xExprType.Elmtype
+	case *gotypes.Builtin:
+		if xExprType.Def != "string" {
+			fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xExprAttr.DataTypeList[0])
 		}
-
-		// Identifier or a qid.Identifier
-		rangeExpr, err := sp.Config.FindFirstNonidDataType(rangeExpr)
-		if err != nil {
-			return err
+		key = &gotypes.Builtin{Def: "int"}
+		value = &gotypes.Builtin{Def: "rune"}
+	case *gotypes.Identifier:
+		if xExprType.Def != "string" {
+			fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xExprAttr.DataTypeList[0])
 		}
+		key = &gotypes.Builtin{Def: "int"}
+		value = &gotypes.Builtin{Def: "rune"}
+	case *gotypes.Map:
+		key = xExprType.Keytype
+		value = xExprType.Valuetype
+	case *gotypes.Channel:
+		key = xExprType.Value
+	case *gotypes.Ellipsis:
+		key = &gotypes.Builtin{Def: "int"}
+		value = xExprType.Def
+	default:
+		panic(fmt.Errorf("Unknown type of range expression: %#v at %v", rangeExpr, statement.Pos()))
+	}
 
-		var key, value gotypes.DataType
-		// From https://golang.org/ref/spec#For_range
-		//
-		// Range expression                          1st value          2nd value
-		//
-		// array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
-		// string          s  string type            index    i  int    see below  rune
-		// map             m  map[K]V                key      k  K      m[k]       V
-		// channel         c  chan E, <-chan E       element  e  E
-		switch xExprType := rangeExpr.(type) {
-		case *gotypes.Array:
-			key = &gotypes.Builtin{Def: "int"}
-			value = xExprType.Elmtype
-		case *gotypes.Slice:
-			key = &gotypes.Builtin{Def: "int"}
-			value = xExprType.Elmtype
-		case *gotypes.Builtin:
-			if xExprType.Def != "string" {
-				fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xExprAttr.DataTypeList[0])
-			}
-			key = &gotypes.Builtin{Def: "int"}
-			value = &gotypes.Builtin{Def: "rune"}
-		case *gotypes.Identifier:
-			if xExprType.Def != "string" {
-				fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xExprAttr.DataTypeList[0])
-			}
-			key = &gotypes.Builtin{Def: "int"}
-			value = &gotypes.Builtin{Def: "rune"}
-		case *gotypes.Map:
-			key = xExprType.Keytype
-			value = xExprType.Valuetype
-		case *gotypes.Channel:
-			key = xExprType.Value
-		case *gotypes.Ellipsis:
-			key = &gotypes.Builtin{Def: "int"}
-			value = xExprType.Def
-		default:
-			panic(fmt.Errorf("Unknown type of range expression: %#v at %v", rangeExpr, statement.Pos()))
-		}
-
-		if statement.Key != nil {
+	if statement.Key != nil {
+		if statement.Tok == token.DEFINE {
 			keyIdent, ok := statement.Key.(*ast.Ident)
 			if !ok {
 				return fmt.Errorf("Expected key as an identifier in the for range statement. Got %#v instead.", statement.Key)
@@ -1049,38 +1171,102 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 			glog.Infof("Processing range.Key variable %v", keyIdent.Name)
 
 			if keyIdent.Name != "_" {
-				if err := sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+				sDef := &symboltable.SymbolDef{
 					Name:    keyIdent.Name,
 					Package: sp.PackageName,
 					Def:     key,
-				}); err != nil {
+					Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, keyIdent.Pos()),
+				}
+				if err := sp.SymbolTable.AddVariable(sDef); err != nil {
 					return err
 				}
+				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+					X:            typevars.MakeRangeKey(xExprAttr.TypeVarList[0]),
+					Y:            typevars.VariableFromSymbolDef(sDef),
+					ExpectedType: key,
+				})
+			}
+		} else {
+			keyExpr := statement.Key
+			for {
+				if pe, ok := keyExpr.(*ast.ParenExpr); ok {
+					keyExpr = pe.X
+					continue
+				}
+				break
+			}
+
+			keyIdent, ok := keyExpr.(*ast.Ident)
+			if !ok {
+				return fmt.Errorf("Expected key as an identifier in the for range statement. Got %#v instead.", statement.Key)
+			}
+			glog.Infof("Processing range.Key variable %v", keyIdent.Name)
+
+			if keyIdent.Name != "_" {
+				keyAttr, err := sp.ExprParser.Parse(keyIdent)
+				fmt.Printf("\n\nkeyAttr = %#v\n\terr = %v\n\n", keyAttr, err)
+				if err != nil {
+					return nil
+				}
+				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:            typevars.MakeRangeKey(xExprAttr.TypeVarList[0]),
+					Y:            keyAttr.TypeVarList[0],
+					ExpectedType: keyAttr.DataTypeList[0],
+				})
 			}
 		}
+	}
 
-		if statement.Value != nil {
+	if statement.Value != nil {
+		if statement.Tok == token.DEFINE {
 			valueIdent, ok := statement.Value.(*ast.Ident)
 			if !ok {
 				return fmt.Errorf("Expected value as an identifier in the for range statement. Got %#v instead.", statement.Value)
 			}
 			glog.Infof("Processing range.Value variable %v", valueIdent.Name)
 			if valueIdent.Name != "_" && value != nil {
-				if err := sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+				sDef := &symboltable.SymbolDef{
 					Name:    valueIdent.Name,
 					Package: sp.PackageName,
 					Def:     value,
-				}); err != nil {
+					Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, valueIdent.Pos()),
+				}
+				if err := sp.SymbolTable.AddVariable(sDef); err != nil {
 					return err
 				}
+				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+					X:            typevars.MakeRangeValue(xExprAttr.TypeVarList[0]),
+					Y:            typevars.VariableFromSymbolDef(sDef),
+					ExpectedType: value,
+				})
 			}
-		}
-	} else {
-		if _, err := sp.ExprParser.Parse(statement.Key); err != nil {
-			return nil
-		}
-		if _, err := sp.ExprParser.Parse(statement.Value); err != nil {
-			return nil
+		} else {
+			valueExpr := statement.Value
+			for {
+				if pe, ok := valueExpr.(*ast.ParenExpr); ok {
+					valueExpr = pe.X
+					continue
+				}
+				break
+			}
+
+			valueIdent, ok := statement.Value.(*ast.Ident)
+			if !ok {
+				return fmt.Errorf("Expected value as an identifier in the for range statement. Got %#v instead.", statement.Value)
+			}
+			glog.Infof("Processing range.Value variable %v", valueIdent.Name)
+
+			if valueIdent.Name != "_" && value != nil {
+				valueAttr, err := sp.ExprParser.Parse(statement.Value)
+				if err != nil {
+					return nil
+				}
+				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:            typevars.MakeRangeValue(xExprAttr.TypeVarList[0]),
+					Y:            valueAttr.TypeVarList[0],
+					ExpectedType: valueAttr.DataTypeList[0],
+				})
+			}
 		}
 	}
 
@@ -1217,6 +1403,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 			sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 				Name: (*funcDecl.Recv).List[0].Names[0].Name,
 				Def:  def,
+				Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
 			})
 		}
 	}
@@ -1233,6 +1420,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
+					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 				})
 			}
 		}
@@ -1249,6 +1437,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
+					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 				})
 			}
 		}

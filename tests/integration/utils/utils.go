@@ -129,13 +129,19 @@ func CompareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 	case *typevars.ListKey:
 	case *typevars.ListValue:
 		y := tested.(*typevars.ListValue)
-		CompareTypeVars(t, &x.Constant, &y.Constant)
+		CompareTypeVars(t, x.Interface, y.Interface)
 	case *typevars.MapKey:
 		y := tested.(*typevars.MapKey)
-		CompareTypeVars(t, &x.Constant, &y.Constant)
+		CompareTypeVars(t, x.Interface, y.Interface)
 	case *typevars.MapValue:
 		y := tested.(*typevars.MapValue)
-		CompareTypeVars(t, &x.Constant, &y.Constant)
+		CompareTypeVars(t, x.Interface, y.Interface)
+	case *typevars.RangeKey:
+		y := tested.(*typevars.RangeKey)
+		CompareTypeVars(t, x.Interface, y.Interface)
+	case *typevars.RangeValue:
+		y := tested.(*typevars.RangeValue)
+		CompareTypeVars(t, x.Interface, y.Interface)
 	case *typevars.Field:
 		y := tested.(*typevars.Field)
 		CompareTypeVars(t, x.Interface, y.Interface)
@@ -165,6 +171,9 @@ func CompareContracts(t *testing.T, expected, tested contracts.Contract) {
 		y := tested.(*contracts.IsCompatibleWith)
 		CompareTypeVars(t, x.X, y.X)
 		CompareTypeVars(t, x.Y, y.Y)
+		if x.Weak != y.Weak {
+			t.Errorf("Expected IsCompatibleWith.Week %q, got %q instead", x.Weak, y.Weak)
+		}
 	case *contracts.BinaryOp:
 		y := tested.(*contracts.BinaryOp)
 		CompareTypeVars(t, x.X, y.X)
@@ -213,6 +222,20 @@ func CompareContracts(t *testing.T, expected, tested contracts.Contract) {
 		CompareTypeVars(t, x.Y, y.Y)
 	case *contracts.IsIndexable:
 		y := tested.(*contracts.IsIndexable)
+		CompareTypeVars(t, x.X, y.X)
+	case *contracts.IsSendableTo:
+		y := tested.(*contracts.IsSendableTo)
+		CompareTypeVars(t, x.X, y.X)
+		CompareTypeVars(t, x.Y, y.Y)
+	case *contracts.IsReceiveableFrom:
+		y := tested.(*contracts.IsReceiveableFrom)
+		CompareTypeVars(t, x.X, y.X)
+		CompareTypeVars(t, x.Y, y.Y)
+	case *contracts.IsIncDecable:
+		y := tested.(*contracts.IsIncDecable)
+		CompareTypeVars(t, x.X, y.X)
+	case *contracts.IsRangeable:
+		y := tested.(*contracts.IsRangeable)
 		CompareTypeVars(t, x.X, y.X)
 	default:
 		t.Errorf("Contract %#v not recognized", expected)

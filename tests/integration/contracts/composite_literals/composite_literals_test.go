@@ -6,7 +6,10 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
+
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
 
 func TestCompositeLiteralsContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -16,7 +19,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 		"structV2": ":205:structV2",
 		"listV2":   ":275:listV2",
 	}
-	compareContracts(
+	utils.CompareContracts(
 		t,
 		packageName,
 		"composite_literals.go",
@@ -29,7 +32,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			//
 			// Int <-> 1
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Identifier{
+				X: typevars.MakeConstantListValue(&gotypes.Identifier{
 					Def:     "Int",
 					Package: packageName,
 				}),
@@ -37,7 +40,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			// Int <-> 2
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Identifier{
+				X: typevars.MakeConstantListValue(&gotypes.Identifier{
 					Def:     "Int",
 					Package: packageName,
 				}),
@@ -61,22 +64,22 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			//
 			// "3" <-> string
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeMapKey(&gotypes.Builtin{Untyped: false, Def: "string"}),
+				X: typevars.MakeConstantMapKey(&gotypes.Builtin{Untyped: false, Def: "string"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			// 3 <-> int
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeMapValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstantMapValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// "4" <-> string
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeMapKey(&gotypes.Builtin{Untyped: false, Def: "string"}),
+				X: typevars.MakeConstantMapKey(&gotypes.Builtin{Untyped: false, Def: "string"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			// 4 <-> int
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeMapValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstantMapValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// mapV <-> map[string]int
@@ -227,18 +230,18 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			//
 			// 1 <-> int
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstantListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// 2 <-> int
 			// TODO(jchaloup): documents this as "constant contract" a.k.a does not consume any data type
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstantListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// []int <-> {1,2}
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Slice{
+				X: typevars.MakeConstantListValue(&gotypes.Slice{
 					Elmtype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
 				Y: typevars.MakeConstant(&gotypes.Slice{
@@ -247,17 +250,17 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			// 3 <-> int
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstantListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// 4 <-> int
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstantListValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// []int <-> {3,4}
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeListValue(&gotypes.Slice{
+				X: typevars.MakeConstantListValue(&gotypes.Slice{
 					Elmtype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
 				Y: typevars.MakeConstant(&gotypes.Slice{
