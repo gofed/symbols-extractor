@@ -9,7 +9,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/function_literals"
 
 func TestFunctionLiteralsContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -19,7 +19,7 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 	utils.CompareContracts(
 		t,
 		packageName,
-		"function_literals.go",
+		"testdata/function_literals.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Function{

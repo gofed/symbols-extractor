@@ -9,7 +9,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/indexable"
 
 func TestIndexableContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -23,7 +23,7 @@ func TestIndexableContracts(t *testing.T) {
 	utils.CompareContracts(
 		t,
 		packageName,
-		"indexable.go",
+		"testdata/indexable.go",
 		[]contracts.Contract{
 			//
 			// list := []Int{

@@ -9,7 +9,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/type_casting"
 
 func TestTypeCastingContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -19,7 +19,7 @@ func TestTypeCastingContracts(t *testing.T) {
 	utils.CompareContracts(
 		t,
 		packageName,
-		"type_casting.go",
+		"testdata/type_casting.go",
 		[]contracts.Contract{
 			// asA := Int(1)
 			&contracts.IsCompatibleWith{

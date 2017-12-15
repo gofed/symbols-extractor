@@ -10,7 +10,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/general"
 
 var gVars = map[string]string{
 	"c":      ":48:c",
@@ -52,7 +52,7 @@ func TestGeneralContracts(t *testing.T) {
 	utils.CompareContracts(
 		t,
 		packageName,
-		"general.go",
+		"testdata/general.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),

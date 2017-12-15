@@ -10,7 +10,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/binaryops"
 
 func TestBinaryOpsContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -25,7 +25,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 	utils.CompareContracts(
 		t,
 		packageName,
-		"binaryop.go",
+		"testdata/binaryop.go",
 		[]contracts.Contract{
 			//
 			// bopa := 1 == 2

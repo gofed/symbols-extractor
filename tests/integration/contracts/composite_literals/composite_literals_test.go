@@ -9,7 +9,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/composite_literals"
 
 func TestCompositeLiteralsContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -22,7 +22,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 	utils.CompareContracts(
 		t,
 		packageName,
-		"composite_literals.go",
+		"testdata/composite_literals.go",
 		[]contracts.Contract{
 			//
 			// list := []Int{
