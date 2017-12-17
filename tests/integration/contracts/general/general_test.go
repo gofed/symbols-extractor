@@ -10,7 +10,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/general"
 
 var gVars = map[string]string{
 	"c":      ":48:c",
@@ -49,10 +49,10 @@ var gVars = map[string]string{
 }
 
 func TestGeneralContracts(t *testing.T) {
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"general.go",
+		"testdata/general.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
@@ -120,10 +120,14 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			// l := []string{}
 			// v, ok := l[1]
-			&contracts.PropagatesTo{
+			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Slice{
 					Elmtype: &gotypes.Builtin{Untyped: false, Def: "string"},
 				}),
+				Y: typevars.MakeVirtualVar(4),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(4),
 				Y: typevars.MakeVar(gVars["l"], packageName),
 			},
 			&contracts.IsIndexable{
@@ -143,11 +147,15 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			// m := map[int]string{}
 			// mv, mok := m[1]
-			&contracts.PropagatesTo{
+			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "int"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "string"},
 				}),
+				Y: typevars.MakeVirtualVar(5),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(5),
 				Y: typevars.MakeVar(gVars["m"], packageName),
 			},
 			&contracts.IsIndexable{
@@ -169,11 +177,11 @@ func TestGeneralContracts(t *testing.T) {
 			// intD, intOk := id.(*int)
 			&contracts.UnaryOp{
 				X:       typevars.MakeVar(gVars["c"], packageName),
-				Y:       typevars.MakeVirtualVar(4),
+				Y:       typevars.MakeVirtualVar(6),
 				OpToken: token.AND,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVirtualVar(4),
+				X: typevars.MakeVirtualVar(6),
 				Y: typevars.MakeConstant(&gotypes.Interface{
 					Methods: nil,
 				}),
@@ -214,11 +222,11 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			// s := struct{ a int }{a: 2}
 			&contracts.HasField{
-				X:     typevars.MakeVirtualVar(5),
+				X:     typevars.MakeVirtualVar(7),
 				Field: "a",
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(5), "a", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(7), "a", 0),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
@@ -230,17 +238,10 @@ func TestGeneralContracts(t *testing.T) {
 						},
 					},
 				}),
-				Y: typevars.MakeVirtualVar(5),
+				Y: typevars.MakeVirtualVar(7),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{
-						{
-							Name: "a",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
-						},
-					},
-				}),
+				X: typevars.MakeVirtualVar(7),
 				Y: typevars.MakeVar(gVars["s"], packageName),
 			},
 			// s.a = 2
@@ -255,29 +256,29 @@ func TestGeneralContracts(t *testing.T) {
 			// *(&c) = 2
 			&contracts.UnaryOp{
 				X:       typevars.MakeVar(gVars["c"], packageName),
-				Y:       typevars.MakeVirtualVar(6),
+				Y:       typevars.MakeVirtualVar(8),
 				OpToken: token.AND,
 			},
 			&contracts.IsDereferenceable{
-				X: typevars.MakeVirtualVar(6),
+				X: typevars.MakeVirtualVar(8),
 			},
 			&contracts.DereferenceOf{
-				X: typevars.MakeVirtualVar(6),
-				Y: typevars.MakeVirtualVar(7),
+				X: typevars.MakeVirtualVar(8),
+				Y: typevars.MakeVirtualVar(9),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeVirtualVar(7),
+				Y: typevars.MakeVirtualVar(9),
 			},
 			// go func() {}()
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Function{
 					Package: packageName,
 				}),
-				Y: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(8)),
+				Y: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(10)),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(8)),
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(10)),
 				ArgsCount: 0,
 			},
 			// switch swA := 1; swA {
@@ -347,38 +348,11 @@ func TestGeneralContracts(t *testing.T) {
 			// }
 			&contracts.IsReceiveableFrom{
 				X: typevars.MakeVar(gVars["c1"], packageName),
-				Y: typevars.MakeVirtualVar(9),
-			},
-			&contracts.PropagatesTo{
-				X: typevars.MakeVirtualVar(9),
-				Y: typevars.MakeVar(gVars["msg1"], packageName),
-			},
-			&contracts.IsReceiveableFrom{
-				X: typevars.MakeVar(gVars["c1"], packageName),
-				Y: typevars.MakeVirtualVar(10),
-			},
-			&contracts.IsIndexable{
-				X: typevars.MakeVar(gVars["l"], packageName),
-			},
-			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeListKey(),
-			},
-			&contracts.IsCompatibleWith{
-				X: typevars.MakeVirtualVar(10),
-				Y: typevars.MakeListValue(typevars.MakeVar(gVars["l"], packageName)),
-			},
-			&contracts.IsReceiveableFrom{
-				X: typevars.MakeVar(gVars["c1"], packageName),
 				Y: typevars.MakeVirtualVar(11),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(11),
-				Y: typevars.MakeVar(gVars["msg1:2"], packageName),
-			},
-			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
-				Y: typevars.MakeVar(gVars["msg1Ok"], packageName),
+				Y: typevars.MakeVar(gVars["msg1"], packageName),
 			},
 			&contracts.IsReceiveableFrom{
 				X: typevars.MakeVar(gVars["c1"], packageName),
@@ -393,6 +367,33 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVirtualVar(12),
+				Y: typevars.MakeListValue(typevars.MakeVar(gVars["l"], packageName)),
+			},
+			&contracts.IsReceiveableFrom{
+				X: typevars.MakeVar(gVars["c1"], packageName),
+				Y: typevars.MakeVirtualVar(13),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(13),
+				Y: typevars.MakeVar(gVars["msg1:2"], packageName),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+				Y: typevars.MakeVar(gVars["msg1Ok"], packageName),
+			},
+			&contracts.IsReceiveableFrom{
+				X: typevars.MakeVar(gVars["c1"], packageName),
+				Y: typevars.MakeVirtualVar(14),
+			},
+			&contracts.IsIndexable{
+				X: typevars.MakeVar(gVars["l"], packageName),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeListKey(),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeVirtualVar(14),
 				Y: typevars.MakeListValue(typevars.MakeVar(gVars["l"], packageName)),
 			},
 			&contracts.IsCompatibleWith{
@@ -412,7 +413,7 @@ func TestGeneralContracts(t *testing.T) {
 			&contracts.BinaryOp{
 				X:       typevars.MakeVar(gVars["i"], packageName),
 				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Z:       typevars.MakeVirtualVar(13),
+				Z:       typevars.MakeVirtualVar(15),
 				OpToken: token.LSS,
 			},
 			&contracts.IsIncDecable{
@@ -459,10 +460,10 @@ func TestGeneralContracts(t *testing.T) {
 				X: typevars.MakeConstant(&gotypes.Function{
 					Package: packageName,
 				}),
-				Y: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(14)),
+				Y: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(16)),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(14)),
+				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(16)),
 				ArgsCount: 0,
 			},
 			// if ifI := 1; ifI < 2 {
@@ -475,7 +476,7 @@ func TestGeneralContracts(t *testing.T) {
 			&contracts.BinaryOp{
 				X:       typevars.MakeVar(gVars["ifI"], packageName),
 				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Z:       typevars.MakeVirtualVar(15),
+				Z:       typevars.MakeVirtualVar(17),
 				OpToken: token.LSS,
 			},
 		})

@@ -44,6 +44,7 @@ type Parser struct {
 // parseBasicLit consumes *ast.BasicLit and produces Builtin
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
+	// TODO(jchaloup): store the literal as well so one can argue about []int{1, 2.0} and []int{1, 2.2}
 	var builtin *gotypes.Builtin
 	switch lit.Kind {
 	case token.INT:
@@ -66,45 +67,34 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error)
 }
 
 // to parse *gotypes.Array, *gotypes.Slice, *gotypes.Map
-func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.DataType) (*typevars.Constant, error) {
+func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.CompositeLit, litType gotypes.DataType) (typevars.Interface, error) {
+	glog.Infof("Processing parseKeyValueLikeExpr")
 	var valueTypeVar typevars.Interface
 	var keyTypeVar typevars.Interface
 	var valueType gotypes.DataType
 
+	var outputTypeVar typevars.Interface = &typevars.Variable{
+		Name: ep.Config.ContractTable.NewVariable(),
+	}
+
 	switch elmExpr := litType.(type) {
 	case *gotypes.Slice:
 		valueType = elmExpr.Elmtype
-		valueTypeVar = &typevars.ListValue{
-			Interface: &typevars.Constant{
-				DataType: elmExpr.Elmtype,
-			},
-		}
-		keyTypeVar = &typevars.ListKey{}
+		valueTypeVar = typevars.MakeListValue(outputTypeVar)
+		keyTypeVar = typevars.MakeListKey()
 	case *gotypes.Array:
 		valueType = elmExpr.Elmtype
-		valueTypeVar = &typevars.ListValue{
-			Interface: &typevars.Constant{
-				DataType: elmExpr.Elmtype,
-			},
-		}
-		keyTypeVar = &typevars.ListKey{}
+		valueTypeVar = typevars.MakeListValue(outputTypeVar)
+		keyTypeVar = typevars.MakeListKey()
 	case *gotypes.Map:
 		valueType = elmExpr.Valuetype
-		valueTypeVar = &typevars.MapValue{
-			Interface: &typevars.Constant{
-				DataType: elmExpr.Valuetype,
-			},
-		}
-		keyTypeVar = &typevars.MapKey{
-			Interface: &typevars.Constant{
-				DataType: elmExpr.Keytype,
-			},
-		}
+		valueTypeVar = typevars.MakeMapValue(outputTypeVar)
+		keyTypeVar = typevars.MakeMapKey(outputTypeVar)
 	default:
 		return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
 	}
 
-	for _, litElement := range litElements {
+	for _, litElement := range lit.Elts {
 		var valueExpr ast.Expr
 		if kvExpr, ok := litElement.(*ast.KeyValueExpr); ok {
 			attr, err := ep.Parse(kvExpr.Key)
@@ -132,6 +122,22 @@ func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.
 					typeDef = valueType
 				}
 			}
+			// type A struct {
+			// 	f int
+			// }
+			// type B []A
+			// type C map[int]B
+			// c := C{
+			// 	0: {
+			// 		A{
+			//      A{f: 2},
+			//    },
+			// 	},
+			// }
+			// will get parsed even if it is a semantic error.
+			// The semantic analysis is not currently run and
+			// it is assumed each Go code is semantically correct.
+			// TODO(jchaloup): find a way to detect the semantic error and report it
 			attr, err := ep.parseCompositeLit(clExpr, typeDef)
 			if err != nil {
 				return nil, err
@@ -159,14 +165,29 @@ func (ep *Parser) parseKeyValueLikeExpr(litElements []ast.Expr, litType gotypes.
 		})
 	}
 
-	return &typevars.Constant{
-		DataType: litType,
-	}, nil
+	// qid.id is a type variable, not a constant
+	if litDataType != nil {
+		var outputOriginalTypeVar typevars.Interface
+		outputOriginalTypeVar = typevars.MakeConstant(litDataType)
+		// qid.id is a type variable, not a constant
+		if sel, sok := litDataType.(*gotypes.Selector); sok {
+			if qid, qok := sel.Prefix.(*gotypes.Packagequalifier); qok {
+				outputOriginalTypeVar = typevars.MakeVar(sel.Item, qid.Path)
+			}
+		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: outputOriginalTypeVar,
+			Y: outputTypeVar,
+		})
+	}
+
+	return outputTypeVar, nil
 }
 
 // *gotypes.Struct
-func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) (*typevars.Constant, error) {
-	structTypeVar := &typevars.Variable{
+func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) (typevars.Interface, error) {
+	glog.Infof("Processing parseCompositeLitStructElements")
+	structOutputTypeVar := &typevars.Variable{
 		Name: ep.Config.ContractTable.NewVariable(),
 	}
 
@@ -187,10 +208,10 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
 			}
 			ep.Config.ContractTable.AddContract(&contracts.HasField{
-				X:     structTypeVar,
+				X:     structOutputTypeVar,
 				Field: keyDefIdentifier.Name,
 			})
-			fieldTypeVar = typevars.MakeField(structTypeVar, keyDefIdentifier.Name, 0)
+			fieldTypeVar = typevars.MakeField(structOutputTypeVar, keyDefIdentifier.Name, 0)
 			valueExpr = kvExpr.Value
 		} else {
 			if fieldCounter >= fieldLen {
@@ -201,10 +222,10 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
 			}
 			ep.Config.ContractTable.AddContract(&contracts.HasField{
-				X:     structTypeVar,
+				X:     structOutputTypeVar,
 				Index: fieldCounter,
 			})
-			fieldTypeVar = typevars.MakeField(structTypeVar, "", fieldCounter)
+			fieldTypeVar = typevars.MakeField(structOutputTypeVar, "", fieldCounter)
 			valueExpr = litElement
 		}
 
@@ -221,16 +242,22 @@ func (ep *Parser) parseCompositeLitStructElements(lit *ast.CompositeLit, structD
 		fieldCounter++
 	}
 
-	ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-		X: &typevars.Constant{
-			DataType: structDef,
-		},
-		Y: structTypeVar,
-	})
+	if litDataType != nil {
+		var structOriginalTypeVar typevars.Interface
+		structOriginalTypeVar = typevars.MakeConstant(litDataType)
+		// qid.id is a type variable, not a constant
+		if sel, sok := litDataType.(*gotypes.Selector); sok {
+			if qid, qok := sel.Prefix.(*gotypes.Packagequalifier); qok {
+				structOriginalTypeVar = typevars.MakeVar(sel.Item, qid.Path)
+			}
+		}
+		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+			X: structOriginalTypeVar,
+			Y: structOutputTypeVar,
+		})
+	}
 
-	return &typevars.Constant{
-		DataType: structDef,
-	}, nil
+	return structOutputTypeVar, nil
 }
 
 func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprAttribute, error) {
@@ -259,7 +286,7 @@ func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprA
 
 // parseCompositeLit consumes ast.CompositeLit and produces data type of the root composite literal
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (*types.ExprAttribute, error) {
-	glog.Infof("Processing CompositeLit: %#v\n", lit)
+	glog.Infof("Processing CompositeLit: %#v\t\ttypeDef: %#v\n", lit, typeDef)
 	// https://golang.org/ref/spec#Composite_literals
 	// The LiteralType's underlying type must be a struct, array, slice, or map
 	//  type (the grammar enforces this constraint except when the type is given as a TypeName)
@@ -294,6 +321,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 
 	// The CL type can be processed independently of the CL elements
 	var litTypedef gotypes.DataType
+	var origLitTypedef gotypes.DataType
 	if typeDef != nil {
 		litTypedef = typeDef
 	} else {
@@ -302,6 +330,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 			return nil, err
 		}
 		litTypedef = def
+		origLitTypedef = def
 	}
 
 	glog.Infof("litTypedef: %#v", litTypedef)
@@ -312,19 +341,26 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 	glog.Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
 
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
-	var typeVar *typevars.Constant
+	var typeVar typevars.Interface
 	switch litTypeExpr := nonIdentLitTypeDef.DataTypeList[0].(type) {
 	case *gotypes.Struct:
 		// anonymous structure -> we can ignore field's allocation
 		var err error
-		typeVar, err = ep.parseCompositeLitStructElements(lit, litTypeExpr, nil)
+		typeVar, err = ep.parseCompositeLitStructElements(origLitTypedef, lit, litTypeExpr, nil)
 		if err != nil {
 			return nil, err
 		}
 	case *gotypes.Array, *gotypes.Slice, *gotypes.Map:
 		glog.Infof("parseCompositeLitArrayLikeElements: %#v\n", lit)
 		var err error
-		typeVar, err = ep.parseKeyValueLikeExpr(lit.Elts, nonIdentLitTypeDef.DataTypeList[0])
+		// if origLitTypedef != nil {
+		// 	switch origLitTypedef.(type) {
+		// 	case *gotypes.Array, *gotypes.Slice, *gotypes.Map:
+		// 	default:
+		// 		origLitTypedef = nil
+		// 	}
+		// }
+		typeVar, err = ep.parseKeyValueLikeExpr(origLitTypedef, lit, nonIdentLitTypeDef.DataTypeList[0])
 		if err != nil {
 			return nil, err
 		}
@@ -1723,7 +1759,10 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		//                 based on that, use the corresponding Add method
 		ep.AllocatedSymbolsTable.AddSymbol(xType.Path, expr.Sel.Name, "")
 		return types.ExprAttributeFromDataType(packageIdent.Def).AddTypeVar(
-			typevars.VariableFromSymbolDef(packageIdent),
+			typevars.MakeVar(
+				xType.Path,
+				expr.Sel.Name,
+			),
 		), nil
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {

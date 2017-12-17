@@ -10,7 +10,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/function_invocation"
 
 func TestFunctionInvocationContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -22,10 +22,10 @@ func TestFunctionInvocationContracts(t *testing.T) {
 		"ab": ":304:ab",
 		"b":  ":321:b",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"function_invocation.go",
+		"testdata/function_invocation.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),

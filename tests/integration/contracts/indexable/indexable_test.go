@@ -9,7 +9,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/indexable"
 
 func TestIndexableContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -20,10 +20,10 @@ func TestIndexableContracts(t *testing.T) {
 		"ma":   ":137:ma",
 		"sa":   ":154:sa",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"indexable.go",
+		"testdata/indexable.go",
 		[]contracts.Contract{
 			//
 			// list := []Int{
@@ -32,20 +32,20 @@ func TestIndexableContracts(t *testing.T) {
 			//
 			// Int <-> 1
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstantListValue(&gotypes.Identifier{
-					Def:     "Int",
-					Package: packageName,
-				}),
+				X: typevars.MakeListValue(typevars.MakeVirtualVar(1)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
-			// list <-> []Int
-			&contracts.PropagatesTo{
+			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Slice{
 					Elmtype: &gotypes.Identifier{
 						Def:     "Int",
 						Package: packageName,
 					},
 				}),
+				Y: typevars.MakeVirtualVar(1),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(1),
 				Y: typevars.MakeVar(vars["list"], packageName),
 			},
 			//
@@ -53,22 +53,23 @@ func TestIndexableContracts(t *testing.T) {
 			// 	"3": 3,
 			// }
 			//
-			// "3" <-> string
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstantMapKey(&gotypes.Builtin{Untyped: false, Def: "string"}),
+				X: typevars.MakeMapKey(typevars.MakeVirtualVar(2)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
-			// 3 <-> int
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstantMapValue(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeMapValue(typevars.MakeVirtualVar(2)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
-			// mapV <-> map[string]int
-			&contracts.PropagatesTo{
+			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
+				Y: typevars.MakeVirtualVar(2),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(2),
 				Y: typevars.MakeVar(vars["mapV"], packageName),
 			},
 			&contracts.IsCompatibleWith{

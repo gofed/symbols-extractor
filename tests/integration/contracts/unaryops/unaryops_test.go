@@ -10,7 +10,7 @@ import (
 	utils "github.com/gofed/symbols-extractor/tests/integration/contracts"
 )
 
-var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/testdata"
+var packageName = "github.com/gofed/symbols-extractor/tests/integration/contracts/unaryops"
 
 func TestUnaryOpContracts(t *testing.T) {
 	var vars = map[string]string{
@@ -23,10 +23,10 @@ func TestUnaryOpContracts(t *testing.T) {
 		"uopc":     ":134:uopc",
 		"uopd":     ":149:uopd",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"unaryop.go",
+		"testdata/unaryops.go",
 		[]contracts.Contract{
 			// a := "ahoj"
 			&contracts.PropagatesTo{

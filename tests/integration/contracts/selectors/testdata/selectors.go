@@ -1,7 +1,5 @@
 package testdata
 
-import "fmt"
-
 type D struct{}
 
 func (d *D) method() int { return 0 }
@@ -13,8 +11,6 @@ func frr() {
 	// method invocation
 	mA := D{}
 	mB := mA.method()
-
-	fmt.Print("Neco")
 }
 
 type D2 interface {
@@ -57,7 +53,7 @@ type D6 string
 
 func (d *D6) imethod() int { return 0 }
 
-func frr3() {
+func frr4() {
 	idg := D6("string")
 	idh := idg.imethod()
 
