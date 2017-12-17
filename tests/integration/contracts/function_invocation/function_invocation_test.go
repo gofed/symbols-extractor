@@ -22,7 +22,7 @@ func TestFunctionInvocationContracts(t *testing.T) {
 		"ab": ":304:ab",
 		"b":  ":321:b",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
 		"testdata/function_invocation.go",

@@ -23,7 +23,7 @@ func TestUnaryOpContracts(t *testing.T) {
 		"uopc":     ":134:uopc",
 		"uopd":     ":149:uopd",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
 		"testdata/unaryops.go",

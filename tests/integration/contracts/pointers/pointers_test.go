@@ -18,7 +18,7 @@ func TestPointersContracts(t *testing.T) {
 		"ra": ":52:ra",
 		"da": ":75:da",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
 		"testdata/pointers.go",

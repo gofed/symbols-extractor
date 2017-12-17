@@ -16,7 +16,7 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 		"ffA": ":33:ffA",
 		"ffB": ":70:ffB",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
 		"testdata/function_literals.go",

@@ -14,25 +14,25 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestSelectorsTypes(t *testing.T) {
 	var vars = map[string]string{
-		"frA": ":124:frA",
-		"mA":  ":167:mA",
-		"mB":  ":178:mB",
-		"ia":  ":335:ia",
-		"ib":  ":350:ib",
-		"ida": ":440:ida",
-		"idb": ":453:idb",
-		"idc": ":476:idc",
-		"idd": ":489:idd",
-		"ide": ":574:ide",
-		"idf": ":602:idf",
-		"idg": ":690:idg",
-		"idh": ":711:idh",
-		"idi": ":734:idi",
-		"idj": ":761:idj",
-		"idk": ":776:idk",
-		"idl": ":824:idl",
+		"frA": ":110:frA",
+		"mA":  ":153:mA",
+		"mB":  ":164:mB",
+		"ia":  ":301:ia",
+		"ib":  ":316:ib",
+		"ida": ":406:ida",
+		"idb": ":419:idb",
+		"idc": ":442:idc",
+		"idd": ":455:idd",
+		"ide": ":540:ide",
+		"idf": ":568:idf",
+		"idg": ":656:idg",
+		"idh": ":677:idh",
+		"idi": ":700:idi",
+		"idj": ":727:idj",
+		"idk": ":742:idk",
+		"idl": ":790:idl",
 	}
-	utils.CompareContracts(t,
+	utils.ParseAndCompareContracts(t,
 		packageName,
 		"testdata/selectors.go",
 		[]contracts.Contract{
@@ -51,15 +51,14 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVar(vars["frA"], packageName),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
+				X: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "D",
+					Package: packageName,
 				}),
 				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
-				}),
+				X: typevars.MakeVirtualVar(2),
 				Y: typevars.MakeVar(vars["mA"], packageName),
 			},
 			&contracts.HasField{
@@ -81,15 +80,14 @@ func TestSelectorsTypes(t *testing.T) {
 			// var ia D2 = &D3{}
 			// ib := ia.imethod()
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
+				X: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "D3",
+					Package: packageName,
 				}),
 				Y: typevars.MakeVirtualVar(4),
 			},
 			&contracts.UnaryOp{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
-				}),
+				X:       typevars.MakeVirtualVar(4),
 				Y:       typevars.MakeVirtualVar(5),
 				OpToken: token.AND,
 			},
@@ -118,15 +116,14 @@ func TestSelectorsTypes(t *testing.T) {
 			// ida := D4{}
 			// idb := ida.imethod()
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
+				X: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "D4",
+					Package: packageName,
 				}),
 				Y: typevars.MakeVirtualVar(7),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
-				}),
+				X: typevars.MakeVirtualVar(7),
 				Y: typevars.MakeVar(vars["ida"], packageName),
 			},
 			&contracts.HasField{
@@ -196,14 +193,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(11),
 			},
 			&contracts.UnaryOp{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{
-						{
-							Name: "d",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
-						},
-					},
-				}),
+				X:       typevars.MakeVirtualVar(11),
 				Y:       typevars.MakeVirtualVar(12),
 				OpToken: token.AND,
 			},
@@ -277,14 +267,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(14),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{
-						{
-							Name: "d",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
-						},
-					},
-				}),
+				X: typevars.MakeVirtualVar(14),
 				Y: typevars.MakeVar(vars["idi"], packageName),
 			},
 			&contracts.HasField{
@@ -300,15 +283,14 @@ func TestSelectorsTypes(t *testing.T) {
 			// })(&D3{})
 			// idl := idk.imethod()
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
+				X: typevars.MakeConstant(&gotypes.Identifier{
+					Def:     "D3",
+					Package: packageName,
 				}),
 				Y: typevars.MakeVirtualVar(15),
 			},
 			&contracts.UnaryOp{
-				X: typevars.MakeConstant(&gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
-				}),
+				X:       typevars.MakeVirtualVar(15),
 				Y:       typevars.MakeVirtualVar(16),
 				OpToken: token.AND,
 			},

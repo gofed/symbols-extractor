@@ -16,7 +16,7 @@ func TestTypeCastingContracts(t *testing.T) {
 		"asA": ":64:asA",
 		"asB": ":79:asB",
 	}
-	utils.CompareContracts(
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
 		"testdata/type_casting.go",

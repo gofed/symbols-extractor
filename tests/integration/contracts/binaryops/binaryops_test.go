@@ -22,7 +22,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 		"bopf": ":600:bopf",
 		"bopg": ":655:bopg",
 	}
-	utils.CompareContracts(
+
+	utils.ParseAndCompareContracts(
 		t,
 		packageName,
 		"testdata/binaryop.go",
