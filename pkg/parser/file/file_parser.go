@@ -251,9 +251,14 @@ func (fp *FileParser) parseFuncDecls(specs []*ast.FuncDecl) error {
 
 func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error) {
 	var postponed []*ast.FuncDecl
+	fp.Config.ContractTable.UnsetPrefix()
+	defer fp.Config.ContractTable.UnsetPrefix()
+
 	for _, spec := range specs {
 		postpone, err := fp.parseFuncDeclaration(spec)
 		if err != nil {
+			// If this errors -> no more parsing of the file
+			// If anything gets reprocessed again, it can not error here
 			return nil, err
 		}
 		if postpone {
@@ -264,7 +269,9 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 		// and continue with other definition
 		// TODO(jchaloup): reset the alloc table back to the state before the body got processed
 		// in case the processing ended with an error
+		fp.Config.ContractTable.SetPrefix(spec.Name.Name)
 		if err := fp.StmtParser.ParseFuncBody(spec); err != nil {
+			fp.Config.ContractTable.DropPrefixContracts(spec.Name.Name)
 			glog.Warningf("File parse %q Funcs error: %v\n", spec.Name.Name, err)
 			postponed = append(postponed, spec)
 			continue
