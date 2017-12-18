@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 	"path"
+	"sort"
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
@@ -77,7 +78,17 @@ func ParseAndCompareContracts(t *testing.T, gopkg, filename string, tests []cont
 		t.Error(err)
 		return
 	}
-	CompareContracts(t, config.ContractTable.Contracts(), tests)
+	var genContracts []contracts.Contract
+	cs := config.ContractTable.Contracts()
+	var keys []string
+	for fncName := range cs {
+		keys = append(keys, fncName)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		genContracts = append(genContracts, cs[key]...)
+	}
+	CompareContracts(t, genContracts, tests)
 }
 
 func CompareContracts(t *testing.T, contractsList, tests []contracts.Contract) {
