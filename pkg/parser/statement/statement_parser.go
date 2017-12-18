@@ -143,7 +143,7 @@ func (sp *Parser) ParseFuncBody(funcDecl *ast.FuncDecl) error {
 	sp.SymbolTable.Push()
 	if err := sp.parseFuncHeadVariables(funcDecl); err != nil {
 		sp.SymbolTable.Pop()
-		return nil
+		return fmt.Errorf("sp.ParseFuncBody: %v", err)
 	}
 	sp.SymbolTable.Push()
 	defer func() {
@@ -1396,7 +1396,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 
 		def, err := sp.parseReceiver(funcDecl.Recv.List[0].Type, true)
 		if err != nil {
-			return err
+			return fmt.Errorf("sp.parseReceiver: %v", err)
 		}
 		// the receiver can be typed only
 		if funcDecl.Recv.List[0].Names != nil {
@@ -1408,20 +1408,31 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 		}
 	}
 
+	// Store symbol definitions of all params once all of them are parsed.
+	// Otherwise, func PostForm(url string, data url.Values) will get processed
+	// properly. The url in url.Values will be interpreted as string,
+	// instead of qid.
+	// The same holds for func(net, addr string) (net.Conn, error).
+	// The net in the return type will get picked from the net argument of type string
+	// So both params and results must be stored at the end.
+	var sDefs []*symboltable.SymbolDef
+
 	if funcDecl.Type.Params != nil {
-		for _, field := range funcDecl.Type.Params.List {
+		for i, field := range funcDecl.Type.Params.List {
+			glog.Infof("Parsing funcDecl.Type.Params[%v].Type: %#v\n", i, field.Type)
 			def, err := sp.TypeParser.Parse(field.Type)
 			if err != nil {
-				return err
+				return fmt.Errorf("sp.TypeParser.Parse Params: %v", err)
 			}
 
 			// field.Names is always non-empty if param's datatype is defined
 			for _, name := range field.Names {
-				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+				sDefs = append(sDefs, &symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
 					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 				})
+
 			}
 		}
 	}
@@ -1430,17 +1441,21 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 		for _, field := range funcDecl.Type.Results.List {
 			def, err := sp.TypeParser.Parse(field.Type)
 			if err != nil {
-				return err
+				return fmt.Errorf("sp.TypeParser.Parse Results: %v", err)
 			}
 
 			for _, name := range field.Names {
-				sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+				sDefs = append(sDefs, &symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
 					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 				})
 			}
 		}
+	}
+
+	for _, sDef := range sDefs {
+		sp.SymbolTable.AddVariable(sDef)
 	}
 	return nil
 }
