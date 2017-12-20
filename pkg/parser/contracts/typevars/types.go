@@ -47,6 +47,7 @@ func (c *Constant) GetType() Type {
 // - qid-ed variable
 type Variable struct {
 	Name    string
+	Pos     string
 	Package string
 }
 
@@ -54,16 +55,22 @@ func (v *Variable) GetType() Type {
 	return VariableType
 }
 
+func (v *Variable) String() string {
+	return fmt.Sprintf("%v#%v", v.Package, v.Name)
+}
+
 func VariableFromSymbolDef(def *symboltable.SymbolDef) *Variable {
 	return &Variable{
-		Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
+		Name:    def.Name,
+		Pos:     def.Pos,
 		Package: def.Package,
 	}
 }
 
 func FunctionFromSymbolDef(def *symboltable.SymbolDef) *Function {
 	return &Function{
-		Name:    fmt.Sprintf("%v:%v", def.Pos, def.Name),
+		Name:    def.Name,
+		Pos:     def.Pos,
 		Package: def.Package,
 	}
 }
@@ -168,8 +175,9 @@ func (m *RangeValue) GetType() Type {
 }
 
 type Function struct {
-	Name    string
 	Package string
+	Name    string
+	Pos     string
 }
 
 func (v *Function) GetType() Type {
@@ -199,15 +207,25 @@ func (a *ReturnType) GetType() Type {
 	return ReturnTypeType
 }
 
-func MakeVar(name, packageName string) *Variable {
+func MakeVar(packageName, name, pos string) *Variable {
 	return &Variable{
-		Name:    name,
 		Package: packageName,
+		Name:    name,
+		Pos:     pos,
+	}
+}
+
+func MakeLocalVar(name, pos string) *Variable {
+	return &Variable{
+		Name: name,
+		Pos:  pos,
 	}
 }
 
 func MakeVirtualVar(index int) *Variable {
-	return MakeVar(fmt.Sprintf("virtual.var.%v", index), "")
+	return &Variable{
+		Name: fmt.Sprintf("virtual.var.%v", index),
+	}
 }
 
 func MakeConstant(datatype gotypes.DataType) *Constant {
@@ -216,10 +234,11 @@ func MakeConstant(datatype gotypes.DataType) *Constant {
 	}
 }
 
-func MakeFunction(name, packageName string) *Function {
+func MakeFunction(packageName, name, pos string) *Function {
 	return &Function{
-		Name:    name,
 		Package: packageName,
+		Name:    name,
+		Pos:     pos,
 	}
 }
 
@@ -230,16 +249,16 @@ func MakeVirtualFunction(v *Variable) *Function {
 	}
 }
 
-func MakeArgument(name, packageName string, index int) *Argument {
+func MakeArgument(f *Function, index int) *Argument {
 	return &Argument{
-		Function: *MakeFunction(name, packageName),
+		Function: *f,
 		Index:    index,
 	}
 }
 
-func MakeReturn(name, packageName string, index int) *ReturnType {
+func MakeReturn(f *Function, index int) *ReturnType {
 	return &ReturnType{
-		Function: *MakeFunction(name, packageName),
+		Function: *f,
 		Index:    index,
 	}
 }

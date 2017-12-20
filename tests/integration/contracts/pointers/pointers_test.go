@@ -14,9 +14,9 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestPointersContracts(t *testing.T) {
 	var vars = map[string]string{
-		"a":  ":39:a",
-		"ra": ":52:ra",
-		"da": ":75:da",
+		"a":  ":39",
+		"ra": ":52",
+		"da": ":75",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -26,29 +26,29 @@ func TestPointersContracts(t *testing.T) {
 			// a := "ahoj"
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
-				Y: typevars.MakeVar(vars["a"], packageName),
+				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			// ra := &a
 			&contracts.UnaryOp{
-				X:       typevars.MakeVar(vars["a"], packageName),
+				X:       typevars.MakeLocalVar("a", vars["a"]),
 				Y:       typevars.MakeVirtualVar(1),
 				OpToken: token.AND,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),
-				Y: typevars.MakeVar(vars["ra"], packageName),
+				Y: typevars.MakeLocalVar("ra", vars["ra"]),
 			},
 			// da := *ra
 			&contracts.IsDereferenceable{
-				X: typevars.MakeVar(vars["ra"], packageName),
+				X: typevars.MakeLocalVar("ra", vars["ra"]),
 			},
 			&contracts.DereferenceOf{
-				X: typevars.MakeVar(vars["ra"], packageName),
+				X: typevars.MakeLocalVar("ra", vars["ra"]),
 				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),
-				Y: typevars.MakeVar(vars["da"], packageName),
+				Y: typevars.MakeLocalVar("da", vars["da"]),
 			},
 		})
 }

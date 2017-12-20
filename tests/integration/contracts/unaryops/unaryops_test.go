@@ -14,14 +14,14 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestUnaryOpContracts(t *testing.T) {
 	var vars = map[string]string{
-		"a":        ":39:a",
-		"ra":       ":52:ra",
-		"chanA":    ":63:chanA",
-		"chanValA": ":88:chanValA",
-		"uopa":     ":110:uopa",
-		"uopb":     ":122:uopb",
-		"uopc":     ":134:uopc",
-		"uopd":     ":149:uopd",
+		"a":        ":39",
+		"ra":       ":52",
+		"chanA":    ":63",
+		"chanValA": ":88",
+		"uopa":     ":110",
+		"uopb":     ":122",
+		"uopc":     ":134",
+		"uopd":     ":149",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -31,19 +31,19 @@ func TestUnaryOpContracts(t *testing.T) {
 			// a := "ahoj"
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
-				Y: typevars.MakeVar(vars["a"], packageName),
+				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			//
 			// ra := &a
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeVar(vars["a"], packageName),
+				X:       typevars.MakeLocalVar("a", vars["a"]),
 				Y:       typevars.MakeVirtualVar(1),
 				OpToken: token.AND,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),
-				Y: typevars.MakeVar(vars["ra"], packageName),
+				Y: typevars.MakeLocalVar("ra", vars["ra"]),
 			},
 			//
 			// chanA := make(chan int)
@@ -53,18 +53,18 @@ func TestUnaryOpContracts(t *testing.T) {
 					Dir:   "3",
 					Value: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
-				Y: typevars.MakeVar(vars["chanA"], packageName),
+				Y: typevars.MakeLocalVar("chanA", vars["chanA"]),
 			},
 			//
 			// chanValA := <-chanA
 			//
 			&contracts.IsReceiveableFrom{
-				X: typevars.MakeVar(vars["chanA"], packageName),
+				X: typevars.MakeLocalVar("chanA", vars["chanA"]),
 				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),
-				Y: typevars.MakeVar(vars["chanValA"], packageName),
+				Y: typevars.MakeLocalVar("chanValA", vars["chanValA"]),
 			},
 			//
 			// uopa := ^1
@@ -76,7 +76,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(3),
-				Y: typevars.MakeVar(vars["uopa"], packageName),
+				Y: typevars.MakeLocalVar("uopa", vars["uopa"]),
 			},
 			//
 			// uopb := -1
@@ -88,7 +88,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(4),
-				Y: typevars.MakeVar(vars["uopb"], packageName),
+				Y: typevars.MakeLocalVar("uopb", vars["uopb"]),
 			},
 			//
 			// uopc := !true
@@ -100,7 +100,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(5),
-				Y: typevars.MakeVar(vars["uopc"], packageName),
+				Y: typevars.MakeLocalVar("uopc", vars["uopc"]),
 			},
 			//
 			// uopd := +1
@@ -112,7 +112,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(6),
-				Y: typevars.MakeVar(vars["uopd"], packageName),
+				Y: typevars.MakeLocalVar("uopd", vars["uopd"]),
 			},
 		})
 }

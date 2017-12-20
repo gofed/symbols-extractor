@@ -2,6 +2,7 @@ package multi_packages
 
 import (
 	"go/token"
+	"sort"
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
@@ -33,19 +34,30 @@ func TestMultiPackageContracts(t *testing.T) {
 	}
 
 	var vars = map[string]string{
-		"a": ":47:a",
-		"b": ":80:b",
-		"c": ":117:c",
+		"a": ":47",
+		"b": ":80",
+		"c": ":117",
+	}
+
+	var genContracts []contracts.Contract
+	cs := config.ContractTable.Contracts()
+	var keys []string
+	for fncName := range cs {
+		keys = append(keys, fncName)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		genContracts = append(genContracts, cs[key]...)
 	}
 
 	conutils.CompareContracts(
 		t,
-		config.ContractTable.Contracts(),
+		genContracts,
 		[]contracts.Contract{
 			// a := &pkgA.A{}
 			// a.method(1, 2)
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar("A", "pkgA"),
+				X: typevars.MakeVar("pkgA", "A", ""),
 				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.UnaryOp{
@@ -55,14 +67,14 @@ func TestMultiPackageContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),
-				Y: typevars.MakeVar(vars["a"], "pkgB"),
+				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			&contracts.HasField{
-				X:     typevars.MakeVar(vars["a"], "pkgB"),
+				X:     typevars.MakeLocalVar("a", vars["a"]),
 				Field: "method",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeVar(vars["a"], "pkgB"), "method", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("a", vars["a"]), "method", 0),
 				Y: typevars.MakeVirtualVar(3),
 			},
 			&contracts.IsInvocable{
@@ -71,11 +83,11 @@ func TestMultiPackageContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeArgument(typevars.MakeVirtualVar(3).Name, "pkgB", 0),
+				Y: typevars.MakeArgument(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)), 0),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeArgument(typevars.MakeVirtualVar(3).Name, "pkgB", 1),
+				Y: typevars.MakeArgument(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)), 1),
 			},
 			// b := pkgA.B{
 			//   pkgA.A{1},
@@ -91,7 +103,7 @@ func TestMultiPackageContracts(t *testing.T) {
 			},
 			// The first item has its type given explicitly
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar("A", "pkgA"),
+				X: typevars.MakeVar("pkgA", "A", ""),
 				Y: typevars.MakeVirtualVar(5),
 			},
 			&contracts.IsCompatibleWith{
@@ -112,12 +124,12 @@ func TestMultiPackageContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(6),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar("B", "pkgA"),
+				X: typevars.MakeVar("pkgA", "B", ""),
 				Y: typevars.MakeVirtualVar(4),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(4),
-				Y: typevars.MakeVar(vars["b"], "pkgB"),
+				Y: typevars.MakeLocalVar("b", vars["b"]),
 			},
 			// c := pkgA.C{
 			// 	0: pkgA.B{
@@ -149,7 +161,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(10),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar("B", "pkgA"),
+				X: typevars.MakeVar("pkgA", "B", ""),
 				Y: typevars.MakeVirtualVar(8),
 			},
 			&contracts.IsCompatibleWith{
@@ -169,7 +181,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar("A", "pkgA"),
+				X: typevars.MakeVar("pkgA", "A", ""),
 				Y: typevars.MakeVirtualVar(12),
 			},
 			&contracts.IsCompatibleWith{
@@ -181,12 +193,12 @@ func TestMultiPackageContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(11),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar("C", "pkgA"),
+				X: typevars.MakeVar("pkgA", "C", ""),
 				Y: typevars.MakeVirtualVar(7),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(7),
-				Y: typevars.MakeVar(vars["c"], "pkgA"),
+				Y: typevars.MakeLocalVar("c", vars["c"]),
 			},
 		},
 	)

@@ -209,6 +209,9 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 						Def:     valueExprAttr.DataTypeList[i],
 						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 					}
+					if sp.SymbolTable.CurrentLevel() > 0 {
+						sDef.Package = ""
+					}
 					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 						X:            valueExprAttr.TypeVarList[i],
 						Y:            typevars.VariableFromSymbolDef(sDef),
@@ -220,6 +223,9 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symboltable.SymbolDef,
 						Package: sp.PackageName,
 						Def:     typeDef,
 						Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+					}
+					if sp.SymbolTable.CurrentLevel() > 0 {
+						sDef.Package = ""
 					}
 					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 						X:            valueExprAttr.TypeVarList[i],
@@ -809,8 +815,8 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 				if rhsIdentifier != nil {
 					sDef := &symboltable.SymbolDef{
 						Name:    rhsIdentifier.Def,
-						Package: "",
 						Def:     &gotypes.Interface{},
+						Package: sp.PackageName,
 						// The Pos in this context is not applicable to the typevars in each
 						// case block the rhsIdentifier.Def has different scope
 						// TODO(jchaloup): find a different way to state the position of the rhsIdentifier
@@ -835,7 +841,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 				if rhsIdentifier != nil {
 					sDef := &symboltable.SymbolDef{
 						Name:    rhsIdentifier.Def,
-						Package: "",
+						Package: sp.PackageName,
 						Def:     rhsType,
 						// The Pos in this context is not applicable to the typevars in each
 						// case block the rhsIdentifier.Def has different scope
@@ -940,9 +946,7 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 					case 0:
 						return fmt.Errorf("Expecting at least one expression on the LHS of a clause assigment")
 					case 1:
-						y := &typevars.Variable{
-							Name: sp.Config.ContractTable.NewVariable(),
-						}
+						y := sp.Config.ContractTable.NewVirtualVar()
 						sp.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
 							X: rhsExprAttr.TypeVarList[0],
 							Y: y,
@@ -982,9 +986,7 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 						// See http://www.tapirgames.com/blog/golang-block-and-scope
 						// If an ordinary assignment (with = symbol) is used, all variables/selectors(and other assignable expression) must be already defined,
 						// so they are not included as new variables.
-						y := &typevars.Variable{
-							Name: sp.Config.ContractTable.NewVariable(),
-						}
+						y := sp.Config.ContractTable.NewVirtualVar()
 						sp.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
 							X: rhsExprAttr.TypeVarList[0],
 							Y: y,
@@ -1400,13 +1402,21 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 		}
 		// the receiver can be typed only
 		if funcDecl.Recv.List[0].Names != nil {
-			sp.SymbolTable.AddVariable(&symboltable.SymbolDef{
+			sDef := &symboltable.SymbolDef{
 				Name: (*funcDecl.Recv).List[0].Names[0].Name,
 				Def:  def,
 				Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
+			}
+			sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X:            typevars.MakeConstant(def),
+				Y:            typevars.VariableFromSymbolDef(sDef),
+				ExpectedType: sDef.Def,
 			})
+			sp.SymbolTable.AddVariable(sDef)
 		}
 	}
+	// TOOD(jchaloup): check the id of the receiver is not the same
+	// as any of the function params/return ids
 
 	// Store symbol definitions of all params once all of them are parsed.
 	// Otherwise, func PostForm(url string, data url.Values) will get processed
@@ -1427,12 +1437,17 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 
 			// field.Names is always non-empty if param's datatype is defined
 			for _, name := range field.Names {
-				sDefs = append(sDefs, &symboltable.SymbolDef{
+				sDef := &symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
 					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+				}
+				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+					X:            typevars.MakeConstant(def),
+					Y:            typevars.VariableFromSymbolDef(sDef),
+					ExpectedType: sDef.Def,
 				})
-
+				sDefs = append(sDefs, sDef)
 			}
 		}
 	}
@@ -1445,11 +1460,17 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 			}
 
 			for _, name := range field.Names {
-				sDefs = append(sDefs, &symboltable.SymbolDef{
+				sDef := &symboltable.SymbolDef{
 					Name: name.Name,
 					Def:  def,
 					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
+				}
+				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+					X:            typevars.MakeConstant(def),
+					Y:            typevars.VariableFromSymbolDef(sDef),
+					ExpectedType: sDef.Def,
 				})
+				sDefs = append(sDefs, sDef)
 			}
 		}
 	}

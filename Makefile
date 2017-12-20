@@ -127,7 +127,17 @@ test:
             $(GLOG_FLAGS) $(WLOG)
 
 integration:
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/tests/integration/contracts $(GLOG_FLAGS) $(WLOG)
+	@ $(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/tests/integration/contracts/binaryops \
+			$(PROJECT_ROOT)/tests/integration/contracts/composite_literals \
+			$(PROJECT_ROOT)/tests/integration/contracts/function_invocation  \
+			$(PROJECT_ROOT)/tests/integration/contracts/function_literals  \
+			$(PROJECT_ROOT)/tests/integration/contracts/general  \
+			$(PROJECT_ROOT)/tests/integration/contracts/indexable  \
+			$(PROJECT_ROOT)/tests/integration/contracts/pointers  \
+			$(PROJECT_ROOT)/tests/integration/contracts/selectors  \
+			$(PROJECT_ROOT)/tests/integration/contracts/type_casting  \
+			$(PROJECT_ROOT)/tests/integration/contracts/unaryops \
+			$(PROJECT_ROOT)/tests/integration/contracts/multi_packages $(GLOG_FLAGS) $(WLOG)
 
 gen:
 	./gentypes.sh

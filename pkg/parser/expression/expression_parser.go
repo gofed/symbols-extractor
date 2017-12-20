@@ -73,9 +73,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	var keyTypeVar typevars.Interface
 	var valueType gotypes.DataType
 
-	var outputTypeVar typevars.Interface = &typevars.Variable{
-		Name: ep.Config.ContractTable.NewVariable(),
-	}
+	var outputTypeVar typevars.Interface = ep.Config.ContractTable.NewVirtualVar()
 
 	switch elmExpr := litType.(type) {
 	case *gotypes.Slice:
@@ -172,7 +170,11 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 		// qid.id is a type variable, not a constant
 		if sel, sok := litDataType.(*gotypes.Selector); sok {
 			if qid, qok := sel.Prefix.(*gotypes.Packagequalifier); qok {
-				outputOriginalTypeVar = typevars.MakeVar(sel.Item, qid.Path)
+				outputOriginalTypeVar = typevars.MakeVar(
+					qid.Path,
+					sel.Item,
+					"", // no position for a global symbol
+				)
 			}
 		}
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
@@ -187,9 +189,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 // *gotypes.Struct
 func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) (typevars.Interface, error) {
 	glog.Infof("Processing parseCompositeLitStructElements")
-	structOutputTypeVar := &typevars.Variable{
-		Name: ep.Config.ContractTable.NewVariable(),
-	}
+	structOutputTypeVar := ep.Config.ContractTable.NewVirtualVar()
 
 	fieldCounter := 0
 	fieldLen := len(structDef.Fields)
@@ -248,7 +248,11 @@ func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, 
 		// qid.id is a type variable, not a constant
 		if sel, sok := litDataType.(*gotypes.Selector); sok {
 			if qid, qok := sel.Prefix.(*gotypes.Packagequalifier); qok {
-				structOriginalTypeVar = typevars.MakeVar(sel.Item, qid.Path)
+				structOriginalTypeVar = typevars.MakeVar(
+					qid.Path,
+					sel.Item,
+					"", // no position for a global symbol
+				)
 			}
 		}
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
@@ -470,9 +474,7 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		return nil, fmt.Errorf("Operand of an unary operator is not a single value")
 	}
 
-	y := &typevars.Variable{
-		Name: ep.Config.ContractTable.NewVariable(),
-	}
+	y := ep.Config.ContractTable.NewVirtualVar()
 
 	var yAttr *types.ExprAttribute
 
@@ -576,9 +578,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		// As the list of all data types is read from the builtin package,
 		// it is not possible to keep a clean solution and provide
 		// the check for the operands validity at the same time.
-		z := &typevars.Variable{
-			Name: ep.Config.ContractTable.NewVariable(),
-		}
+		z := ep.Config.ContractTable.NewVirtualVar()
 		ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
 			OpToken: expr.Op,
 			X:       xAttr.TypeVarList[0],
@@ -604,9 +604,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				// The right operand can be ignored (it is always converted to an integer).
 				// If the left operand is untyped int => untyped int (or int for non-constant expressions)
 				// if the left operand is typed int => return int
-				z := &typevars.Variable{
-					Name: ep.Config.ContractTable.NewVariable(),
-				}
+				z := ep.Config.ContractTable.NewVirtualVar()
 				ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
 					OpToken: expr.Op,
 					X:       xAttr.TypeVarList[0],
@@ -626,9 +624,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 				if xt.Untyped && yt.Untyped {
 
 				}
-				z := &typevars.Variable{
-					Name: ep.Config.ContractTable.NewVariable(),
-				}
+				z := ep.Config.ContractTable.NewVirtualVar()
 				ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
 					OpToken: expr.Op,
 					X:       xAttr.TypeVarList[0],
@@ -648,9 +644,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 			}
 			return nil, fmt.Errorf("Binary operation %q over two different built-in types: %q != %q", expr.Op, xt, yt)
 		}
-		z := &typevars.Variable{
-			Name: ep.Config.ContractTable.NewVariable(),
-		}
+		z := ep.Config.ContractTable.NewVirtualVar()
 		ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
 			OpToken: expr.Op,
 			X:       xAttr.TypeVarList[0],
@@ -721,9 +715,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		return nil, fmt.Errorf("At least one operand of a binary expression has to be an identifier or a qualified identifier")
 	}
 
-	z := &typevars.Variable{
-		Name: ep.Config.ContractTable.NewVariable(),
-	}
+	z := ep.Config.ContractTable.NewVirtualVar()
 	ep.Config.ContractTable.AddContract(&contracts.BinaryOp{
 		OpToken: expr.Op,
 		X:       xAttr.TypeVarList[0],
@@ -765,9 +757,7 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (*types.ExprAttribute, error
 		X: attr.TypeVarList[0],
 	})
 
-	y := &typevars.Variable{
-		Name: ep.Config.ContractTable.NewVariable(),
-	}
+	y := ep.Config.ContractTable.NewVirtualVar()
 	ep.Config.ContractTable.AddContract(&contracts.DereferenceOf{
 		X: attr.TypeVarList[0],
 		Y: y,
@@ -956,11 +946,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					for i := range attr.DataTypeList {
 						if functionTypeVar != nil {
 							ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-								X: attr.TypeVarList[i],
-								Y: &typevars.Argument{
-									Function: *functionTypeVar,
-									Index:    i,
-								},
+								X:            attr.TypeVarList[i],
+								Y:            typevars.MakeArgument(functionTypeVar, i),
 								ExpectedType: attr.DataTypeList[i],
 							})
 						}
@@ -974,11 +961,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				// E.g. func f(a string, b ...int) called as f("aaa"), the 'b' is nil then
 				if functionTypeVar != nil {
 					ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-						X: attr.TypeVarList[0],
-						Y: &typevars.Argument{
-							Function: *functionTypeVar,
-							Index:    0,
-						},
+						X:            attr.TypeVarList[0],
+						Y:            typevars.MakeArgument(functionTypeVar, 0),
 						ExpectedType: attr.DataTypeList[0],
 					})
 				}
@@ -998,11 +982,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 			if functionTypeVar != nil {
 				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X: attr.TypeVarList[0],
-					Y: &typevars.Argument{
-						Function: *functionTypeVar,
-						Index:    i,
-					},
+					X:            attr.TypeVarList[0],
+					Y:            typevars.MakeArgument(functionTypeVar, i),
 					ExpectedType: attr.DataTypeList[0],
 				})
 			}
@@ -1074,12 +1055,12 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
 				case 2:
 					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
-					if err := processArgs(typevars.MakeFunction("make", "builtin"), []ast.Expr{expr.Args[1]}, nil); err != nil {
+					if err := processArgs(typevars.MakeFunction("builtin", "make", ""), []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
 				case 3:
 					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
-					if err := processArgs(typevars.MakeFunction("make", "builtin"), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+					if err := processArgs(typevars.MakeFunction("builtin", "make", ""), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
 				default:
@@ -1117,14 +1098,14 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 	case *typevars.Function:
 		f = d
 	case *typevars.Variable:
-		f = typevars.MakeFunction(d.Name, d.Package)
+		f = typevars.MakeFunction(d.Package, d.Name, d.Pos)
 	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
-		newVar := ep.Config.ContractTable.NewVariable()
+		newVar := ep.Config.ContractTable.NewVirtualVar()
 		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 			X: attr.TypeVarList[0],
-			Y: typevars.MakeVar(newVar, ep.Config.PackageName),
+			Y: newVar,
 		})
-		f = typevars.MakeFunction(newVar, ep.Config.PackageName)
+		f = typevars.MakeVirtualFunction(newVar)
 	default:
 		panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
 	}
@@ -1140,10 +1121,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 	outputAttr := types.ExprAttributeFromDataType(results...)
 	for i := range results {
-		z := &typevars.ReturnType{
-			Function: *f,
-			Index:    i,
-		}
+		z := typevars.MakeReturn(f, i)
 		outputAttr.AddTypeVar(z)
 	}
 	return outputAttr, nil
@@ -1242,14 +1220,14 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 	}
 
 	def, err := ep.TypeParser.Parse(expr.Type)
-	newVar := ep.Config.ContractTable.NewVariable()
+	newVar := ep.Config.ContractTable.NewVirtualVar()
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 		X: typevars.MakeConstant(def),
-		Y: typevars.MakeFunction(newVar, ep.Config.PackageName),
+		Y: newVar,
 	})
 
 	return types.ExprAttributeFromDataType(def).AddTypeVar(
-		typevars.MakeFunction(newVar, ep.Config.PackageName),
+		typevars.MakeVirtualFunction(newVar),
 	), err
 }
 
@@ -1680,9 +1658,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 		return false, nil, fmt.Errorf("Expected a method %q of data type %v, got %#v instead", expr.Sel.Name, typeSymbolDef.Name, methodDefAttr.DataTypeList[0])
 	}
 
-	y := &typevars.Variable{
-		Name: ep.Config.ContractTable.NewVariable(),
-	}
+	y := ep.Config.ContractTable.NewVirtualVar()
 
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 		X: &typevars.Constant{
@@ -1762,6 +1738,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			typevars.MakeVar(
 				xType.Path,
 				expr.Sel.Name,
+				"", // no position for a global symbol
 			),
 		), nil
 	case *gotypes.Pointer:

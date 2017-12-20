@@ -13,11 +13,11 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestCompositeLiteralsContracts(t *testing.T) {
 	var vars = map[string]string{
-		"list":     ":45:list",
-		"mapV":     ":75:mapV",
-		"structV":  ":124:structV",
-		"structV2": ":205:structV2",
-		"listV2":   ":275:listV2",
+		"list":     ":45",
+		"mapV":     ":75",
+		"structV":  ":124",
+		"structV2": ":205",
+		"listV2":   ":275",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -50,7 +50,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),
-				Y: typevars.MakeVar(vars["list"], packageName),
+				Y: typevars.MakeLocalVar("list", vars["list"]),
 			},
 			// mapV := map[string]int{
 			// 	"3": 3,
@@ -83,7 +83,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),
-				Y: typevars.MakeVar(vars["mapV"], packageName),
+				Y: typevars.MakeLocalVar("mapV", vars["mapV"]),
 			},
 			//
 			// structV := struct {
@@ -132,7 +132,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(3),
-				Y: typevars.MakeVar(vars["structV"], packageName),
+				Y: typevars.MakeLocalVar("structV", vars["structV"]),
 			},
 			//
 			// structV2 := struct {
@@ -181,7 +181,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(4),
-				Y: typevars.MakeVar(vars["structV2"], packageName),
+				Y: typevars.MakeLocalVar("structV2", vars["structV2"]),
 			},
 			//
 			// listV2 := [][]int{
@@ -229,7 +229,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(5),
-				Y: typevars.MakeVar(vars["listV2"], packageName),
+				Y: typevars.MakeLocalVar("listV2", vars["listV2"]),
 			},
 		})
 }

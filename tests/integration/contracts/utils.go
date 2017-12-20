@@ -107,5 +107,6 @@ func CompareContracts(t *testing.T, contractsList, tests []contracts.Contract) {
 
 	for i := c; i < len(contractsList); i++ {
 		t.Logf("\n\n\n\nAbout to check %v-th contract: %v\n", i, contracts.Contract2String(contractsList[i]))
+		//t.Errorf("\n\n\n\nUnprocessed %v-th contract: %v\n", i, contracts.Contract2String(contractsList[i]))
 	}
 }
