@@ -53,6 +53,11 @@ func (s *Stack) AddImport(sym *symboltable.SymbolDef) error {
 func (s *Stack) AddVariable(sym *symboltable.SymbolDef) error {
 	if s.Size > 0 {
 		glog.Infof("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
+		// In order to distinguish between global and local variable
+		// all local variable are packageless
+		if s.Size > 1 {
+			sym.Package = ""
+		}
 		return s.Tables[s.Size-1].AddVariable(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
@@ -168,6 +173,10 @@ func (s *Stack) Reset() error {
 	s.Size = 1
 
 	return nil
+}
+
+func (s *Stack) CurrentLevel() int {
+	return s.Size - 1
 }
 
 // Table gets a symbol table at given level

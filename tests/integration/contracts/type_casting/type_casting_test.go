@@ -13,8 +13,8 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestTypeCastingContracts(t *testing.T) {
 	var vars = map[string]string{
-		"asA": ":64:asA",
-		"asB": ":79:asB",
+		"asA": ":64",
+		"asB": ":79",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -34,16 +34,16 @@ func TestTypeCastingContracts(t *testing.T) {
 					Def:     "Int",
 					Package: packageName,
 				}),
-				Y: typevars.MakeVar(vars["asA"], packageName),
+				Y: typevars.MakeLocalVar("asA", vars["asA"]),
 			},
 			// asB := asA.(int)
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar(vars["asA"], packageName),
+				X: typevars.MakeLocalVar("asA", vars["asA"]),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "int"}),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "int"}),
-				Y: typevars.MakeVar(vars["asB"], packageName),
+				Y: typevars.MakeLocalVar("asB", vars["asB"]),
 			},
 		})
 }

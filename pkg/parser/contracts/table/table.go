@@ -1,9 +1,8 @@
 package table
 
 import (
-	"fmt"
-
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
+	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/golang/glog"
 )
 
@@ -33,9 +32,9 @@ func (t *Table) DropPrefixContracts(prefix string) {
 	delete(t.contracts, prefix)
 }
 
-func (t *Table) NewVariable() string {
+func (t *Table) NewVirtualVar() *typevars.Variable {
 	t.virtualVariableCounter++
-	return fmt.Sprintf("virtual.var.%v", t.virtualVariableCounter)
+	return typevars.MakeVirtualVar(t.virtualVariableCounter)
 }
 
 func (t *Table) Contracts() map[string][]contracts.Contract {

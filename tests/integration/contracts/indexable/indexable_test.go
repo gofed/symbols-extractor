@@ -13,12 +13,12 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestIndexableContracts(t *testing.T) {
 	var vars = map[string]string{
-		"list": ":45:list",
-		"mapV": ":63:mapV",
-		"la":   ":107:la",
-		"lb":   ":124:lb",
-		"ma":   ":137:ma",
-		"sa":   ":154:sa",
+		"list": ":45",
+		"mapV": ":63",
+		"la":   ":107",
+		"lb":   ":124",
+		"ma":   ":137",
+		"sa":   ":154",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -46,7 +46,7 @@ func TestIndexableContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),
-				Y: typevars.MakeVar(vars["list"], packageName),
+				Y: typevars.MakeLocalVar("list", vars["list"]),
 			},
 			//
 			// mapV := map[string]int{
@@ -70,7 +70,7 @@ func TestIndexableContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),
-				Y: typevars.MakeVar(vars["mapV"], packageName),
+				Y: typevars.MakeLocalVar("mapV", vars["mapV"]),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
@@ -81,35 +81,35 @@ func TestIndexableContracts(t *testing.T) {
 				Y: typevars.MakeListKey(),
 			},
 			&contracts.IsIndexable{
-				X: typevars.MakeVar(vars["list"], packageName),
+				X: typevars.MakeLocalVar("list", vars["list"]),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeVar(vars["list"], packageName),
-				Y: typevars.MakeVar(vars["la"], packageName),
+				X: typevars.MakeLocalVar("list", vars["list"]),
+				Y: typevars.MakeLocalVar("la", vars["la"]),
 			},
 			//lb := la[3]
 			&contracts.IsIndexable{
-				X: typevars.MakeVar(vars["la"], packageName),
+				X: typevars.MakeLocalVar("la", vars["la"]),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeListKey(),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeListValue(typevars.MakeVar(vars["la"], packageName)),
-				Y: typevars.MakeVar(vars["lb"], packageName),
+				X: typevars.MakeListValue(typevars.MakeLocalVar("la", vars["la"])),
+				Y: typevars.MakeLocalVar("lb", vars["lb"]),
 			},
 			// ma := mapV["3"]
 			&contracts.IsIndexable{
-				X: typevars.MakeVar(vars["mapV"], packageName),
+				X: typevars.MakeLocalVar("mapV", vars["mapV"]),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
 				Y: typevars.MakeConstantMapKey(&gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeMapValue(typevars.MakeVar(vars["mapV"], packageName)),
-				Y: typevars.MakeVar(vars["ma"], packageName),
+				X: typevars.MakeMapValue(typevars.MakeLocalVar("mapV", vars["mapV"])),
+				Y: typevars.MakeLocalVar("ma", vars["ma"]),
 			},
 			//sa := "ahoj"[0]
 			&contracts.IsIndexable{
@@ -121,7 +121,7 @@ func TestIndexableContracts(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstantListValue(&gotypes.Builtin{Untyped: true, Def: "string"}),
-				Y: typevars.MakeVar(vars["sa"], packageName),
+				Y: typevars.MakeLocalVar("sa", vars["sa"]),
 			},
 		})
 }

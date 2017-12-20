@@ -14,13 +14,13 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestFunctionInvocationContracts(t *testing.T) {
 	var vars = map[string]string{
-		"a":  ":179:a",
-		"g":  ":20:g",
-		"g1": ":69:g1",
-		"g2": ":113:g2",
-		"aa": ":287:aa",
-		"ab": ":304:ab",
-		"b":  ":321:b",
+		"a":  ":179",
+		"g":  ":20",
+		"g1": ":69",
+		"g2": ":113",
+		"aa": ":287",
+		"ab": ":304",
+		"b":  ":321",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -29,78 +29,78 @@ func TestFunctionInvocationContracts(t *testing.T) {
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
-				Y: typevars.MakeVar(vars["a"], packageName),
+				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			//
 			// aa := a + g1(a)
 			//
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(vars["g1"], packageName),
+				F:         typevars.MakeFunction(packageName, "g1", vars["g1"]),
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar(vars["a"], packageName),
-				Y: typevars.MakeArgument(vars["g1"], packageName, 0),
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g1", vars["g1"]), 0),
 			},
 			&contracts.BinaryOp{
-				X:       typevars.MakeVar(vars["a"], packageName),
-				Y:       typevars.MakeReturn(vars["g1"], packageName, 0),
+				X:       typevars.MakeLocalVar("a", vars["a"]),
+				Y:       typevars.MakeReturn(typevars.MakeFunction(packageName, "g1", vars["g1"]), 0),
 				Z:       typevars.MakeVirtualVar(1),
 				OpToken: token.ADD,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),
-				Y: typevars.MakeVar(vars["aa"], packageName),
+				Y: typevars.MakeLocalVar("aa", vars["aa"]),
 			},
 			//
 			// ab := a + g2(a)
 			//
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(vars["g2"], packageName),
+				F:         typevars.MakeFunction(packageName, "g2", vars["g2"]),
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar(vars["a"], packageName),
-				Y: typevars.MakeArgument(vars["g2"], packageName, 0),
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g2", vars["g2"]), 0),
 			},
 			&contracts.BinaryOp{
-				X:       typevars.MakeVar(vars["a"], packageName),
-				Y:       typevars.MakeReturn(vars["g2"], packageName, 0),
+				X:       typevars.MakeLocalVar("a", vars["a"]),
+				Y:       typevars.MakeReturn(typevars.MakeFunction(packageName, "g2", vars["g2"]), 0),
 				Z:       typevars.MakeVirtualVar(2),
 				OpToken: token.ADD,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),
-				Y: typevars.MakeVar(vars["ab"], packageName),
+				Y: typevars.MakeLocalVar("ab", vars["ab"]),
 			},
 			//
 			// b := a + g(a, a, a)
 			//
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(vars["g"], packageName),
+				F:         typevars.MakeFunction(packageName, "g", vars["g"]),
 				ArgsCount: 3,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar(vars["a"], packageName),
-				Y: typevars.MakeArgument(vars["g"], packageName, 0),
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g", vars["g"]), 0),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar(vars["a"], packageName),
-				Y: typevars.MakeArgument(vars["g"], packageName, 1),
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g", vars["g"]), 1),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeVar(vars["a"], packageName),
-				Y: typevars.MakeArgument(vars["g"], packageName, 2),
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g", vars["g"]), 2),
 			},
 			&contracts.BinaryOp{
-				X:       typevars.MakeVar(vars["a"], packageName),
-				Y:       typevars.MakeReturn(vars["g"], packageName, 0),
+				X:       typevars.MakeLocalVar("a", vars["a"]),
+				Y:       typevars.MakeReturn(typevars.MakeFunction(packageName, "g", vars["g"]), 0),
 				Z:       typevars.MakeVirtualVar(3),
 				OpToken: token.ADD,
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(3),
-				Y: typevars.MakeVar(vars["b"], packageName),
+				Y: typevars.MakeLocalVar("b", vars["b"]),
 			},
 		})
 }

@@ -106,8 +106,8 @@ func CompareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 		}
 	case *typevars.Variable:
 		y := tested.(*typevars.Variable)
-		if x.Name != y.Name {
-			t.Errorf("Got Variable.Name %v, expected %v", y.Name, x.Name)
+		if x.Name != y.Name || x.Pos != y.Pos || x.Package != y.Package {
+			t.Errorf("Got Variable.Name %v,%v,%v, expected %v,%v,%v", y.Package, y.Name, y.Pos, x.Package, x.Name, x.Pos)
 		}
 	case *typevars.Function:
 		y := tested.(*typevars.Function)
