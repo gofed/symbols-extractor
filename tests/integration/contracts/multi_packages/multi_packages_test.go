@@ -78,16 +78,16 @@ func TestMultiPackageContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(3),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)),
+				F:         typevars.MakeVirtualVar(3),
 				ArgsCount: 2,
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeArgument(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)), 0),
+				Y: typevars.MakeArgument(typevars.MakeVirtualVar(3), 0),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeArgument(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)), 1),
+				Y: typevars.MakeArgument(typevars.MakeVirtualVar(3), 1),
 			},
 			// b := pkgA.B{
 			//   pkgA.A{1},

@@ -932,7 +932,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
 	// params = list of function/method parameters definition (from its signature)
-	processArgs := func(functionTypeVar *typevars.Function, args []ast.Expr, params []gotypes.DataType) error {
+	processArgs := func(functionTypeVar typevars.Interface, args []ast.Expr, params []gotypes.DataType) error {
 		// TODO(jchaloup): check the arguments can be assigned to the parameters
 		// TODO(jchaloup): generate type contract for each argument
 		if params != nil {
@@ -1055,12 +1055,12 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
 				case 2:
 					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
-					if err := processArgs(typevars.MakeFunction("builtin", "make", ""), []ast.Expr{expr.Args[1]}, nil); err != nil {
+					if err := processArgs(typevars.MakeVar("builtin", "make", ""), []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
 				case 3:
 					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
-					if err := processArgs(typevars.MakeFunction("builtin", "make", ""), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+					if err := processArgs(typevars.MakeVar("builtin", "make", ""), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
 				default:
@@ -1093,19 +1093,19 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
 
-	var f *typevars.Function
+	var f typevars.Interface
 	switch d := attr.TypeVarList[0].(type) {
 	case *typevars.Function:
 		f = d
 	case *typevars.Variable:
-		f = typevars.MakeFunction(d.Package, d.Name, d.Pos)
+		f = typevars.MakeVar(d.Package, d.Name, d.Pos)
 	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
 		newVar := ep.Config.ContractTable.NewVirtualVar()
 		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 			X: attr.TypeVarList[0],
 			Y: newVar,
 		})
-		f = typevars.MakeVirtualFunction(newVar)
+		f = newVar
 	default:
 		panic(fmt.Sprintf("expr %#v expected to be a function, got %#v instead", expr, attr.TypeVarList[0]))
 	}
