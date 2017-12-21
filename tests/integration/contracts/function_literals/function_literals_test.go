@@ -43,15 +43,15 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 				Y: typevars.MakeLocalVar("ffA", vars["ffA"]),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(packageName, "ffA", vars["ffA"]),
+				F:         typevars.MakeLocalVar("ffA", vars["ffA"]),
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "ffA", vars["ffA"]), 0),
+				Y: typevars.MakeArgument(typevars.MakeLocalVar("ffA", vars["ffA"]), 0),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeFunction(packageName, "ffA", vars["ffA"]), 0),
+				X: typevars.MakeReturn(typevars.MakeLocalVar("ffA", vars["ffA"]), 0),
 				Y: typevars.MakeLocalVar("ffB", vars["ffB"]),
 			},
 		})

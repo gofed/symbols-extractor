@@ -70,11 +70,11 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(3),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)),
+				F:         typevars.MakeVirtualVar(3),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(3)), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(3), 0),
 				Y: typevars.MakeLocalVar("mB", vars["mB"]),
 			},
 			// var ia D2 = &D3{}
@@ -104,11 +104,11 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(6),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(6)),
+				F:         typevars.MakeVirtualVar(6),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(6)), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(6), 0),
 				Y: typevars.MakeLocalVar("ib", vars["ib"]),
 			},
 			// type D4 D3
@@ -135,11 +135,11 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(8),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(8)),
+				F:         typevars.MakeVirtualVar(8),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(8)), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(8), 0),
 				Y: typevars.MakeLocalVar("idb", vars["idb"]),
 			},
 			// idc := &ida
@@ -162,11 +162,11 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(10),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(10)),
+				F:         typevars.MakeVirtualVar(10),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(10)), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(10), 0),
 				Y: typevars.MakeLocalVar("idd", vars["idd"]),
 			},
 			// ide := &struct{ d int }{2}
@@ -236,11 +236,11 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(13),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(13)),
+				F:         typevars.MakeVirtualVar(13),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(13)), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(13), 0),
 				Y: typevars.MakeLocalVar("idh", vars["idh"]),
 			},
 			// idi := struct{ d int }{2}
@@ -335,11 +335,11 @@ func TestSelectorsTypes(t *testing.T) {
 				Y: typevars.MakeVirtualVar(17),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(17)),
+				F:         typevars.MakeVirtualVar(17),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualFunction(typevars.MakeVirtualVar(17)), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(17), 0),
 				Y: typevars.MakeLocalVar("idl", vars["idl"]),
 			},
 		})

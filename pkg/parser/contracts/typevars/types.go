@@ -56,7 +56,7 @@ func (v *Variable) GetType() Type {
 }
 
 func (v *Variable) String() string {
-	return fmt.Sprintf("%v#%v", v.Package, v.Name)
+	return fmt.Sprintf("%v#%v#%v", v.Package, v.Name, v.Pos)
 }
 
 func VariableFromSymbolDef(def *symboltable.SymbolDef) *Variable {
@@ -112,9 +112,9 @@ func TypeVar2String(tv Interface) string {
 	case *Function:
 		return fmt.Sprintf("TypeVar.Function: (%v) %v", d.Package, d.Name)
 	case *ReturnType:
-		return fmt.Sprintf("TypeVar.ReturnType: (%v) %v at %v", d.Package, d.Name, d.Index)
+		return fmt.Sprintf("TypeVar.ReturnType: (%v) at %v", TypeVar2String(d.Function), d.Index)
 	case *Argument:
-		return fmt.Sprintf("TypeVar.Argument: (%v) %v at %v", d.Package, d.Name, d.Index)
+		return fmt.Sprintf("TypeVar.Argument: (%v) at %v", TypeVar2String(d.Function), d.Index)
 	case *Field:
 		if d.Name == "" {
 			return fmt.Sprintf("TypeVar.Field: %#v at index %v", d.Interface, d.Index)
@@ -180,6 +180,10 @@ type Function struct {
 	Pos     string
 }
 
+func (f *Function) String() string {
+	return fmt.Sprintf("%v#%v#%v", f.Package, f.Name, f.Pos)
+}
+
 func (v *Function) GetType() Type {
 	return FunctionType
 }
@@ -187,7 +191,7 @@ func (v *Function) GetType() Type {
 // Argument represent an address of a function/method argument
 type Argument struct {
 	// Location of a function
-	Function
+	Function Interface
 	// Return type position
 	Index int
 }
@@ -198,7 +202,7 @@ func (a *Argument) GetType() Type {
 
 type ReturnType struct {
 	// Location of a function
-	Function
+	Function Interface
 	// Return type position
 	Index int
 }
@@ -249,16 +253,16 @@ func MakeVirtualFunction(v *Variable) *Function {
 	}
 }
 
-func MakeArgument(f *Function, index int) *Argument {
+func MakeArgument(i Interface, index int) *Argument {
 	return &Argument{
-		Function: *f,
+		Function: i,
 		Index:    index,
 	}
 }
 
-func MakeReturn(f *Function, index int) *ReturnType {
+func MakeReturn(i Interface, index int) *ReturnType {
 	return &ReturnType{
-		Function: *f,
+		Function: i,
 		Index:    index,
 	}
 }

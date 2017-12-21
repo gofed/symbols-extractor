@@ -74,9 +74,8 @@ type BinaryOp struct {
 	// As long as the operands are compatible with the operation, the contract holds.
 	OpToken token.Token
 	// Z = X op Y
-	X, Y typevars.Interface
-	Z    typevars.Interface
-	// TODO(jchaloup): add expected type
+	X, Y, Z      typevars.Interface
+	ExpectedType gotypes.DataType
 }
 
 type UnaryOp struct {

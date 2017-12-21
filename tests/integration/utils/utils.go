@@ -116,13 +116,13 @@ func CompareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 		}
 	case *typevars.Argument:
 		y := tested.(*typevars.Argument)
-		CompareTypeVars(t, &x.Function, &y.Function)
+		CompareTypeVars(t, x.Function, y.Function)
 		if x.Index != y.Index {
 			t.Errorf("Got Argument.Index %v, expected %v", y.Index, x.Index)
 		}
 	case *typevars.ReturnType:
 		y := tested.(*typevars.ReturnType)
-		CompareTypeVars(t, &x.Function, &y.Function)
+		CompareTypeVars(t, x.Function, y.Function)
 		if x.Index != y.Index {
 			t.Errorf("Got ReturnType.Index %v, expected %v", y.Index, x.Index)
 		}
