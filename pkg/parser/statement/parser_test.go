@@ -8,11 +8,12 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
+	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	"github.com/gofed/symbols-extractor/pkg/testing/utils"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
@@ -24,6 +25,7 @@ func prepareParser(pkgName string) *types.Config {
 		AllocatedSymbolsTable: alloctable.New(),
 		GlobalSymbolTable:     global.New(""),
 	}
+	c.SymbolsAccessor = accessors.NewAccessor(c.GlobalSymbolTable).SetCurrentTable(c.PackageName, c.SymbolTable)
 
 	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())
 
@@ -54,10 +56,10 @@ func prepareParser(pkgName string) *types.Config {
 //		  ff := fdecl.Recv.List[0]
 //}
 
-func createSymDefFunc(gopkg, recv, name string, method, pntr bool) *symboltable.SymbolDef {
+func createSymDefFunc(gopkg, recv, name string, method, pntr bool) *symbols.SymbolDef {
 	// help function which just create simple method/function SymbolDef
 	// - the test below is much more readable now
-	symdef := &symboltable.SymbolDef{
+	symdef := &symbols.SymbolDef{
 		Name:    name,
 		Package: gopkg,
 		Def:     &gotypes.Function{},
@@ -86,33 +88,33 @@ func TestParseFuncDecl(t *testing.T) {
 	funcSrc := "package funcdecl\ntype Sstr string\ntype Foo string\n"
 	testFDecl := []struct {
 		fDecl     []string
-		expectRes []*symboltable.SymbolDef
+		expectRes []*symbols.SymbolDef
 	}{
 		{
 			[]string{"func (s *Sstr, t *Sstr) Foo() Sstr { return Sstr{} }"},
-			[]*symboltable.SymbolDef{nil},
+			[]*symbols.SymbolDef{nil},
 		},
 		{
 			[]string{"func () Foo() Sstr { return Sstr{} }"},
-			[]*symboltable.SymbolDef{nil},
+			[]*symbols.SymbolDef{nil},
 		},
 		{
 			[]string{"func (s *Sstra) Foo() Sstr { return Sstr{} }"},
-			[]*symboltable.SymbolDef{nil},
+			[]*symbols.SymbolDef{nil},
 		},
 		{
 			[]string{"func (s *int) Foo() Sstr { return Sstr{} }"},
-			[]*symboltable.SymbolDef{nil},
+			[]*symbols.SymbolDef{nil},
 		},
 		{
 			[]string{"func (s *Sstr) Foo() Sstr { return Sstr{} }"},
-			[]*symboltable.SymbolDef{
+			[]*symbols.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 			},
 		},
 		{
 			[]string{"func (s *Foo) Foo() Sstr { return Sstr{} }"},
-			[]*symboltable.SymbolDef{
+			[]*symbols.SymbolDef{
 				createSymDefFunc(gopkg, "Foo", "Foo", true, true),
 			},
 		},
@@ -121,7 +123,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s *Sstr) Foo() Sstr { return Sstr{} }",
 				"func (s *Sstr) Foo2() Sstr { return Sstr{} }",
 			},
-			[]*symboltable.SymbolDef{
+			[]*symbols.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 				createSymDefFunc(gopkg, "Sstr", "Foo2", true, true),
 			},
@@ -131,7 +133,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s Sstr) Foo() Sstr { return Sstr{} }",
 				"func (s Sstr) Foo2() Sstr { return Sstr{} }",
 			},
-			[]*symboltable.SymbolDef{
+			[]*symbols.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, false),
 				createSymDefFunc(gopkg, "Sstr", "Foo2", true, false),
 			},
@@ -141,7 +143,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s *Sstr) Foo() Sstr { return Sstr{} }",
 				"func (s *Foo) Foo() Sstr { return Sstr{} }",
 			},
-			[]*symboltable.SymbolDef{
+			[]*symbols.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 				createSymDefFunc(gopkg, "Foo", "Foo", true, true),
 			},
@@ -151,7 +153,7 @@ func TestParseFuncDecl(t *testing.T) {
 				"func (s *Sstr) Foo() Sstr { return Sstr{} }",
 				"func Foo() Sstr { return Sstr{} }",
 			},
-			[]*symboltable.SymbolDef{
+			[]*symbols.SymbolDef{
 				createSymDefFunc(gopkg, "Sstr", "Foo", true, true),
 				createSymDefFunc(gopkg, "", "Foo", false, false),
 			},

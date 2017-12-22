@@ -12,10 +12,11 @@ import (
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	parsertypes "github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 )
 
 func parseBuiltin(config *parsertypes.Config) error {
@@ -67,6 +68,7 @@ func TestDataTypes(t *testing.T) {
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New(),
 	}
+	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
 
 	config.SymbolTable.Push()
 
@@ -85,6 +87,7 @@ func TestDataTypes(t *testing.T) {
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New(),
 	}
+	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
 
 	config.SymbolTable.Push()
 

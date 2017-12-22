@@ -1,10 +1,11 @@
-package symboltable
+package tables
 
 import (
 	"fmt"
 	"io/ioutil"
 	"log"
 
+	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -136,7 +137,7 @@ func (c *CGOTable) LoadFromFile(file string) error {
 	}
 
 	for _, typeDef := range cgo.Types {
-		if err := c.AddDataType(&SymbolDef{
+		if err := c.AddDataType(&symbols.SymbolDef{
 			Name:    typeDef.Name,
 			Package: "C",
 			Def:     typeDef.Type.DataType,
@@ -146,7 +147,7 @@ func (c *CGOTable) LoadFromFile(file string) error {
 	}
 
 	for _, varDef := range cgo.Variables {
-		if err := c.AddVariable(&SymbolDef{
+		if err := c.AddVariable(&symbols.SymbolDef{
 			Name:    varDef.Name,
 			Package: "C",
 			Def:     varDef.Type.DataType,
@@ -169,7 +170,7 @@ func (c *CGOTable) LoadFromFile(file string) error {
 			Params:  params,
 			Results: results,
 		}
-		if err := c.AddFunction(&SymbolDef{
+		if err := c.AddFunction(&symbols.SymbolDef{
 			Name:    fncDef.Name,
 			Package: "C",
 			Def:     f,
@@ -182,4 +183,4 @@ func (c *CGOTable) LoadFromFile(file string) error {
 	return nil
 }
 
-var _ SymbolLookable = &CGOTable{}
+var _ symbols.SymbolLookable = &CGOTable{}

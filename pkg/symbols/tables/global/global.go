@@ -8,16 +8,17 @@ import (
 	"path"
 	"strings"
 
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/golang/glog"
 )
 
 type Table struct {
 	symbolTableDir string
-	tables         map[string]symboltable.SymbolTable
+	tables         map[string]symbols.SymbolTable
 }
 
-func (t *Table) loadFromFile(pkg string) (symboltable.SymbolTable, error) {
+func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 	if t.symbolTableDir == "" {
 		return nil, fmt.Errorf("Symbol table dir not set")
 	}
@@ -34,14 +35,14 @@ func (t *Table) loadFromFile(pkg string) (symboltable.SymbolTable, error) {
 		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
 	}
 
-	var table symboltable.Table
+	var table tables.Table
 	if err := json.Unmarshal(raw, &table); err != nil {
 		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
 	}
 	return &table, nil
 }
 
-func (t *Table) Lookup(pkg string) (symboltable.SymbolTable, error) {
+func (t *Table) Lookup(pkg string) (symbols.SymbolTable, error) {
 	if table, ok := t.tables[pkg]; ok {
 		glog.Infof("Global symbol table %q found", pkg)
 		return table, nil
@@ -63,7 +64,7 @@ func (t *Table) Exists(pkg string) bool {
 	return ok
 }
 
-func (t *Table) Add(pkg string, st symboltable.SymbolTable) error {
+func (t *Table) Add(pkg string, st symbols.SymbolTable) error {
 	if _, ok := t.tables[pkg]; ok {
 		return fmt.Errorf("Symbol table for %q already exist in the global symbol table", pkg)
 	}
@@ -83,7 +84,7 @@ func (t *Table) Packages() []string {
 func New(symbolTableDir string) *Table {
 	return &Table{
 		symbolTableDir: symbolTableDir,
-		tables:         make(map[string]symboltable.SymbolTable, 0),
+		tables:         make(map[string]symbols.SymbolTable, 0),
 	}
 }
 
@@ -93,7 +94,7 @@ func (t *Table) Save(symboltabledir string) error {
 		if _, err := os.Stat(file); err == nil {
 			continue
 		}
-		st, ok := symbolTable.(*symboltable.Table)
+		st, ok := symbolTable.(*tables.Table)
 		if !ok {
 			continue
 		}
@@ -110,7 +111,7 @@ func (t *Table) Save(symboltabledir string) error {
 }
 
 func (t *Table) Load(symboltabledir string) error {
-	t.tables = make(map[string]symboltable.SymbolTable, 0)
+	t.tables = make(map[string]symbols.SymbolTable, 0)
 
 	files, err := ioutil.ReadDir(symboltabledir)
 	if err != nil {
@@ -126,7 +127,7 @@ func (t *Table) Load(symboltabledir string) error {
 
 		parts := strings.Split(f.Name(), ".")
 		name := strings.Join(parts[:len(parts)-1], "/")
-		var table symboltable.Table
+		var table tables.Table
 		if err := json.Unmarshal(raw, &table); err != nil {
 			return nil
 		}

@@ -7,15 +7,16 @@ import (
 	"os"
 	"path"
 
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
-func BuiltinSymbolTable() *symboltable.Table {
-	st := symboltable.NewTable()
+func BuiltinSymbolTable() *tables.Table {
+	st := tables.NewTable()
 	addType := func(name string) {
-		st.AddDataType(&symboltable.SymbolDef{
+		st.AddDataType(&symbols.SymbolDef{
 			Name:    name,
 			Package: "builtin",
 			Def: &gotypes.Builtin{
@@ -53,7 +54,7 @@ func ParseNonFunc(config *types.Config, astF *ast.File) error {
 				//fmt.Printf("=== %#v", spec)
 				switch d := spec.(type) {
 				case *ast.TypeSpec:
-					if err := config.SymbolTable.AddDataType(&symboltable.SymbolDef{
+					if err := config.SymbolTable.AddDataType(&symbols.SymbolDef{
 						Name:    d.Name.Name,
 						Package: config.PackageName,
 						Def:     nil,
@@ -66,7 +67,7 @@ func ParseNonFunc(config *types.Config, astF *ast.File) error {
 						return err
 					}
 
-					if err := config.SymbolTable.AddDataType(&symboltable.SymbolDef{
+					if err := config.SymbolTable.AddDataType(&symbols.SymbolDef{
 						Name:    d.Name.Name,
 						Package: config.PackageName,
 						Def:     typeDef,
@@ -83,7 +84,7 @@ func ParseNonFunc(config *types.Config, astF *ast.File) error {
 					if err != nil {
 						return err
 					}
-					config.SymbolTable.AddVariable(&symboltable.SymbolDef{
+					config.SymbolTable.AddVariable(&symbols.SymbolDef{
 						Name:    d.Names[0].Name,
 						Package: config.PackageName,
 						Def: &gotypes.Identifier{

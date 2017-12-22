@@ -7,10 +7,11 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	"github.com/gofed/symbols-extractor/pkg/testing/utils"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
@@ -23,6 +24,7 @@ func prepareParser(pkgName string) *types.Config {
 		GlobalSymbolTable:     global.New(""),
 		ContractTable:         contracttable.New(),
 	}
+	c.SymbolsAccessor = accessors.NewAccessor(c.GlobalSymbolTable).SetCurrentTable(c.PackageName, c.SymbolTable)
 
 	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())
 

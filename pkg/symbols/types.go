@@ -1,4 +1,4 @@
-package symboltable
+package symbols
 
 type SymbolLookable interface {
 	LookupVariable(key string) (*SymbolDef, error)

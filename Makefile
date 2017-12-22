@@ -115,15 +115,13 @@ build:
 	$(GO_BUILD) $(GO_BUILD_FLAGS) -o extract $(PROJECT_ROOT)/cmd $(WLOG)
 
 test:
-	$(RMLOG)
+	@ $(RMLOG)
 #	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser $(GLOG_FLAGS) \
 #            $(WLOG)
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/file \
-            $(GLOG_FLAGS) $(WLOG)
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/types $(WLOG)
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/expression \
-            $(GLOG_FLAGS) $(WLOG)
-	$(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/statement \
+	@ $(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/file \
+            $(PROJECT_ROOT)/pkg/types \
+						$(PROJECT_ROOT)/pkg/parser/expression \
+            $(PROJECT_ROOT)/pkg/parser/statement \
             $(GLOG_FLAGS) $(WLOG)
 
 integration:
