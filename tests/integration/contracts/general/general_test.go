@@ -120,7 +120,16 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			// l := []string{}
 			// v, ok := l[1]
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(4),
+			},
 			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Slice{
+					Elmtype: &gotypes.Builtin{Untyped: false, Def: "string"},
+				}),
+				Y: typevars.MakeVirtualVar(4),
+			},
+			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Slice{
 					Elmtype: &gotypes.Builtin{Untyped: false, Def: "string"},
 				}),
@@ -147,7 +156,17 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			// m := map[int]string{}
 			// mv, mok := m[1]
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(5),
+			},
 			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Map{
+					Keytype:   &gotypes.Builtin{Untyped: false, Def: "int"},
+					Valuetype: &gotypes.Builtin{Untyped: false, Def: "string"},
+				}),
+				Y: typevars.MakeVirtualVar(5),
+			},
+			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "int"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "string"},
@@ -230,6 +249,17 @@ func TestGeneralContracts(t *testing.T) {
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Struct{
+					Fields: []gotypes.StructFieldsItem{
+						{
+							Name: "a",
+							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+						},
+					},
+				}),
+				Y: typevars.MakeVirtualVar(7),
+			},
+			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						{

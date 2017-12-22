@@ -60,6 +60,10 @@ func TestMultiPackageContracts(t *testing.T) {
 				X: typevars.MakeVar("pkgA", "A", ""),
 				Y: typevars.MakeVirtualVar(1),
 			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Selector{Item: "A", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
+				Y: typevars.MakeVirtualVar(1),
+			},
 			&contracts.UnaryOp{
 				X:       typevars.MakeVirtualVar(1),
 				Y:       typevars.MakeVirtualVar(2),
@@ -93,6 +97,9 @@ func TestMultiPackageContracts(t *testing.T) {
 			//   pkgA.A{1},
 			//   {2},
 			// }
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(4),
+			},
 			&contracts.HasField{
 				X:     typevars.MakeVirtualVar(5),
 				Index: 0,
@@ -104,6 +111,10 @@ func TestMultiPackageContracts(t *testing.T) {
 			// The first item has its type given explicitly
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVar("pkgA", "A", ""),
+				Y: typevars.MakeVirtualVar(5),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Selector{Item: "A", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
 				Y: typevars.MakeVirtualVar(5),
 			},
 			&contracts.IsCompatibleWith{
@@ -119,12 +130,16 @@ func TestMultiPackageContracts(t *testing.T) {
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// The second item has not its type given explicitly => no contract
-			&contracts.IsCompatibleWith{
+			&contracts.PropagatesTo{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(4)),
 				Y: typevars.MakeVirtualVar(6),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVar("pkgA", "B", ""),
+				Y: typevars.MakeVirtualVar(4),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Selector{Item: "B", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
 				Y: typevars.MakeVirtualVar(4),
 			},
 			&contracts.PropagatesTo{
@@ -140,9 +155,15 @@ func TestMultiPackageContracts(t *testing.T) {
 			// 		pkgA.A{f: 2},
 			// 	},
 			// }
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(7),
+			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapKey(typevars.MakeVirtualVar(7)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+			},
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(8),
 			},
 			&contracts.HasField{
 				X:     typevars.MakeVirtualVar(9),
@@ -152,16 +173,20 @@ func TestMultiPackageContracts(t *testing.T) {
 				X: typevars.MakeField(typevars.MakeVirtualVar(9), "", 0),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
-			&contracts.IsCompatibleWith{
+			&contracts.PropagatesTo{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(8)),
 				Y: typevars.MakeVirtualVar(9),
 			},
-			&contracts.IsCompatibleWith{
+			&contracts.PropagatesTo{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(8)),
 				Y: typevars.MakeVirtualVar(10),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVar("pkgA", "B", ""),
+				Y: typevars.MakeVirtualVar(8),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Selector{Item: "B", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
 				Y: typevars.MakeVirtualVar(8),
 			},
 			&contracts.IsCompatibleWith{
@@ -171,6 +196,9 @@ func TestMultiPackageContracts(t *testing.T) {
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapKey(typevars.MakeVirtualVar(7)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+			},
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(11),
 			},
 			&contracts.HasField{
 				X:     typevars.MakeVirtualVar(12),
@@ -184,16 +212,24 @@ func TestMultiPackageContracts(t *testing.T) {
 				X: typevars.MakeVar("pkgA", "A", ""),
 				Y: typevars.MakeVirtualVar(12),
 			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Selector{Item: "A", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
+				Y: typevars.MakeVirtualVar(12),
+			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(11)),
 				Y: typevars.MakeVirtualVar(12),
 			},
-			&contracts.IsCompatibleWith{
+			&contracts.PropagatesTo{
 				X: typevars.MakeMapValue(typevars.MakeVirtualVar(7)),
 				Y: typevars.MakeVirtualVar(11),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVar("pkgA", "C", ""),
+				Y: typevars.MakeVirtualVar(7),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Selector{Item: "C", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
 				Y: typevars.MakeVirtualVar(7),
 			},
 			&contracts.PropagatesTo{
