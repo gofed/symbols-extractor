@@ -41,6 +41,7 @@ func storePackage(config *types.Config) {
 
 func ParsePackage(t *testing.T, config *types.Config, fileParser *fileparser.FileParser, packageName, filename, pkg string) error {
 	config.PackageName = pkg
+	config.SymbolsAccessor.SetCurrentTable(pkg, config.SymbolTable)
 
 	payload := makePayload(t, packageName, filename)
 	if e := fileParser.Parse(payload); e != nil {

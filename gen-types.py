@@ -252,7 +252,7 @@ class DataTypeGenerator(object):
 def printSymbolDefinition(dataTypes):
         template_str = """
 
-package symboltable
+package symbols
 
 import (
     "encoding/json"
@@ -320,5 +320,5 @@ if __name__ == "__main__":
     with open("pkg/types/types.go", "w") as file:
         file.write(str(DataTypeGenerator(data["definitions"], dataTypes).parse()))
 
-    with open("pkg/parser/symboltable/symbol.go", "w") as file:
+    with open("pkg/symbols/symbol.go", "w") as file:
         file.write(printSymbolDefinition(dataTypes))

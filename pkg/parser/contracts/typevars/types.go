@@ -3,7 +3,7 @@ package typevars
 import (
 	"fmt"
 
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -59,7 +59,7 @@ func (v *Variable) String() string {
 	return fmt.Sprintf("%v#%v#%v", v.Package, v.Name, v.Pos)
 }
 
-func VariableFromSymbolDef(def *symboltable.SymbolDef) *Variable {
+func VariableFromSymbolDef(def *symbols.SymbolDef) *Variable {
 	return &Variable{
 		Name:    def.Name,
 		Pos:     def.Pos,
@@ -67,7 +67,7 @@ func VariableFromSymbolDef(def *symboltable.SymbolDef) *Variable {
 	}
 }
 
-func FunctionFromSymbolDef(def *symboltable.SymbolDef) *Function {
+func FunctionFromSymbolDef(def *symbols.SymbolDef) *Function {
 	return &Function{
 		Name:    def.Name,
 		Pos:     def.Pos,

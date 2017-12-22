@@ -16,11 +16,12 @@ import (
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
@@ -115,7 +116,7 @@ type ProjectParser struct {
 	cgoSymbolsPath       string
 	// Global symbol table
 	globalSymbolTable *global.Table
-	cgoSymbolTable    *symboltable.CGOTable
+	cgoSymbolTable    *tables.CGOTable
 	// For each package and its file store its alloc symbol table
 	globalAllocSymbolTable *allocglobal.Table
 	// package stack
@@ -284,6 +285,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 		SymbolTable:       c.SymbolTable,
 		GlobalSymbolTable: pp.globalSymbolTable,
 		ContractTable:     contracttable.New(),
+		SymbolsAccessor:   accessors.NewAccessor(pp.globalSymbolTable).SetCurrentTable(packagePath, c.SymbolTable),
 	}
 
 	config.TypeParser = typeparser.New(config)
@@ -447,7 +449,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 func (pp *ProjectParser) Parse() error {
 	// set C pseudo-package
 	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
-	pp.cgoSymbolTable = symboltable.NewCGOTable()
+	pp.cgoSymbolTable = tables.NewCGOTable()
 	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable); err != nil {
 		return fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
 	}

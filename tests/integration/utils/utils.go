@@ -17,11 +17,12 @@ import (
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/global"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable/stack"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	parsertypes "github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 )
 
 func parseBuiltin(config *parsertypes.Config) error {
@@ -65,6 +66,8 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 		ContractTable:         contracttable.New(),
 	}
 
+	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
+
 	config.SymbolTable.Push()
 
 	config.TypeParser = typeparser.New(config)
@@ -82,6 +85,8 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New(),
 	}
+
+	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
 
 	config.SymbolTable.Push()
 

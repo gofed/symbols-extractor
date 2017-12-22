@@ -10,8 +10,8 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
@@ -144,6 +144,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 			if err != nil {
 				return nil, err
 			}
+
 			// If the CL type is explicitly given, it has higher priority over
 			// itemOf relation. Thus the type propagates to CL's elements and
 			// if them itemOf relation changes to IsCompatibleWith contract.
@@ -203,7 +204,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 }
 
 // *gotypes.Struct
-func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symboltable.SymbolDef) (typevars.Interface, error) {
+func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symbols.SymbolDef) (typevars.Interface, error) {
 	glog.Infof("Processing parseCompositeLitStructElements")
 	structOutputTypeVar := ep.Config.ContractTable.NewVirtualVar()
 
@@ -280,30 +281,6 @@ func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, 
 	return structOutputTypeVar, nil
 }
 
-func (ep *Parser) findFirstNonidDataType(typeDef gotypes.DataType) (*types.ExprAttribute, error) {
-	var symbolDef *symboltable.SymbolDef
-	switch typeDefType := typeDef.(type) {
-	case *gotypes.Selector:
-		_, def, err := ep.retrieveQidDataType(typeDefType.Prefix, &ast.Ident{Name: typeDefType.Item})
-		if err != nil {
-			return nil, err
-		}
-		symbolDef = def
-	case *gotypes.Identifier:
-		def, _, err := ep.Config.Lookup(typeDefType)
-		if err != nil {
-			return nil, err
-		}
-		symbolDef = def
-	default:
-		return types.ExprAttributeFromDataType(typeDef), nil
-	}
-	if symbolDef.Def == nil {
-		return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
-	}
-	return ep.findFirstNonidDataType(symbolDef.Def)
-}
-
 // parseCompositeLit consumes ast.CompositeLit and produces data type of the root composite literal
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (*types.ExprAttribute, error) {
 	glog.Infof("Processing CompositeLit: %#v\t\ttypeDef: %#v\n", lit, typeDef)
@@ -354,7 +331,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 	}
 
 	glog.Infof("litTypedef: %#v", litTypedef)
-	nonIdentLitTypeDef, err := ep.findFirstNonidDataType(litTypedef)
+	nonIdentLitTypeDef, err := ep.SymbolsAccessor.FindFirstNonidDataType(litTypedef)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +339,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
 	var typeVar typevars.Interface
-	switch litTypeExpr := nonIdentLitTypeDef.DataTypeList[0].(type) {
+	switch litTypeExpr := nonIdentLitTypeDef.(type) {
 	case *gotypes.Struct:
 		// anonymous structure -> we can ignore field's allocation
 		var err error
@@ -380,12 +357,12 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 		// 		origLitTypedef = nil
 		// 	}
 		// }
-		typeVar, err = ep.parseKeyValueLikeExpr(origLitTypedef, lit, nonIdentLitTypeDef.DataTypeList[0])
+		typeVar, err = ep.parseKeyValueLikeExpr(origLitTypedef, lit, nonIdentLitTypeDef)
 		if err != nil {
 			return nil, err
 		}
 	default:
-		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef.DataTypeList[0]))
+		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef))
 	}
 
 	// If the CL type is explicitly given, it has higher priority over
@@ -435,7 +412,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
 			// TODO(jchaloup): return symbol origin
-			if st == symboltable.FunctionSymbol {
+			if st == symbols.FunctionSymbol {
 				return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
 					typevars.FunctionFromSymbolDef(def),
 				), nil
@@ -455,7 +432,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 
 	if symbolErr == nil {
 		switch symbolType {
-		case symboltable.VariableSymbol:
+		case symbols.VariableSymbol:
 			switch ident.Name {
 			case "true", "false":
 				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(
@@ -472,7 +449,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			default:
 				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
 			}
-		case symboltable.FunctionSymbol:
+		case symbols.FunctionSymbol:
 			return types.ExprAttributeFromDataType(symbolDef.Def).AddTypeVar(
 				typevars.FunctionFromSymbolDef(symbolDef),
 			), nil
@@ -522,18 +499,18 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 		yAttr = types.ExprAttributeFromDataType(&gotypes.Pointer{Def: attr.DataTypeList[0]})
 	// channel
 	case token.ARROW:
-		nonIdentDefAttr, err := ep.findFirstNonidDataType(attr.DataTypeList[0])
+		nonIdentDefAttr, err := ep.SymbolsAccessor.FindFirstNonidDataType(attr.DataTypeList[0])
 		if err != nil {
 			return nil, err
 		}
-		if nonIdentDefAttr.DataTypeList[0].GetType() != gotypes.ChannelType {
-			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead at %v", nonIdentDefAttr.DataTypeList[0].GetType(), expr.Pos())
+		if nonIdentDefAttr.GetType() != gotypes.ChannelType {
+			return nil, fmt.Errorf("<-OP operator expectes OP to be a channel, got %v instead at %v", nonIdentDefAttr.GetType(), expr.Pos())
 		}
 		ep.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
 			X: attr.TypeVarList[0],
 			Y: y,
 		})
-		yAttr = types.ExprAttributeFromDataType(nonIdentDefAttr.DataTypeList[0].(*gotypes.Channel).Value)
+		yAttr = types.ExprAttributeFromDataType(nonIdentDefAttr.(*gotypes.Channel).Value)
 		// other
 	case token.XOR, token.OR, token.SUB, token.NOT, token.ADD:
 		// is token.OR really a unary operator?
@@ -901,8 +878,8 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
 		// local definition
-		var def *symboltable.SymbolDef
-		var defType symboltable.SymbolType
+		var def *symbols.SymbolDef
+		var defType symbols.SymbolType
 		var err error
 
 		if typeDef.Package == "" || typeDef.Package == ep.PackageName {
@@ -931,7 +908,7 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []
 		}
 		return ep.getFunctionDef(def.Def)
 	case *gotypes.Selector:
-		_, sd, err := ep.retrieveQidDataType(typeDef.Prefix, &ast.Ident{Name: typeDef.Item})
+		_, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(typeDef.Prefix, &ast.Ident{Name: typeDef.Item})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1271,29 +1248,9 @@ func (ep *Parser) parseStructType(expr *ast.StructType) (*types.ExprAttribute, e
 	return types.ExprAttributeFromDataType(def), err
 }
 
-func (ep *Parser) retrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ident) (symboltable.SymbolLookable, *symboltable.SymbolDef, error) {
-	// qid.structtype expected
-	qid, ok := qidprefix.(*gotypes.Packagequalifier)
-	if !ok {
-		return nil, nil, fmt.Errorf("Expecting a qid.structtype when retrieving a struct from a selector expression")
-	}
-	glog.Infof("Trying to retrieve a symbol %#v from package %v\n", item.String(), qid.Path)
-	qidst, err := ep.GlobalSymbolTable.Lookup(qid.Path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
-	}
-
-	structDef, piErr := qidst.LookupDataType(item.String())
-	if piErr != nil {
-		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", item.String(), qid.Path, piErr)
-	}
-	ep.AllocatedSymbolsTable.AddDataType(qid.Path, item.Name, ep.Config.SymbolPos(item.Pos()))
-	return qidst, structDef, nil
-}
-
 type dataTypeFieldAccessor struct {
-	symbolTable symboltable.SymbolLookable
-	dataTypeDef *symboltable.SymbolDef
+	symbolTable symbols.SymbolLookable
+	dataTypeDef *symbols.SymbolDef
 	field       *ast.Ident
 	methodsOnly bool
 	fieldsOnly  bool
@@ -1339,7 +1296,7 @@ func (ep *Parser) retrieveDataTypeField(accessor *dataTypeFieldAccessor) (*types
 			// in which case all methods of the type are ignored
 			// I.e. with 'type A B' data type of B is data type of A. However, methods of type B are not inherited.
 
-			var pkgST symboltable.SymbolLookable
+			var pkgST symbols.SymbolLookable
 			if ident.Package == "" || ident.Package == ep.PackageName {
 				pkgST = ep.SymbolTable
 			} else {
@@ -1373,7 +1330,7 @@ func (ep *Parser) retrieveDataTypeField(accessor *dataTypeFieldAccessor) (*types
 
 			selector := accessor.dataTypeDef.Def.(*gotypes.Selector)
 			// qid?
-			st, sd, err := ep.Config.RetrieveQidDataType(selector)
+			st, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(selector.Prefix, &ast.Ident{Name: selector.Item})
 			if err != nil {
 				return nil, err
 			}
@@ -1401,8 +1358,8 @@ func (ep *Parser) retrieveDataTypeField(accessor *dataTypeFieldAccessor) (*types
 	}
 
 	type embeddedDataTypesItem struct {
-		symbolTable symboltable.SymbolLookable
-		symbolDef   *symboltable.SymbolDef
+		symbolTable symbols.SymbolLookable
+		symbolDef   *symbols.SymbolDef
 	}
 	var embeddedDataTypes []embeddedDataTypesItem
 
@@ -1463,7 +1420,7 @@ ITEMS_LOOP:
 					glog.Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
-				st, sd, err := ep.retrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
+				st, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
 				if err != nil {
 					return nil, err
 				}
@@ -1522,15 +1479,15 @@ ITEMS_LOOP:
 	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", accessor.field.String(), accessor.dataTypeDef)
 }
 
-func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLookable, interfaceDefsymbol *symboltable.SymbolDef, method string) (*types.ExprAttribute, error) {
+func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symbols.SymbolLookable, interfaceDefsymbol *symbols.SymbolDef, method string) (*types.ExprAttribute, error) {
 	glog.Infof("Retrieving Interface method %q from %#v\n", method, interfaceDefsymbol)
 	if interfaceDefsymbol.Def.GetType() != gotypes.InterfaceType {
 		return nil, fmt.Errorf("Trying to retrieve a %v method from a non-interface data type: %#v", method, interfaceDefsymbol.Def)
 	}
 
 	type embeddedInterfacesItem struct {
-		symbolTable symboltable.SymbolLookable
-		symbolDef   *symboltable.SymbolDef
+		symbolTable symbols.SymbolLookable
+		symbolDef   *symbols.SymbolDef
 	}
 	var embeddedInterfaces []embeddedInterfacesItem
 
@@ -1587,7 +1544,7 @@ func (ep *Parser) retrieveInterfaceMethod(pkgsymboltable symboltable.SymbolLooka
 					glog.Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
-				st, sd, err := ep.retrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
+				st, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
 				if err != nil {
 					return nil, err
 				}
@@ -1634,8 +1591,8 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 		dataTypeIdent = pointer.X
 	}
 
-	var typeSymbolTable symboltable.SymbolLookable
-	var typeSymbolDef *symboltable.SymbolDef
+	var typeSymbolTable symbols.SymbolLookable
+	var typeSymbolDef *symbols.SymbolDef
 
 	switch dtExpr := dataTypeIdent.(type) {
 	case *ast.Ident:
@@ -1664,7 +1621,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the qid instead", qidAttr.DataTypeList[0])
 		}
 
-		st, sd, err := ep.retrieveQidDataType(qidAttr.DataTypeList[0], &ast.Ident{Name: dtExpr.Sel.String()})
+		st, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(qidAttr.DataTypeList[0], &ast.Ident{Name: dtExpr.Sel.String()})
 		if err != nil {
 			return false, nil, err
 		}
@@ -1780,7 +1737,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 				byteSlice, _ := json.Marshal(def)
 				glog.Infof("Looking for: %v\n", string(byteSlice))
 			}
-			structDefsymbol, symbolTable, err := ep.Config.LookupDataType(def)
+			structDefsymbol, symbolTable, err := ep.SymbolsAccessor.LookupDataType(def)
 			if err != nil {
 				return nil, fmt.Errorf("Cannot retrieve identifier %q from the symbol table: %v", def.Def, err)
 			}
@@ -1807,7 +1764,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			if !ok {
 				return nil, fmt.Errorf("Trying to retrieve a %v field from a pointer to non-qualified struct data type: %#v", expr.Sel.Name, def)
 			}
-			structDefsymbol, symbolTable, err := ep.Config.LookupDataType(&gotypes.Identifier{Def: def.Item, Package: pq.Path})
+			structDefsymbol, symbolTable, err := ep.SymbolsAccessor.LookupDataType(&gotypes.Identifier{Def: def.Item, Package: pq.Path})
 			if err != nil {
 				return nil, err
 			}
@@ -1825,7 +1782,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			// anonymous struct
 			attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 				symbolTable: ep.SymbolTable,
-				dataTypeDef: &symboltable.SymbolDef{Def: def},
+				dataTypeDef: &symbols.SymbolDef{Def: def},
 				field:       &ast.Ident{Name: expr.Sel.Name},
 			})
 			if err != nil {
@@ -1838,7 +1795,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		}
 	case *gotypes.Identifier:
 		// Get struct/interface definition given by its identifier
-		defSymbol, symbolTable, err := ep.Config.LookupDataType(xType)
+		defSymbol, symbolTable, err := ep.SymbolsAccessor.LookupDataType(xType)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot retrieve %v from the symbol table", xType.Def)
 		}
@@ -1880,7 +1837,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		default:
 			// check data types with receivers
 			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", expr.Sel.Name, xType)
-			def, err := ep.Config.LookupMethod(xType, expr.Sel.Name)
+			def, err := ep.SymbolsAccessor.LookupMethod(xType, expr.Sel.Name)
 			if err != nil {
 				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v at %v: %v", defSymbol, expr.Pos(), err)
 			}
@@ -1891,7 +1848,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 	case *gotypes.Struct:
 		attr, err := ep.retrieveDataTypeField(&dataTypeFieldAccessor{
 			symbolTable: ep.SymbolTable,
-			dataTypeDef: &symboltable.SymbolDef{
+			dataTypeDef: &symbols.SymbolDef{
 				Name:    "",
 				Package: "",
 				Def:     xType,
@@ -1905,7 +1862,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		outputField = expr.Sel.Name
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous
-		attr, err := ep.retrieveInterfaceMethod(ep.SymbolTable, &symboltable.SymbolDef{
+		attr, err := ep.retrieveInterfaceMethod(ep.SymbolTable, &symbols.SymbolDef{
 			Name:    "",
 			Package: "",
 			Def:     xType,
@@ -1917,7 +1874,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		outputField = expr.Sel.Name
 	case *gotypes.Selector:
 		// qid.structtype expected
-		st, sd, err := ep.retrieveQidDataType(xType.Prefix, &ast.Ident{Name: xType.Item})
+		st, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(xType.Prefix, &ast.Ident{Name: xType.Item})
 		if err != nil {
 			return nil, err
 		}
@@ -2007,20 +1964,20 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	// c[1]
 	if indexExpr.GetType() == gotypes.IdentifierType || indexExpr.GetType() == gotypes.SelectorType {
 		for {
-			var symbolDef *symboltable.SymbolDef
+			var symbolDef *symbols.SymbolDef
 			if indexExpr.GetType() == gotypes.IdentifierType {
 				xType := indexExpr.(*gotypes.Identifier)
 
 				if xType.Package == "builtin" {
 					break
 				}
-				def, _, err := ep.Config.LookupDataType(xType)
+				def, _, err := ep.SymbolsAccessor.LookupDataType(xType)
 				if err != nil {
 					return nil, err
 				}
 				symbolDef = def
 			} else {
-				_, sd, err := ep.retrieveQidDataType(indexExpr.(*gotypes.Selector).Prefix, &ast.Ident{Name: indexExpr.(*gotypes.Selector).Item})
+				_, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(indexExpr.(*gotypes.Selector).Prefix, &ast.Ident{Name: indexExpr.(*gotypes.Selector).Item})
 				if err != nil {
 					return nil, err
 				}
