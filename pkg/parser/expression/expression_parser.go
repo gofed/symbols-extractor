@@ -92,6 +92,10 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 		return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
 	}
 
+	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
+		X: outputTypeVar,
+	})
+
 	for _, litElement := range lit.Elts {
 		var valueExpr ast.Expr
 		if kvExpr, ok := litElement.(*ast.KeyValueExpr); ok {
@@ -140,14 +144,26 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 			if err != nil {
 				return nil, err
 			}
-			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-				X:            valueTypeVar,
-				Y:            attr.TypeVarList[0],
-				ExpectedType: attr.DataTypeList[0],
-			})
+			// If the CL type is explicitly given, it has higher priority over
+			// itemOf relation. Thus the type propagates to CL's elements and
+			// if them itemOf relation changes to IsCompatibleWith contract.
+			if clExpr.Type == nil {
+				ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+					X:            valueTypeVar,
+					Y:            attr.TypeVarList[0],
+					ExpectedType: attr.DataTypeList[0],
+				})
+			} else {
+				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:            valueTypeVar,
+					Y:            attr.TypeVarList[0],
+					ExpectedType: attr.DataTypeList[0],
+				})
+			}
 			continue
 		}
 
+		// E.g. in case the value is a return value of a function or a basic literal
 		attr, err := ep.Parse(valueExpr)
 		if err != nil {
 			return nil, err
@@ -370,6 +386,21 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 		}
 	default:
 		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef.DataTypeList[0]))
+	}
+
+	// If the CL type is explicitly given, it has higher priority over
+	// itemOf relation. Thus the type propagates to CL's elements and
+	// if them itemOf relation changes to IsCompatibleWith contract.
+	if lit.Type != nil {
+		def, err := ep.TypeParser.Parse(lit.Type)
+		if err != nil {
+			return nil, err
+		}
+		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X:            typevars.MakeConstant(def),
+			Y:            typeVar,
+			ExpectedType: def,
+		})
 	}
 
 	return types.ExprAttributeFromDataType(litTypedef).AddTypeVar(typeVar), nil

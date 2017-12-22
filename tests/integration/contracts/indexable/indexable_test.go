@@ -31,6 +31,9 @@ func TestIndexableContracts(t *testing.T) {
 			// }
 			//
 			// Int <-> 1
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(1),
+			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(1)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
@@ -45,6 +48,16 @@ func TestIndexableContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(&gotypes.Slice{
+					Elmtype: &gotypes.Identifier{
+						Def:     "Int",
+						Package: packageName,
+					},
+				}),
+				Y: typevars.MakeVirtualVar(1),
+			},
+
+			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),
 				Y: typevars.MakeLocalVar("list", vars["list"]),
 			},
@@ -53,6 +66,9 @@ func TestIndexableContracts(t *testing.T) {
 			// 	"3": 3,
 			// }
 			//
+			&contracts.IsIndexable{
+				X: typevars.MakeVirtualVar(2),
+			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapKey(typevars.MakeVirtualVar(2)),
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
@@ -62,6 +78,13 @@ func TestIndexableContracts(t *testing.T) {
 				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(&gotypes.Map{
+					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
+					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
+				}),
+				Y: typevars.MakeVirtualVar(2),
+			},
+			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(&gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
