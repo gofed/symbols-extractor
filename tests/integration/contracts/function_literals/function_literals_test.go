@@ -39,7 +39,7 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeVirtualFunction(typevars.MakeVirtualVar(1)),
+				X: typevars.MakeVirtualVar(1),
 				Y: typevars.MakeLocalVar("ffA", vars["ffA"]),
 			},
 			&contracts.IsInvocable{

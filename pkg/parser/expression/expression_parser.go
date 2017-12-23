@@ -414,7 +414,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			// TODO(jchaloup): return symbol origin
 			if st == symbols.FunctionSymbol {
 				return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
-					typevars.FunctionFromSymbolDef(def),
+					typevars.VariableFromSymbolDef(def),
 				), nil
 			}
 			return types.ExprAttributeFromDataType(def.Def).AddTypeVar(
@@ -451,7 +451,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			}
 		case symbols.FunctionSymbol:
 			return types.ExprAttributeFromDataType(symbolDef.Def).AddTypeVar(
-				typevars.FunctionFromSymbolDef(symbolDef),
+				typevars.VariableFromSymbolDef(symbolDef),
 			), nil
 		default:
 			return nil, fmt.Errorf("Unsupported symbol type: %v", symbolType)
@@ -940,7 +940,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
 	// params = list of function/method parameters definition (from its signature)
-	processArgs := func(functionTypeVar typevars.Interface, args []ast.Expr, params []gotypes.DataType) error {
+	processArgs := func(functionTypeVar *typevars.Variable, args []ast.Expr, params []gotypes.DataType) error {
 		// TODO(jchaloup): check the arguments can be assigned to the parameters
 		// TODO(jchaloup): generate type contract for each argument
 		if params != nil {
@@ -1101,10 +1101,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		return nil, fmt.Errorf("Symbol %#v of %#v to be called is not a function", funcType, expr)
 	}
 
-	var f typevars.Interface
+	var f *typevars.Variable
 	switch d := attr.TypeVarList[0].(type) {
-	case *typevars.Function:
-		f = d
 	case *typevars.Variable:
 		f = typevars.MakeVar(d.Package, d.Name, d.Pos)
 	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
@@ -1235,7 +1233,7 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 	})
 
 	return types.ExprAttributeFromDataType(def).AddTypeVar(
-		typevars.MakeVirtualFunction(newVar),
+		newVar,
 	), err
 }
 

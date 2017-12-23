@@ -35,16 +35,16 @@ func TestFunctionInvocationContracts(t *testing.T) {
 			// aa := a + g1(a)
 			//
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(packageName, "g1", vars["g1"]),
+				F:         typevars.MakeVar(packageName, "g1", vars["g1"]),
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeLocalVar("a", vars["a"]),
-				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g1", vars["g1"]), 0),
+				Y: typevars.MakeArgument(typevars.MakeVar(packageName, "g1", vars["g1"]), 0),
 			},
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("a", vars["a"]),
-				Y:       typevars.MakeReturn(typevars.MakeFunction(packageName, "g1", vars["g1"]), 0),
+				Y:       typevars.MakeReturn(typevars.MakeVar(packageName, "g1", vars["g1"]), 0),
 				Z:       typevars.MakeVirtualVar(1),
 				OpToken: token.ADD,
 			},
@@ -56,16 +56,16 @@ func TestFunctionInvocationContracts(t *testing.T) {
 			// ab := a + g2(a)
 			//
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(packageName, "g2", vars["g2"]),
+				F:         typevars.MakeVar(packageName, "g2", vars["g2"]),
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeLocalVar("a", vars["a"]),
-				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g2", vars["g2"]), 0),
+				Y: typevars.MakeArgument(typevars.MakeVar(packageName, "g2", vars["g2"]), 0),
 			},
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("a", vars["a"]),
-				Y:       typevars.MakeReturn(typevars.MakeFunction(packageName, "g2", vars["g2"]), 0),
+				Y:       typevars.MakeReturn(typevars.MakeVar(packageName, "g2", vars["g2"]), 0),
 				Z:       typevars.MakeVirtualVar(2),
 				OpToken: token.ADD,
 			},
@@ -77,24 +77,24 @@ func TestFunctionInvocationContracts(t *testing.T) {
 			// b := a + g(a, a, a)
 			//
 			&contracts.IsInvocable{
-				F:         typevars.MakeFunction(packageName, "g", vars["g"]),
+				F:         typevars.MakeVar(packageName, "g", vars["g"]),
 				ArgsCount: 3,
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeLocalVar("a", vars["a"]),
-				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g", vars["g"]), 0),
+				Y: typevars.MakeArgument(typevars.MakeVar(packageName, "g", vars["g"]), 0),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeLocalVar("a", vars["a"]),
-				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g", vars["g"]), 1),
+				Y: typevars.MakeArgument(typevars.MakeVar(packageName, "g", vars["g"]), 1),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeLocalVar("a", vars["a"]),
-				Y: typevars.MakeArgument(typevars.MakeFunction(packageName, "g", vars["g"]), 2),
+				Y: typevars.MakeArgument(typevars.MakeVar(packageName, "g", vars["g"]), 2),
 			},
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("a", vars["a"]),
-				Y:       typevars.MakeReturn(typevars.MakeFunction(packageName, "g", vars["g"]), 0),
+				Y:       typevars.MakeReturn(typevars.MakeVar(packageName, "g", vars["g"]), 0),
 				Z:       typevars.MakeVirtualVar(3),
 				OpToken: token.ADD,
 			},
