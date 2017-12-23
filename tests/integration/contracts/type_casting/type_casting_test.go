@@ -23,14 +23,14 @@ func TestTypeCastingContracts(t *testing.T) {
 		[]contracts.Contract{
 			// asA := Int(1)
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y: typevars.MakeConstant(&gotypes.Identifier{
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Identifier{
 					Def:     "Int",
 					Package: packageName,
 				}),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Identifier{
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
 					Def:     "Int",
 					Package: packageName,
 				}),
@@ -39,10 +39,10 @@ func TestTypeCastingContracts(t *testing.T) {
 			// asB := asA.(int)
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeLocalVar("asA", vars["asA"]),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "int"}),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "int"}),
 				Y: typevars.MakeLocalVar("asB", vars["asB"]),
 			},
 		})

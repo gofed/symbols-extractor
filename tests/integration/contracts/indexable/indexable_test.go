@@ -36,10 +36,10 @@ func TestIndexableContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(1)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Slice{
+				X: typevars.MakeConstant(packageName, &gotypes.Slice{
 					Elmtype: &gotypes.Identifier{
 						Def:     "Int",
 						Package: packageName,
@@ -48,7 +48,7 @@ func TestIndexableContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Slice{
+				X: typevars.MakeConstant(packageName, &gotypes.Slice{
 					Elmtype: &gotypes.Identifier{
 						Def:     "Int",
 						Package: packageName,
@@ -71,21 +71,21 @@ func TestIndexableContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapKey(typevars.MakeVirtualVar(2)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapValue(typevars.MakeVirtualVar(2)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Map{
+				X: typevars.MakeConstant(packageName, &gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
 				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Map{
+				X: typevars.MakeConstant(packageName, &gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
@@ -96,11 +96,11 @@ func TestIndexableContracts(t *testing.T) {
 				Y: typevars.MakeLocalVar("mapV", vars["mapV"]),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeListKey(),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeListKey(),
 			},
 			&contracts.IsIndexable{
@@ -115,7 +115,7 @@ func TestIndexableContracts(t *testing.T) {
 				X: typevars.MakeLocalVar("la", vars["la"]),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeListKey(),
 			},
 			&contracts.PropagatesTo{
@@ -127,8 +127,8 @@ func TestIndexableContracts(t *testing.T) {
 				X: typevars.MakeLocalVar("mapV", vars["mapV"]),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
-				Y: typevars.MakeConstantMapKey(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstantMapKey(typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"})),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeMapValue(typevars.MakeLocalVar("mapV", vars["mapV"])),
@@ -136,14 +136,14 @@ func TestIndexableContracts(t *testing.T) {
 			},
 			//sa := "ahoj"[0]
 			&contracts.IsIndexable{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeListKey(),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstantListValue(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstantListValue(typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"})),
 				Y: typevars.MakeLocalVar("sa", vars["sa"]),
 			},
 		})

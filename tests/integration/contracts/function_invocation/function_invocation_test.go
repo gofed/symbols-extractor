@@ -28,7 +28,7 @@ func TestFunctionInvocationContracts(t *testing.T) {
 		"testdata/function_invocation.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			//

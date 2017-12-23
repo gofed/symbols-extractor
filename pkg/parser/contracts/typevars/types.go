@@ -232,9 +232,10 @@ func MakeVirtualVar(index int) *Variable {
 	}
 }
 
-func MakeConstant(datatype gotypes.DataType) *Constant {
+func MakeConstant(pkg string, datatype gotypes.DataType) *Constant {
 	return &Constant{
 		DataType: datatype,
+		Package:  pkg,
 	}
 }
 
@@ -277,9 +278,9 @@ func MakeListValue(i Interface) *ListValue {
 	}
 }
 
-func MakeConstantListValue(datatype gotypes.DataType) *ListValue {
+func MakeConstantListValue(c *Constant) *ListValue {
 	return &ListValue{
-		Interface: MakeConstant(datatype),
+		Interface: c,
 	}
 }
 
@@ -289,9 +290,9 @@ func MakeMapKey(i Interface) *MapKey {
 	}
 }
 
-func MakeConstantMapKey(datatype gotypes.DataType) *MapKey {
+func MakeConstantMapKey(c *Constant) *MapKey {
 	return &MapKey{
-		Interface: MakeConstant(datatype),
+		Interface: c,
 	}
 }
 
@@ -313,9 +314,9 @@ func MakeRangeValue(i Interface) *RangeValue {
 	}
 }
 
-func MakeConstantMapValue(datatype gotypes.DataType) *MapValue {
+func MakeConstantMapValue(c *Constant) *MapValue {
 	return &MapValue{
-		Interface: MakeConstant(datatype),
+		Interface: c,
 	}
 }
 func MakeField(i Interface, field string, index int) *Field {

@@ -32,8 +32,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopa := 1 == 2
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(1),
 				OpToken: token.EQL,
 			},
@@ -45,8 +45,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopa = 1 != 2
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(2),
 				OpToken: token.NEQ,
 			},
@@ -58,8 +58,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopa = 1 <= 2
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(3),
 				OpToken: token.LEQ,
 			},
@@ -71,8 +71,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopa = 1 < 2
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(4),
 				OpToken: token.LSS,
 			},
@@ -84,8 +84,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopa = 1 >= 2
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(5),
 				OpToken: token.GEQ,
 			},
@@ -97,8 +97,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopa = 1 > 2
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(6),
 				OpToken: token.GTR,
 			},
@@ -110,8 +110,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopb := 8.0 << 1
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "float"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "float"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(7),
 				OpToken: token.SHL,
 			},
@@ -123,8 +123,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bopb = 8.0 >> 1
 			//
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "float"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "float"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(8),
 				OpToken: token.SHR,
 			},
@@ -137,7 +137,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 			//
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("bopc", vars["bopc"]),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(9),
 				OpToken: token.SHL,
 			},
@@ -150,7 +150,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 			//
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("bopc", vars["bopc"]),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(10),
 				OpToken: token.SHR,
 			},
@@ -160,8 +160,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bopd := true & false
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
 				Z:       typevars.MakeVirtualVar(11),
 				OpToken: token.AND,
 			},
@@ -171,8 +171,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bopd = true | false
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
 				Z:       typevars.MakeVirtualVar(12),
 				OpToken: token.OR,
 			},
@@ -182,8 +182,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bopd = true &^ false
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
 				Z:       typevars.MakeVirtualVar(13),
 				OpToken: token.AND_NOT,
 			},
@@ -193,8 +193,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bopd = true ^ false
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
 				Z:       typevars.MakeVirtualVar(14),
 				OpToken: token.XOR,
 			},
@@ -204,8 +204,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bope := 1 * 1
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(15),
 				OpToken: token.MUL,
 			},
@@ -215,8 +215,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bope := 1 - 1
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(16),
 				OpToken: token.SUB,
 			},
@@ -226,8 +226,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bope := 1 / 1
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(17),
 				OpToken: token.QUO,
 			},
@@ -237,8 +237,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bope := 1 + 1
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(18),
 				OpToken: token.ADD,
 			},
@@ -248,8 +248,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bope := 1 % 1
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(19),
 				OpToken: token.REM,
 			},
@@ -261,7 +261,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bope = bopf % 1
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("bopf", vars["bopf"]),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(20),
 				OpToken: token.REM,
 			},
@@ -271,8 +271,8 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bopd := true && false
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
 				Z:       typevars.MakeVirtualVar(21),
 				OpToken: token.LAND,
 			},
@@ -284,7 +284,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 			// bope = bopg + 1
 			&contracts.BinaryOp{
 				X:       typevars.MakeLocalVar("bopg", vars["bopg"]),
-				Y:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Z:       typevars.MakeVirtualVar(22),
 				OpToken: token.ADD,
 			},
@@ -294,7 +294,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 			},
 			// bope = 1 + bopg
 			&contracts.BinaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y:       typevars.MakeLocalVar("bopg", vars["bopg"]),
 				Z:       typevars.MakeVirtualVar(23),
 				OpToken: token.ADD,

@@ -36,14 +36,14 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(1)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(1)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Slice{
+				X: typevars.MakeConstant(packageName, &gotypes.Slice{
 					Elmtype: &gotypes.Identifier{
 						Def:     "Int",
 						Package: packageName,
@@ -52,7 +52,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Slice{
+				X: typevars.MakeConstant(packageName, &gotypes.Slice{
 					Elmtype: &gotypes.Identifier{
 						Def:     "Int",
 						Package: packageName,
@@ -75,29 +75,29 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapKey(typevars.MakeVirtualVar(2)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapValue(typevars.MakeVirtualVar(2)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapKey(typevars.MakeVirtualVar(2)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeMapValue(typevars.MakeVirtualVar(2)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Map{
+				X: typevars.MakeConstant(packageName, &gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
 				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Map{
+				X: typevars.MakeConstant(packageName, &gotypes.Map{
 					Keytype:   &gotypes.Builtin{Untyped: false, Def: "string"},
 					Valuetype: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
@@ -123,7 +123,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeField(typevars.MakeVirtualVar(3), "key1", 0),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.HasField{
 				X:     typevars.MakeVirtualVar(3),
@@ -131,14 +131,14 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeField(typevars.MakeVirtualVar(3), "key2", 0),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// structV <-> struct {
 			// 	key1 string
 			// 	key2 int
 			// }
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Struct{
+				X: typevars.MakeConstant(packageName, &gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						gotypes.StructFieldsItem{
 							Name: "key1",
@@ -153,7 +153,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(3),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Struct{
+				X: typevars.MakeConstant(packageName, &gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						gotypes.StructFieldsItem{
 							Name: "key1",
@@ -187,7 +187,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeField(typevars.MakeVirtualVar(4), "", 0),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 			},
 			&contracts.HasField{
 				X:     typevars.MakeVirtualVar(4),
@@ -195,14 +195,14 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeField(typevars.MakeVirtualVar(4), "", 1),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			// structV2 <-> struct {
 			// 	key1 string
 			// 	key2 int
 			// }
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Struct{
+				X: typevars.MakeConstant(packageName, &gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						gotypes.StructFieldsItem{
 							Name: "key1",
@@ -217,7 +217,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(4),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Struct{
+				X: typevars.MakeConstant(packageName, &gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						gotypes.StructFieldsItem{
 							Name: "key1",
@@ -255,11 +255,11 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(6)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(6)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(5)),
@@ -270,18 +270,18 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(7)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(7)),
-				Y: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				Y: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeListValue(typevars.MakeVirtualVar(5)),
 				Y: typevars.MakeVirtualVar(7),
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(&gotypes.Slice{
+				X: typevars.MakeConstant(packageName, &gotypes.Slice{
 					Elmtype: &gotypes.Slice{
 						Elmtype: &gotypes.Builtin{Untyped: false, Def: "int"},
 					},
@@ -289,7 +289,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(5),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Slice{
+				X: typevars.MakeConstant(packageName, &gotypes.Slice{
 					Elmtype: &gotypes.Slice{
 						Elmtype: &gotypes.Builtin{Untyped: false, Def: "int"},
 					},

@@ -521,7 +521,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					return defAttr.DataTypeList[0], defAttr.TypeVarList[0], err
 				}
 				if i == 1 {
-					return &gotypes.Builtin{Def: "bool"}, &typevars.Constant{DataType: &gotypes.Builtin{Def: "bool"}}, nil
+					return &gotypes.Builtin{Def: "bool"}, typevars.MakeConstant(sp.Config.PackageName, &gotypes.Builtin{Def: "bool"}), nil
 				}
 				return nil, nil, fmt.Errorf("Rhs index %v out of range", i)
 			}
@@ -544,7 +544,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
 				glog.Infof("Calling TypeAssertExpr Rhs index function")
 				if i == 0 {
-					y := typevars.MakeConstant(typeDef)
+					y := typevars.MakeConstant(sp.Config.PackageName, typeDef)
 					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 						X:            xDefAttr.TypeVarList[0],
 						Y:            y,
@@ -553,7 +553,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					return typeDef, y, nil
 				}
 				if i == 1 {
-					return &gotypes.Builtin{Def: "bool"}, &typevars.Constant{DataType: &gotypes.Builtin{Def: "bool"}}, nil
+					return &gotypes.Builtin{Def: "bool"}, typevars.MakeConstant(sp.Config.PackageName, &gotypes.Builtin{Def: "bool"}), nil
 				}
 				return nil, nil, fmt.Errorf("Rhs index %v out of range", i)
 			}
@@ -678,7 +678,7 @@ func (sp *Parser) parseSwitchStmt(statement *ast.SwitchStmt) error {
 
 	var stmtTagTypeVar typevars.Interface
 	if statement.Tag == nil {
-		stmtTagTypeVar = typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"})
+		stmtTagTypeVar = typevars.MakeConstant("builtin", &gotypes.Builtin{Untyped: false, Def: "bool"})
 	} else {
 		attr, err := sp.ExprParser.Parse(statement.Tag)
 		if err != nil {
@@ -807,7 +807,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 						return err
 					}
 					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-						X:    typevars.MakeConstant(rhsType),
+						X:    typevars.MakeConstant(sp.Config.PackageName, rhsType),
 						Y:    typeTypeVar,
 						Weak: true,
 					})
@@ -824,7 +824,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 					}
 					sp.SymbolTable.AddVariable(sDef)
 					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-						X: typevars.MakeConstant(&gotypes.Interface{}),
+						X: typevars.MakeConstant(sp.Config.PackageName, &gotypes.Interface{}),
 						Y: typevars.VariableFromSymbolDef(sDef),
 					})
 				}
@@ -834,7 +834,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 					return err
 				}
 				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X:    typevars.MakeConstant(rhsType),
+					X:    typevars.MakeConstant(sp.Config.PackageName, rhsType),
 					Y:    typeTypeVar,
 					Weak: true,
 				})
@@ -850,7 +850,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 					}
 					sp.SymbolTable.AddVariable(sDef)
 					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-						X: typevars.MakeConstant(rhsType),
+						X: typevars.MakeConstant(sp.Config.PackageName, rhsType),
 						Y: typevars.VariableFromSymbolDef(sDef),
 					})
 				}
@@ -1023,7 +1023,7 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 							}
 							sp.SymbolTable.AddVariable(sDef2)
 							sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-								X: typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+								X: typevars.MakeConstant("builtin", &gotypes.Builtin{Def: "bool"}),
 								Y: typevars.VariableFromSymbolDef(sDef2),
 							})
 						} else {
@@ -1040,7 +1040,7 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 								return err
 							}
 							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-								X: typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+								X: typevars.MakeConstant("builtin", &gotypes.Builtin{Def: "bool"}),
 								Y: assignOkAttr.TypeVarList[0],
 							})
 						}
@@ -1408,7 +1408,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 				Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
 			}
 			sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-				X:            typevars.MakeConstant(def),
+				X:            typevars.MakeConstant(sp.Config.PackageName, def),
 				Y:            typevars.VariableFromSymbolDef(sDef),
 				ExpectedType: sDef.Def,
 			})
@@ -1443,7 +1443,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 				}
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-					X:            typevars.MakeConstant(def),
+					X:            typevars.MakeConstant(sp.Config.PackageName, def),
 					Y:            typevars.VariableFromSymbolDef(sDef),
 					ExpectedType: sDef.Def,
 				})
@@ -1466,7 +1466,7 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 					Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, name.Pos()),
 				}
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-					X:            typevars.MakeConstant(def),
+					X:            typevars.MakeConstant(sp.Config.PackageName, def),
 					Y:            typevars.VariableFromSymbolDef(sDef),
 					ExpectedType: sDef.Def,
 				})
