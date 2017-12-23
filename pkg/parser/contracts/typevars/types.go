@@ -15,7 +15,6 @@ type Type string
 
 var ConstantType Type = "Constant"
 var VariableType Type = "Variable"
-var FunctionType Type = "Function"
 var ArgumentType Type = "Argument"
 var ReturnTypeType Type = "ReturnType"
 var MapKeyType Type = "MapKey"
@@ -67,14 +66,6 @@ func VariableFromSymbolDef(def *symbols.SymbolDef) *Variable {
 	}
 }
 
-func FunctionFromSymbolDef(def *symbols.SymbolDef) *Function {
-	return &Function{
-		Name:    def.Name,
-		Pos:     def.Pos,
-		Package: def.Package,
-	}
-}
-
 type Field struct {
 	Interface
 	Name  string
@@ -94,7 +85,7 @@ func (c *CGO) GetType() Type {
 func TypeVar2String(tv Interface) string {
 	switch d := tv.(type) {
 	case *Constant:
-		return fmt.Sprintf("TypeVar.Constant: %#v", d.DataType)
+		return fmt.Sprintf("TypeVar.Constant: %#v, Package: %v", d.DataType, d.Package)
 	case *Variable:
 		return fmt.Sprintf("TypeVar.Variable: (%v) %v", d.Package, d.Name)
 	case *ListKey:
@@ -109,8 +100,6 @@ func TypeVar2String(tv Interface) string {
 		return fmt.Sprintf("TypeVar.RangeKey: %#v", d.Interface)
 	case *RangeValue:
 		return fmt.Sprintf("TypeVar.RangeValue: %#v", d.Interface)
-	case *Function:
-		return fmt.Sprintf("TypeVar.Function: (%v) %v", d.Package, d.Name)
 	case *ReturnType:
 		return fmt.Sprintf("TypeVar.ReturnType: (%v) at %v", TypeVar2String(d.Function), d.Index)
 	case *Argument:
@@ -174,24 +163,10 @@ func (m *RangeValue) GetType() Type {
 	return RangeValueType
 }
 
-type Function struct {
-	Package string
-	Name    string
-	Pos     string
-}
-
-func (f *Function) String() string {
-	return fmt.Sprintf("%v#%v#%v", f.Package, f.Name, f.Pos)
-}
-
-func (v *Function) GetType() Type {
-	return FunctionType
-}
-
 // Argument represent an address of a function/method argument
 type Argument struct {
 	// Location of a function
-	Function Interface
+	Function *Variable
 	// Return type position
 	Index int
 }
@@ -202,7 +177,7 @@ func (a *Argument) GetType() Type {
 
 type ReturnType struct {
 	// Location of a function
-	Function Interface
+	Function *Variable
 	// Return type position
 	Index int
 }
@@ -239,31 +214,16 @@ func MakeConstant(pkg string, datatype gotypes.DataType) *Constant {
 	}
 }
 
-func MakeFunction(packageName, name, pos string) *Function {
-	return &Function{
-		Package: packageName,
-		Name:    name,
-		Pos:     pos,
-	}
-}
-
-func MakeVirtualFunction(v *Variable) *Function {
-	return &Function{
-		Name:    v.Name,
-		Package: v.Package,
-	}
-}
-
-func MakeArgument(i Interface, index int) *Argument {
+func MakeArgument(v *Variable, index int) *Argument {
 	return &Argument{
-		Function: i,
+		Function: v,
 		Index:    index,
 	}
 }
 
-func MakeReturn(i Interface, index int) *ReturnType {
+func MakeReturn(v *Variable, index int) *ReturnType {
 	return &ReturnType{
-		Function: i,
+		Function: v,
 		Index:    index,
 	}
 }

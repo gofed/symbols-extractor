@@ -308,7 +308,7 @@ func TestGeneralContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(10),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(10)),
+				F:         typevars.MakeVirtualVar(10),
 				ArgsCount: 0,
 			},
 			// switch swA := 1; swA {
@@ -493,7 +493,7 @@ func TestGeneralContracts(t *testing.T) {
 				Y: typevars.MakeVirtualVar(16),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualFunction(typevars.MakeVirtualVar(16)),
+				F:         typevars.MakeVirtualVar(16),
 				ArgsCount: 0,
 			},
 			// if ifI := 1; ifI < 2 {
