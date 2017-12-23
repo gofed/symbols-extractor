@@ -67,7 +67,7 @@ func VariableFromSymbolDef(def *symbols.SymbolDef) *Variable {
 }
 
 type Field struct {
-	Interface
+	X     *Variable
 	Name  string
 	Index int
 }
@@ -106,9 +106,9 @@ func TypeVar2String(tv Interface) string {
 		return fmt.Sprintf("TypeVar.Argument: (%v) at %v", TypeVar2String(d.Function), d.Index)
 	case *Field:
 		if d.Name == "" {
-			return fmt.Sprintf("TypeVar.Field: %#v at index %v", d.Interface, d.Index)
+			return fmt.Sprintf("TypeVar.Field: %#v at index %v", d.X, d.Index)
 		}
-		return fmt.Sprintf("TypeVar.Field: %#v with field %q", d.Interface, d.Name)
+		return fmt.Sprintf("TypeVar.Field: %#v with field %q", d.X, d.Name)
 	case *CGO:
 		return fmt.Sprintf("TypeVar.CGO")
 	default:
@@ -279,10 +279,10 @@ func MakeConstantMapValue(c *Constant) *MapValue {
 		Interface: c,
 	}
 }
-func MakeField(i Interface, field string, index int) *Field {
+func MakeField(v *Variable, field string, index int) *Field {
 	return &Field{
-		Interface: i,
-		Name:      field,
-		Index:     index,
+		X:     v,
+		Name:  field,
+		Index: index,
 	}
 }

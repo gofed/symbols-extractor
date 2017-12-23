@@ -144,7 +144,7 @@ func CompareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 		CompareTypeVars(t, x.Interface, y.Interface)
 	case *typevars.Field:
 		y := tested.(*typevars.Field)
-		CompareTypeVars(t, x.Interface, y.Interface)
+		CompareTypeVars(t, x.X, y.X)
 		if x.Name != y.Name {
 			t.Errorf("Got Field.Name %v, expected %v", y.Name, x.Name)
 		}
