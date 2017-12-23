@@ -20,7 +20,7 @@ type Table struct {
 
 func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 	if t.symbolTableDir == "" {
-		return nil, fmt.Errorf("Symbol table dir not set")
+		return nil, fmt.Errorf("Unable to load %q, symbol table dir not set", pkg)
 	}
 	// check if the symbol table is available locally
 	parts := strings.Split(pkg, "/")
