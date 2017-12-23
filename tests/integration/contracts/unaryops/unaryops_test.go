@@ -30,7 +30,7 @@ func TestUnaryOpContracts(t *testing.T) {
 		[]contracts.Contract{
 			// a := "ahoj"
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
 				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			//
@@ -49,7 +49,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// chanA := make(chan int)
 			//
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(&gotypes.Channel{
+				X: typevars.MakeConstant(packageName, &gotypes.Channel{
 					Dir:   "3",
 					Value: &gotypes.Builtin{Untyped: false, Def: "int"},
 				}),
@@ -70,7 +70,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopa := ^1
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y:       typevars.MakeVirtualVar(3),
 				OpToken: token.XOR,
 			},
@@ -82,7 +82,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopb := -1
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y:       typevars.MakeVirtualVar(4),
 				OpToken: token.SUB,
 			},
@@ -94,7 +94,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopc := !true
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
 				Y:       typevars.MakeVirtualVar(5),
 				OpToken: token.NOT,
 			},
@@ -106,7 +106,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopd := +1
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(&gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y:       typevars.MakeVirtualVar(6),
 				OpToken: token.ADD,
 			},

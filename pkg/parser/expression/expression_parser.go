@@ -183,7 +183,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	// qid.id is a type variable, not a constant
 	if litDataType != nil {
 		var outputOriginalTypeVar typevars.Interface
-		outputOriginalTypeVar = typevars.MakeConstant(litDataType)
+		outputOriginalTypeVar = typevars.MakeConstant(ep.Config.PackageName, litDataType)
 		// qid.id is a type variable, not a constant
 		if sel, sok := litDataType.(*gotypes.Selector); sok {
 			if qid, qok := sel.Prefix.(*gotypes.Packagequalifier); qok {
@@ -261,7 +261,7 @@ func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, 
 
 	if litDataType != nil {
 		var structOriginalTypeVar typevars.Interface
-		structOriginalTypeVar = typevars.MakeConstant(litDataType)
+		structOriginalTypeVar = typevars.MakeConstant(ep.Config.PackageName, litDataType)
 		// qid.id is a type variable, not a constant
 		if sel, sok := litDataType.(*gotypes.Selector); sok {
 			if qid, qok := sel.Prefix.(*gotypes.Packagequalifier); qok {
@@ -374,7 +374,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 			return nil, err
 		}
 		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-			X:            typevars.MakeConstant(def),
+			X:            typevars.MakeConstant(ep.Config.PackageName, def),
 			Y:            typeVar,
 			ExpectedType: def,
 		})
@@ -436,15 +436,15 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			switch ident.Name {
 			case "true", "false":
 				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(
-					typevars.MakeConstant(&gotypes.Builtin{Def: "bool"}),
+					typevars.MakeConstant("builtin", &gotypes.Builtin{Def: "bool"}),
 				), nil
 			case "nil":
 				return types.ExprAttributeFromDataType(&gotypes.Nil{}).AddTypeVar(
-					typevars.MakeConstant(&gotypes.Nil{}),
+					typevars.MakeConstant("builtin", &gotypes.Nil{}),
 				), nil
 			case "iota":
 				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "iota"}).AddTypeVar(
-					typevars.MakeConstant(&gotypes.Builtin{Def: "iota"}),
+					typevars.MakeConstant("builtin", &gotypes.Builtin{Def: "iota"}),
 				), nil
 			default:
 				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
@@ -1021,7 +1021,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 			return nil, fmt.Errorf("Argument %#v of a call expression does not have one return value", expr.Args[0])
 		}
 
-		y := typevars.MakeConstant(def)
+		y := typevars.MakeConstant(ep.Config.PackageName, def)
 
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X:            attr.TypeVarList[0],
@@ -1075,7 +1075,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					return nil, fmt.Errorf("Expecting 1, 2 or 3 arguments of built-in function make, got %q instead", arglen)
 				}
 				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(typevars.MakeConstant(typeDef)), err
+				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(typevars.MakeConstant(ep.Config.PackageName, typeDef)), err
 			case "new":
 				// The new built-in function allocates memory. The first argument is a type,
 				// not a value, and the value returned is a pointer to a newly
@@ -1087,7 +1087,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				return types.ExprAttributeFromDataType(
 					&gotypes.Pointer{Def: typeDef},
 				).AddTypeVar(
-					typevars.MakeConstant(&gotypes.Pointer{Def: typeDef}),
+					typevars.MakeConstant(ep.Config.PackageName, &gotypes.Pointer{Def: typeDef}),
 				), err
 			}
 		}
@@ -1230,7 +1230,7 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 	def, err := ep.TypeParser.Parse(expr.Type)
 	newVar := ep.Config.ContractTable.NewVirtualVar()
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-		X: typevars.MakeConstant(def),
+		X: typevars.MakeConstant(ep.Config.PackageName, def),
 		Y: newVar,
 	})
 
@@ -1649,10 +1649,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 	y := ep.Config.ContractTable.NewVirtualVar()
 
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-		X: &typevars.Constant{
-			DataType: typeSymbolDef.Def,
-			Package:  typeSymbolDef.Package,
-		},
+		X: typevars.MakeConstant(typeSymbolDef.Package, typeSymbolDef.Def),
 		Y: y,
 	})
 
@@ -2084,7 +2081,7 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttr
 		return nil, err
 	}
 
-	y := typevars.MakeConstant(def)
+	y := typevars.MakeConstant(ep.Config.PackageName, def)
 
 	ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 		X:            attr.TypeVarList[0],

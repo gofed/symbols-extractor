@@ -62,6 +62,13 @@ func ParsePackage(t *testing.T, config *types.Config, fileParser *fileparser.Fil
 		return fmt.Errorf("Payload not fully consumed, missing %v Functions", len(payload.Functions))
 	}
 
+	table, err := config.SymbolTable.Table(0)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Global storing %v\n", pkg)
+	config.GlobalSymbolTable.Add(pkg, table)
+
 	// reset symbol table stack
 	config.SymbolTable.Pop()
 	config.SymbolTable.Push()
