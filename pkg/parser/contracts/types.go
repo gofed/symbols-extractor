@@ -81,8 +81,8 @@ type BinaryOp struct {
 type UnaryOp struct {
 	OpToken token.Token
 	// Y = op X
-	X, Y typevars.Interface
-	// TODO(jchaloup): add expected type
+	X, Y         typevars.Interface
+	ExpectedType gotypes.DataType
 }
 
 type PropagatesTo struct {
@@ -134,7 +134,8 @@ type IsSendableTo struct {
 }
 
 type IsReceiveableFrom struct {
-	X, Y typevars.Interface
+	X, Y         typevars.Interface
+	ExpectedType gotypes.DataType
 }
 
 type IsIncDecable struct {
