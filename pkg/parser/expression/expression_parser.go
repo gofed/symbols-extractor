@@ -1913,8 +1913,21 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		Field: outputField,
 	})
 
+	// Make sure the Field.X is always a virtual variable.
+	// It is easier to evaluate during the data type propagation analysis.
+	var yVar *typevars.Variable
+	if _, ok := xDefAttr.TypeVarList[0].(*typevars.Variable); !ok {
+		yVar = ep.Config.ContractTable.NewVirtualVar()
+		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X: xDefAttr.TypeVarList[0],
+			Y: yVar,
+		})
+	} else {
+		yVar = xDefAttr.TypeVarList[0].(*typevars.Variable)
+	}
+
 	return outputAttr.AddTypeVar(
-		typevars.MakeField(xDefAttr.TypeVarList[0], outputField, 0),
+		typevars.MakeField(yVar, outputField, 0),
 	), nil
 }
 
