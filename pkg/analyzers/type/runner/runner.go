@@ -97,6 +97,10 @@ func New(config *types.Config) *Runner {
 				if isVariable(d.F) {
 					storeVar(d.F.(*typevars.Variable), c)
 				}
+			case *contracts.IsIndexable:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -140,6 +144,12 @@ func (r *Runner) isTypevarEvaluated(i typevars.Interface) bool {
 		return r.isTypevarEvaluated(d.Function)
 	case *typevars.Argument:
 		return r.isTypevarEvaluated(d.Function)
+	case *typevars.ListValue:
+		return r.isTypevarEvaluated(d.X)
+	case *typevars.MapKey:
+		return r.isTypevarEvaluated(d.X)
+	case *typevars.MapValue:
+		return r.isTypevarEvaluated(d.X)
 	default:
 		panic(fmt.Sprintf("Unrecognized typevar: %#v", i))
 	}
@@ -179,6 +189,10 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 				}
 			case *contracts.IsInvocable:
 				if r.isTypevarEvaluated(d.F) {
+					ready = true
+				}
+			case *contracts.IsIndexable:
+				if r.isTypevarEvaluated(d.X) {
 					ready = true
 				}
 			default:
@@ -256,6 +270,40 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 				}, nil
 			default:
 				return nil, fmt.Errorf("typevars.ReturnType expected to be a funtion/method, got %#v instead", item.dataType)
+			}
+		case *typevars.ListValue:
+			item, ok := getVar(td.X)
+			if !ok {
+				return nil, fmt.Errorf("Variable %v does not exist", td.X.String())
+			}
+			fmt.Printf("item: %#v, ok: %v\n", item, ok)
+			switch l := item.dataType.(type) {
+			case *gotypes.Slice:
+				return &varTableItem{
+					dataType:    l.Elmtype,
+					packageName: item.packageName,
+					symbolTable: item.symbolTable,
+				}, nil
+			case *gotypes.Array:
+				return &varTableItem{
+					dataType:    l.Elmtype,
+					packageName: item.packageName,
+					symbolTable: item.symbolTable,
+				}, nil
+			case *gotypes.Map:
+				// only in case the keyType is integer
+				if b, ok := l.Keytype.(*gotypes.Builtin); ok {
+					if b.Def == "int" {
+						return &varTableItem{
+							dataType:    l.Valuetype,
+							packageName: item.packageName,
+							symbolTable: item.symbolTable,
+						}, nil
+					}
+				}
+				return nil, fmt.Errorf("ListValue of %#v is not an Integer type, it's %#v instead", l, l.Keytype)
+			default:
+				return nil, fmt.Errorf("ListValue.X expected to be a Slice, Array or Map, got %#v instead", td.X)
 			}
 		default:
 			panic(fmt.Sprintf("Unrecognized typevar %#v", i))
@@ -335,8 +383,20 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 				symbolTable: xVarItem.symbolTable,
 			})
 		} else {
+			structDef, ok := xVarItem.dataType.(*gotypes.Struct)
+			if !ok {
+				return fmt.Errorf("Trying to retrieve field at index %v from non-struct data type %#v", d.Index, xVarItem.dataType)
+			}
 			// retrieve positional field
-			panic("retrieve positional field NYI")
+			field, err := r.symbolAccessor.RetrieveStructFieldAtIndex(structDef, d.Index)
+			if err != nil {
+				return err
+			}
+			r.varTable.SetFieldAt(d.X.(*typevars.Variable).String(), d.Index, &varTableItem{
+				dataType:    field,
+				packageName: xVarItem.packageName,
+				symbolTable: xVarItem.symbolTable,
+			})
 		}
 	case *contracts.IsCompatibleWith:
 	case *contracts.PropagatesTo:
@@ -364,6 +424,22 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			return nil
 		}
 		return fmt.Errorf("d.F of contracts.IsInvocable expected to be a funtion/method, got %#v instead", item.dataType)
+	case *contracts.IsIndexable:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		if _, ok := item.dataType.(*gotypes.Slice); ok {
+			return nil
+		}
+		if _, ok := item.dataType.(*gotypes.Map); ok {
+			return nil
+		}
+		if _, ok := item.dataType.(*gotypes.Array); ok {
+			return nil
+		}
+		fmt.Printf("item: %#v\n", item)
+		panic("|||")
 	default:
 		panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 	}

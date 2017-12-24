@@ -273,11 +273,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 	case *gotypes.Struct:
 		_, currentSt := c.symbolsAccessor.CurrentTable()
 		return c.symbolsAccessor.RetrieveDataTypeField(
-			accessors.NewFieldAccessor(currentSt, &symbols.SymbolDef{
-				Name:    "",
-				Package: "",
-				Def:     xType,
-			}, &ast.Ident{Name: item}),
+			accessors.NewFieldAccessor(currentSt, &symbols.SymbolDef{Def: xType}, &ast.Ident{Name: item}),
 		)
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous

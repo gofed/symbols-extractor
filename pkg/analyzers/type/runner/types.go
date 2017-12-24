@@ -87,13 +87,15 @@ type VarTable struct {
 	// variable name
 	variables map[string]*varTableItem
 	// variable name, field
-	fields map[string]map[string]*varTableItem
+	fields   map[string]map[string]*varTableItem
+	fieldsAt map[string]map[int]*varTableItem
 }
 
 func newVarTable() *VarTable {
 	return &VarTable{
 		variables: make(map[string]*varTableItem),
 		fields:    make(map[string]map[string]*varTableItem),
+		fieldsAt:  make(map[string]map[int]*varTableItem),
 	}
 }
 
@@ -122,8 +124,20 @@ func (v *VarTable) SetField(name, field string, item *varTableItem) {
 	v.fields[name][field] = item
 }
 
+func (v *VarTable) SetFieldAt(name string, idx int, item *varTableItem) {
+	if _, ok := v.fieldsAt[name]; !ok {
+		v.fieldsAt[name] = make(map[int]*varTableItem)
+	}
+	v.fieldsAt[name][idx] = item
+}
+
 func (v *VarTable) GetField(name, field string) (*varTableItem, bool) {
 	item, ok := v.fields[name][field]
+	return item, ok
+}
+
+func (v *VarTable) GetFieldAt(name string, idx int) (*varTableItem, bool) {
+	item, ok := v.fieldsAt[name][idx]
 	return item, ok
 }
 
