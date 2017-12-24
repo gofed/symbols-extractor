@@ -10,13 +10,14 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 type Runner struct {
 	v2c           *var2Contract
 	entryTypevars map[string]typevars.Interface
 	// data type propagation through virtual variables
-	*varTable
+	varTable *VarTable
 
 	// contracts
 	waitingContracts *contractPayload
@@ -124,10 +125,11 @@ func (r *Runner) isTypevarEvaluated(i typevars.Interface) bool {
 	case *typevars.Constant:
 		return true
 	case *typevars.Variable:
-		if r.varTable.GetVariable(d.String()) != nil {
-			return true
+		v, ok := r.varTable.GetVariable(d.String())
+		if !ok {
+			return false
 		}
-		return false
+		return v != nil
 	case *typevars.Field:
 		if r.isTypevarEvaluated(d.X) {
 			_, exists := r.varTable.GetField(d.X.String(), d.Name)
@@ -200,17 +202,72 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 }
 
 func (r *Runner) evaluateContract(c contracts.Contract) error {
-	getVar := func(i typevars.Interface) *varTableItem {
-		return r.varTable.GetVariable(i.(*typevars.Variable).String())
+	getVar := func(i typevars.Interface) (*varTableItem, bool) {
+		k, ok := r.varTable.GetVariable(i.(*typevars.Variable).String())
+		return k, ok
 	}
 
 	setVar := func(i typevars.Interface, item *varTableItem) {
+		glog.Infof("Setting %v to %#v", i.(*typevars.Variable).String(), item)
 		r.varTable.SetVariable(i.(*typevars.Variable).String(), item)
+	}
+
+	glog.Infof("Checking %v...", contracts.Contract2String(c))
+
+	typevar2varTableItem := func(i typevars.Interface) (*varTableItem, error) {
+		switch td := i.(type) {
+		case *typevars.Constant:
+			st, err := r.globalSymbolTable.Lookup(td.Package)
+			if err != nil {
+				panic(err)
+			}
+			return &varTableItem{
+				dataType:    td.DataType,
+				packageName: td.Package,
+				symbolTable: st,
+			}, nil
+		case *typevars.Variable:
+			v, ok := getVar(td)
+			if ok {
+				return v, nil
+			}
+			return nil, fmt.Errorf("Variable %v does not exist", td.String())
+		case *typevars.Field:
+			item, _ := r.varTable.GetField(td.X.String(), td.Name)
+			return item, nil
+		case *typevars.ReturnType:
+			item, ok := getVar(td.Function)
+			if !ok {
+				return nil, fmt.Errorf("Variable %v does not exist", td.Function.String())
+			}
+			// fmt.Printf("item: %#v\n", item)
+			switch fDef := item.dataType.(type) {
+			case *gotypes.Method:
+				return &varTableItem{
+					dataType:    fDef.Def.(*gotypes.Function).Results[td.Index],
+					packageName: item.packageName,
+					symbolTable: item.symbolTable,
+				}, nil
+			case *gotypes.Function:
+				return &varTableItem{
+					dataType:    fDef.Results[td.Index],
+					packageName: item.packageName,
+					symbolTable: item.symbolTable,
+				}, nil
+			default:
+				return nil, fmt.Errorf("typevars.ReturnType expected to be a funtion/method, got %#v instead", item.dataType)
+			}
+		default:
+			panic(fmt.Sprintf("Unrecognized typevar %#v", i))
+		}
 	}
 
 	switch d := c.(type) {
 	case *contracts.UnaryOp:
-		xVarItem := getVar(d.X)
+		xVarItem, err := typevar2varTableItem(d.X)
+		if err != nil {
+			return err
+		}
 
 		yDataType, err := propagation.New(nil).UnaryExpr(
 			d.OpToken,
@@ -228,8 +285,14 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 
 		// fmt.Println(contracts.Contract2String(d))
 	case *contracts.BinaryOp:
-		xVarItem := getVar(d.X)
-		yVarItem := getVar(d.Y)
+		xVarItem, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		yVarItem, yErr := typevar2varTableItem(d.Y)
+		if yErr != nil {
+			return yErr
+		}
 
 		// have the BinaryExpr return symbol table and the package name as well
 		// it will be either builtin or the current package
@@ -250,7 +313,10 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 
 		// fmt.Println(contracts.Contract2String(d))
 	case *contracts.HasField:
-		xVarItem := getVar(d.X)
+		xVarItem, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
 		// fmt.Println(contracts.Contract2String(d))
 
 		if d.Field != "" {
@@ -272,60 +338,23 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			// retrieve positional field
 			panic("retrieve positional field NYI")
 		}
-
 	case *contracts.IsCompatibleWith:
-	//   if r.isTypevarEvaluated(d.X) && r.isTypevarEvaluated(d.Y) {
-	//     ready = true
-	//   }
 	case *contracts.PropagatesTo:
 		// fmt.Printf("PT.X: %#v\n", d.X)
 		// fmt.Printf("PT.Y: %#v\n", d.Y)
 
-		switch td := d.X.(type) {
-		case *typevars.Constant:
-			// The RHS is always a variable
-			st, err := r.globalSymbolTable.Lookup(td.Package)
-			if err != nil {
-				panic(err)
-			}
-			setVar(d.Y, &varTableItem{
-				dataType:    td.DataType,
-				packageName: td.Package,
-				symbolTable: st,
-			})
-		case *typevars.Variable:
-			setVar(d.Y, getVar(d.X))
-		case *typevars.Field:
-			item, _ := r.varTable.GetField(td.X.String(), td.Name)
-			setVar(d.Y, item)
-		case *typevars.ReturnType:
-			// fmt.Printf("d.X: %#v\n", td.Function)
-			item := getVar(td.Function)
-			// fmt.Printf("item: %#v\n", item)
-			switch fDef := item.dataType.(type) {
-			case *gotypes.Method:
-				// fmt.Printf("item(%v): %#v\n", td.Index, fDef.Def.(*gotypes.Function).Results[td.Index])
-				setVar(d.Y, &varTableItem{
-					dataType:    fDef.Def.(*gotypes.Function).Results[td.Index],
-					packageName: item.packageName,
-					symbolTable: item.symbolTable,
-				})
-			case *gotypes.Function:
-				// fmt.Printf("item(%v): %#v\n", td.Index, fDef.Results[td.Index])
-				setVar(d.Y, &varTableItem{
-					dataType:    fDef.Results[td.Index],
-					packageName: item.packageName,
-					symbolTable: item.symbolTable,
-				})
-			default:
-				return fmt.Errorf("d.X of typevars.ReturnType expected to be a funtion/method, got %#v instead", item.dataType)
-			}
-		default:
-			panic(fmt.Sprintf("Unrecognized typevar %#v during PropagatesTo evaluation", d.X))
+		item, err := typevar2varTableItem(d.X)
+		if err != nil {
+			return err
 		}
+
+		setVar(d.Y, item)
 		// fmt.Println(contracts.Contract2String(d))
 	case *contracts.IsInvocable:
-		item := getVar(d.F)
+		item, xErr := typevar2varTableItem(d.F)
+		if xErr != nil {
+			return xErr
+		}
 		// TODO(jchaloup): call getFunctionDef in case the DataType is an identifier
 		// fmt.Printf("d.F: %#v\n", item.dataType)
 		if _, ok := item.dataType.(*gotypes.Method); ok {
@@ -364,6 +393,8 @@ func (r *Runner) Run() error {
 
 	ready, unready := r.splitContracts(newContractPayload(r.waitingContracts.contracts()))
 	for !ready.isEmpty() {
+		fmt.Printf("Ready:\n")
+		ready.dump()
 		for _, d := range ready.contracts() {
 			for _, c := range d {
 				if err := r.evaluateContract(c); err != nil {
@@ -377,6 +408,6 @@ func (r *Runner) Run() error {
 	return nil
 }
 
-func (r *Runner) VarTable() *varTable {
+func (r *Runner) VarTable() *VarTable {
 	return r.varTable
 }

@@ -83,21 +83,21 @@ func (v *varTableItem) DataType() gotypes.DataType {
 	return v.dataType
 }
 
-type varTable struct {
+type VarTable struct {
 	// variable name
 	variables map[string]*varTableItem
 	// variable name, field
 	fields map[string]map[string]*varTableItem
 }
 
-func newVarTable() *varTable {
-	return &varTable{
+func newVarTable() *VarTable {
+	return &VarTable{
 		variables: make(map[string]*varTableItem),
 		fields:    make(map[string]map[string]*varTableItem),
 	}
 }
 
-func (v *varTable) Names() []string {
+func (v *VarTable) Names() []string {
 	var names []string
 	for name := range v.variables {
 		names = append(names, name)
@@ -105,28 +105,29 @@ func (v *varTable) Names() []string {
 	return names
 }
 
-func (v *varTable) SetVariable(name string, item *varTableItem) {
+func (v *VarTable) SetVariable(name string, item *varTableItem) {
 	v.variables[name] = item
 }
 
-func (v *varTable) GetVariable(name string) *varTableItem {
+func (v *VarTable) GetVariable(name string) (*varTableItem, bool) {
 	// TODO(jchaloup): handle case when the variable does not exist
-	return v.variables[name]
+	k, ok := v.variables[name]
+	return k, ok
 }
 
-func (v *varTable) SetField(name, field string, item *varTableItem) {
+func (v *VarTable) SetField(name, field string, item *varTableItem) {
 	if _, ok := v.fields[name]; !ok {
 		v.fields[name] = make(map[string]*varTableItem)
 	}
 	v.fields[name][field] = item
 }
 
-func (v *varTable) GetField(name, field string) (*varTableItem, bool) {
+func (v *VarTable) GetField(name, field string) (*varTableItem, bool) {
 	item, ok := v.fields[name][field]
 	return item, ok
 }
 
-func (v varTable) Dump() {
+func (v VarTable) Dump() {
 	var keys []string
 	for key := range v.variables {
 		keys = append(keys, key)

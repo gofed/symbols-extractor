@@ -136,7 +136,8 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/contracts/type_casting  \
 			$(PROJECT_ROOT)/tests/integration/contracts/unaryops \
 			$(PROJECT_ROOT)/tests/integration/contracts/multi_packages \
-			$(PROJECT_ROOT)/tests/integration/typepropagation $(GLOG_FLAGS) $(WLOG)
+			$(PROJECT_ROOT)/tests/integration/typepropagation/basic \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/binaryops $(GLOG_FLAGS) $(WLOG)
 
 gen:
 	./gentypes.sh
