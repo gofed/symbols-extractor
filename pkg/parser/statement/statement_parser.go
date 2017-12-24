@@ -1112,8 +1112,20 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 	sp.SymbolTable.Push()
 	defer sp.SymbolTable.Pop()
 	fmt.Printf("RangeStmt.X = xExprAttr: %#v\n", xExprAttr)
+
+	var xVarType *typevars.Variable
+	if d, ok := xExprAttr.TypeVarList[0].(*typevars.Variable); ok {
+		xVarType = d
+	} else {
+		xVarType = sp.Config.ContractTable.NewVirtualVar()
+		sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X: xExprAttr.TypeVarList[0],
+			Y: xVarType,
+		})
+	}
+
 	sp.Config.ContractTable.AddContract(&contracts.IsRangeable{
-		X: xExprAttr.TypeVarList[0],
+		X: xVarType,
 	})
 
 	var rangeExpr gotypes.DataType
@@ -1191,7 +1203,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 					return err
 				}
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-					X:            typevars.MakeRangeKey(xExprAttr.TypeVarList[0]),
+					X:            typevars.MakeRangeKey(xVarType),
 					Y:            typevars.VariableFromSymbolDef(sDef),
 					ExpectedType: key,
 				})
@@ -1219,7 +1231,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 					return nil
 				}
 				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X:            typevars.MakeRangeKey(xExprAttr.TypeVarList[0]),
+					X:            typevars.MakeRangeKey(xVarType),
 					Y:            keyAttr.TypeVarList[0],
 					ExpectedType: keyAttr.DataTypeList[0],
 				})
@@ -1245,7 +1257,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 					return err
 				}
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-					X:            typevars.MakeRangeValue(xExprAttr.TypeVarList[0]),
+					X:            typevars.MakeRangeValue(xVarType),
 					Y:            typevars.VariableFromSymbolDef(sDef),
 					ExpectedType: value,
 				})
@@ -1272,7 +1284,7 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 					return nil
 				}
 				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X:            typevars.MakeRangeValue(xExprAttr.TypeVarList[0]),
+					X:            typevars.MakeRangeValue(xVarType),
 					Y:            valueAttr.TypeVarList[0],
 					ExpectedType: valueAttr.DataTypeList[0],
 				})

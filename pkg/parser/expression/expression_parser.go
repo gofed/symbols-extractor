@@ -73,7 +73,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	var keyTypeVar typevars.Interface
 	var valueType gotypes.DataType
 
-	var outputTypeVar typevars.Interface = ep.Config.ContractTable.NewVirtualVar()
+	outputTypeVar := ep.Config.ContractTable.NewVirtualVar()
 
 	switch elmExpr := litType.(type) {
 	case *gotypes.Slice:
@@ -1292,33 +1292,55 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 		}
 	}
 
+	var yVarType *typevars.Variable
+	if d, ok := xDefAttr.TypeVarList[0].(*typevars.Variable); ok {
+		yVarType = d
+	} else {
+		yVarType = ep.Config.ContractTable.NewVirtualVar()
+		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X: xDefAttr.TypeVarList[0],
+			Y: yVarType,
+		})
+	}
+
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
-		X: xDefAttr.TypeVarList[0],
+		X: yVarType,
 	})
 
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
 	switch xType := indexExpr.(type) {
 	case *gotypes.Map:
+		var keyVarType *typevars.Variable
+		if d, ok := indexAttr.TypeVarList[0].(*typevars.Variable); ok {
+			keyVarType = d
+		} else {
+			keyVarType = ep.Config.ContractTable.NewVirtualVar()
+			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X: indexAttr.TypeVarList[0],
+				Y: keyVarType,
+			})
+		}
+
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
-			Y: typevars.MakeMapKey(indexAttr.TypeVarList[0]),
+			Y: typevars.MakeMapKey(keyVarType),
 		})
-		y := typevars.MakeMapValue(xDefAttr.TypeVarList[0])
+		y := typevars.MakeMapValue(yVarType)
 		return types.ExprAttributeFromDataType(xType.Valuetype).AddTypeVar(y), nil
 	case *gotypes.Array:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
+		y := typevars.MakeListValue(yVarType)
 		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Slice:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
+		y := typevars.MakeListValue(yVarType)
 		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
 	case *gotypes.Builtin:
 		if xType.Def == "string" {
@@ -1327,7 +1349,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 				X: indexAttr.TypeVarList[0],
 				Y: typevars.MakeListKey(),
 			})
-			y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
+			y := typevars.MakeListValue(yVarType)
 			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
@@ -1338,7 +1360,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 				X: indexAttr.TypeVarList[0],
 				Y: typevars.MakeListKey(),
 			})
-			y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
+			y := typevars.MakeListValue(yVarType)
 			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
 		}
 		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
@@ -1347,7 +1369,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(xDefAttr.TypeVarList[0])
+		y := typevars.MakeListValue(yVarType)
 		return types.ExprAttributeFromDataType(xType.Def).AddTypeVar(y), nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v at %v", xDefAttr.DataTypeList[0], expr.Pos()))

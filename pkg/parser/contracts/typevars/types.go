@@ -91,15 +91,15 @@ func TypeVar2String(tv Interface) string {
 	case *ListKey:
 		return fmt.Sprintf("TypeVar.ListKey: integer type")
 	case *ListValue:
-		return fmt.Sprintf("TypeVar.ListValue: %#v", d.Interface)
+		return fmt.Sprintf("TypeVar.ListValue: %#v", d.X)
 	case *MapKey:
-		return fmt.Sprintf("TypeVar.MapKey: %#v", d.Interface)
+		return fmt.Sprintf("TypeVar.MapKey: %#v", d.X)
 	case *MapValue:
-		return fmt.Sprintf("TypeVar.MapValue: %#v", d.Interface)
+		return fmt.Sprintf("TypeVar.MapValue: %#v", d.X)
 	case *RangeKey:
-		return fmt.Sprintf("TypeVar.RangeKey: %#v", d.Interface)
+		return fmt.Sprintf("TypeVar.RangeKey: %#v", d.X)
 	case *RangeValue:
-		return fmt.Sprintf("TypeVar.RangeValue: %#v", d.Interface)
+		return fmt.Sprintf("TypeVar.RangeValue: %#v", d.X)
 	case *ReturnType:
 		return fmt.Sprintf("TypeVar.ReturnType: (%v) at %v", TypeVar2String(d.Function), d.Index)
 	case *Argument:
@@ -124,7 +124,7 @@ func (l *ListKey) GetType() Type {
 }
 
 type ListValue struct {
-	Interface
+	X *Variable
 }
 
 func (l *ListValue) GetType() Type {
@@ -132,7 +132,7 @@ func (l *ListValue) GetType() Type {
 }
 
 type MapKey struct {
-	Interface
+	X *Variable
 }
 
 func (m *MapKey) GetType() Type {
@@ -140,7 +140,7 @@ func (m *MapKey) GetType() Type {
 }
 
 type MapValue struct {
-	Interface
+	X *Variable
 }
 
 func (m *MapValue) GetType() Type {
@@ -148,7 +148,7 @@ func (m *MapValue) GetType() Type {
 }
 
 type RangeKey struct {
-	Interface
+	X *Variable
 }
 
 func (m *RangeKey) GetType() Type {
@@ -156,7 +156,7 @@ func (m *RangeKey) GetType() Type {
 }
 
 type RangeValue struct {
-	Interface
+	X *Variable
 }
 
 func (m *RangeValue) GetType() Type {
@@ -232,53 +232,36 @@ func MakeListKey() *ListKey {
 	return &ListKey{}
 }
 
-func MakeListValue(i Interface) *ListValue {
+func MakeListValue(v *Variable) *ListValue {
 	return &ListValue{
-		Interface: i,
+		X: v,
 	}
 }
 
-func MakeConstantListValue(c *Constant) *ListValue {
-	return &ListValue{
-		Interface: c,
-	}
-}
-
-func MakeMapKey(i Interface) *MapKey {
+func MakeMapKey(v *Variable) *MapKey {
 	return &MapKey{
-		Interface: i,
+		X: v,
 	}
 }
 
-func MakeConstantMapKey(c *Constant) *MapKey {
-	return &MapKey{
-		Interface: c,
-	}
-}
-
-func MakeMapValue(i Interface) *MapValue {
+func MakeMapValue(v *Variable) *MapValue {
 	return &MapValue{
-		Interface: i,
+		X: v,
 	}
 }
 
-func MakeRangeKey(i Interface) *RangeKey {
+func MakeRangeKey(v *Variable) *RangeKey {
 	return &RangeKey{
-		Interface: i,
+		X: v,
 	}
 }
 
-func MakeRangeValue(i Interface) *RangeValue {
+func MakeRangeValue(v *Variable) *RangeValue {
 	return &RangeValue{
-		Interface: i,
+		X: v,
 	}
 }
 
-func MakeConstantMapValue(c *Constant) *MapValue {
-	return &MapValue{
-		Interface: c,
-	}
-}
 func MakeField(v *Variable, field string, index int) *Field {
 	return &Field{
 		X:     v,
