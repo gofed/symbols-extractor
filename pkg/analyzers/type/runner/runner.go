@@ -15,7 +15,7 @@ import (
 
 type Runner struct {
 	v2c           *var2Contract
-	entryTypevars map[string]typevars.Interface
+	entryTypevars map[string]*typevars.Variable
 	// data type propagation through virtual variables
 	varTable *VarTable
 
@@ -30,7 +30,7 @@ type Runner struct {
 func New(config *types.Config) *Runner {
 	r := &Runner{
 		v2c:               newVar2Contract(),
-		entryTypevars:     make(map[string]typevars.Interface, 0),
+		entryTypevars:     make(map[string]*typevars.Variable, 0),
 		varTable:          newVarTable(),
 		waitingContracts:  newContractPayload(nil),
 		globalSymbolTable: config.GlobalSymbolTable,
@@ -455,22 +455,29 @@ func (r *Runner) dumpTypeVars() {
 
 func (r *Runner) Run() error {
 	// propagate data type definitions of all entry typevars
-	// for key, _ := range r.entryTypevars {
-	// 	fmt.Printf("ev: %#v\n", key)
-	// 	// if _, ok := r.varsTypes[key]; !ok {
-	// 	// 	r.varsTypes[key] = nil
-	// 	// 	// st, err := r.globalSymbolTable.Lookup(v.Package)
-	// 	// 	// if err != nil {
-	// 	// 	// 	return err
-	// 	// 	// }
-	// 	// 	// fmt.Printf("ST: %#v\n", st)
-	// 	// }
-	// }
+	for key, ev := range r.entryTypevars {
+		fmt.Printf("ev: %#v\n", key)
+		st, err := r.globalSymbolTable.Lookup(ev.Package)
+		if err != nil {
+			return err
+		}
+		sDef, _, sErr := st.LookupVariableLikeSymbol(ev.Name)
+		if sErr != nil {
+			return sErr
+		}
+		r.varTable.SetVariable(ev.String(), &varTableItem{
+			dataType:    sDef.Def,
+			packageName: ev.Package,
+			symbolTable: st,
+		})
+	}
 
 	ready, unready := r.splitContracts(newContractPayload(r.waitingContracts.contracts()))
 	for !ready.isEmpty() {
 		fmt.Printf("Ready:\n")
 		ready.dump()
+		fmt.Printf("Unready:\n")
+		unready.dump()
 		for _, d := range ready.contracts() {
 			for _, c := range d {
 				if err := r.evaluateContract(c); err != nil {

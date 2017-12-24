@@ -138,6 +138,7 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/contracts/multi_packages \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/basic \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/binaryops \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/function_invocation \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/composite_literals \
 				$(GLOG_FLAGS) $(WLOG)
 
