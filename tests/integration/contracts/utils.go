@@ -1,17 +1,21 @@
 package contracts
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/parser"
 	"go/token"
 	"os"
 	"path"
+	"reflect"
 	"sort"
 	"testing"
 
+	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/gofed/symbols-extractor/tests/integration/utils"
 )
 
@@ -117,4 +121,56 @@ func CompareContracts(t *testing.T, contractsList, tests []contracts.Contract) {
 		t.Logf("\n\n\n\nAbout to check %v-th contract: %v\n", i, contracts.Contract2String(contractsList[i]))
 		//t.Errorf("\n\n\n\nUnprocessed %v-th contract: %v\n", i, contracts.Contract2String(contractsList[i]))
 	}
+}
+
+type VarTableTest struct {
+	Name     string
+	DataType gotypes.DataType
+}
+
+func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runner.VarTable) {
+	for _, e := range expected {
+		tested, exists := testedVarTable.GetVariable(e.Name)
+		if !exists {
+			t.Errorf("Variable %v does not exist", e.Name)
+			continue
+		}
+		fmt.Printf("Checking %q variable...\n", e.Name)
+		if !reflect.DeepEqual(tested.DataType(), e.DataType) {
+			tByteSlice, _ := json.Marshal(tested.DataType())
+			eByteSlice, _ := json.Marshal(e.DataType)
+			t.Errorf("%v: got %v, expected %v", e.Name, string(tByteSlice), string(eByteSlice))
+		}
+	}
+
+	names := testedVarTable.Names()
+	if len(names) > len(expected) {
+		t.Errorf("There is %v variables not yet checked", len(names)-len(expected))
+	}
+
+	// sort.Strings(names)
+	// for _, name := range names {
+	// 	fmt.Printf("Name: %v\tDataType: %#v\n", name, varTable.GetVariable(name).DataType())
+	// }
+}
+
+func ParseAndCompareVarTable(t *testing.T, gopkg, filename string, expected []VarTableTest) {
+	fileParser, config, err := utils.InitFileParser(gopkg)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if err := ParsePackage(t, config, fileParser, config.PackageName, filename, config.PackageName); err != nil {
+		t.Error(err)
+		return
+	}
+
+	r := runner.New(config)
+	if err := r.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	r.VarTable().Dump()
+
+	CompareVarTable(t, expected, r.VarTable())
 }
