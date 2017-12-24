@@ -129,19 +129,19 @@ func CompareTypeVars(t *testing.T, expected, tested typevars.Interface) {
 	case *typevars.ListKey:
 	case *typevars.ListValue:
 		y := tested.(*typevars.ListValue)
-		CompareTypeVars(t, x.Interface, y.Interface)
+		CompareTypeVars(t, x.X, y.X)
 	case *typevars.MapKey:
 		y := tested.(*typevars.MapKey)
-		CompareTypeVars(t, x.Interface, y.Interface)
+		CompareTypeVars(t, x.X, y.X)
 	case *typevars.MapValue:
 		y := tested.(*typevars.MapValue)
-		CompareTypeVars(t, x.Interface, y.Interface)
+		CompareTypeVars(t, x.X, y.X)
 	case *typevars.RangeKey:
 		y := tested.(*typevars.RangeKey)
-		CompareTypeVars(t, x.Interface, y.Interface)
+		CompareTypeVars(t, x.X, y.X)
 	case *typevars.RangeValue:
 		y := tested.(*typevars.RangeValue)
-		CompareTypeVars(t, x.Interface, y.Interface)
+		CompareTypeVars(t, x.X, y.X)
 	case *typevars.Field:
 		y := tested.(*typevars.Field)
 		CompareTypeVars(t, x.X, y.X)
