@@ -318,13 +318,21 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symbols.SymbolDef, err
 		if spec.Names[i].Name == "_" {
 			continue
 		}
-		symbolsDef = append(symbolsDef, &symbols.SymbolDef{
+		sDef := &symbols.SymbolDef{
 			Name:    spec.Names[i].Name,
 			Package: sp.PackageName,
 			Def:     typeDef,
 			Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, spec.Names[i].Pos()),
+		}
+		symbolsDef = append(symbolsDef, sDef)
+		if sp.SymbolTable.CurrentLevel() > 0 {
+			sDef.Package = ""
+		}
+		sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+			X:            typevars.MakeConstant(sp.PackageName, typeDef),
+			Y:            typevars.VariableFromSymbolDef(sDef),
+			ExpectedType: typeDef,
 		})
-		// Only variable declaration => do not generate any contracts
 	}
 
 	return symbolsDef, nil
