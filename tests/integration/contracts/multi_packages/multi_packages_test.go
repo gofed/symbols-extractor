@@ -23,12 +23,12 @@ func TestMultiPackageContracts(t *testing.T) {
 	}
 
 	// Parse pkgA package
-	if err := conutils.ParsePackage(t, config, fileParser, packageName, "testdata/pkgA/pkg.go", "pkgA"); err != nil {
+	if err := conutils.ParsePackage(t, config, fileParser, packageName, "../../testdata/multi_packages/pkgA/pkg.go", "pkgA"); err != nil {
 		t.Error(err)
 		return
 	}
 	// Parse pkgB package
-	if err := conutils.ParsePackage(t, config, fileParser, packageName, "testdata/pkgB/pkg.go", "pkgB"); err != nil {
+	if err := conutils.ParsePackage(t, config, fileParser, packageName, "../../testdata/multi_packages/pkgB/pkg.go", "pkgB"); err != nil {
 		t.Error(err)
 		return
 	}

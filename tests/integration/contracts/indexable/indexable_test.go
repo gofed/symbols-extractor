@@ -23,7 +23,7 @@ func TestIndexableContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/indexable.go",
+		"../../testdata/indexable.go",
 		[]contracts.Contract{
 			//
 			// list := []Int{

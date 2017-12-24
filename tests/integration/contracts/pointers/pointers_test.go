@@ -21,7 +21,7 @@ func TestPointersContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/pointers.go",
+		"../../testdata/pointers.go",
 		[]contracts.Contract{
 			// a := "ahoj"
 			&contracts.PropagatesTo{

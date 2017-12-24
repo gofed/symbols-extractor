@@ -34,7 +34,7 @@ func TestSelectorsTypes(t *testing.T) {
 	}
 	utils.ParseAndCompareContracts(t,
 		packageName,
-		"testdata/selectors.go",
+		"../../testdata/selectors.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Struct{

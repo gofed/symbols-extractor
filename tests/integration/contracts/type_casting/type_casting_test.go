@@ -19,7 +19,7 @@ func TestTypeCastingContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/type_casting.go",
+		"../../testdata/type_casting.go",
 		[]contracts.Contract{
 			// asA := Int(1)
 			&contracts.IsCompatibleWith{

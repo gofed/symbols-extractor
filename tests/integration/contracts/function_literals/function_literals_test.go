@@ -20,7 +20,7 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/function_literals.go",
+		"../../testdata/function_literals.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Def: "int"}),
