@@ -22,7 +22,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/composite_literals.go",
+		"../../testdata/composite_literals.go",
 		[]contracts.Contract{
 			//
 			// list := []Int{

@@ -26,7 +26,7 @@ func TestUnaryOpContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/unaryops.go",
+		"../../testdata/unaryops.go",
 		[]contracts.Contract{
 			// a := "ahoj"
 			&contracts.PropagatesTo{

@@ -25,7 +25,7 @@ func TestFunctionInvocationContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/function_invocation.go",
+		"../../testdata/function_invocation.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),

@@ -26,7 +26,7 @@ func TestBinaryOpsContracts(t *testing.T) {
 	utils.ParseAndCompareContracts(
 		t,
 		packageName,
-		"testdata/binaryop.go",
+		"../../testdata/binaryop.go",
 		[]contracts.Contract{
 			//
 			// bopa := 1 == 2
