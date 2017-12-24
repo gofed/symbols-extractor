@@ -140,6 +140,7 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/typepropagation/binaryops \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/function_invocation \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/composite_literals \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/function_literals \
 				$(GLOG_FLAGS) $(WLOG)
 
 gen:
