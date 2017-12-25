@@ -141,6 +141,7 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/typepropagation/function_invocation \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/composite_literals \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/function_literals \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/indexable \
 				$(GLOG_FLAGS) $(WLOG)
 
 gen:

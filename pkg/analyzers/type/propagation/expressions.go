@@ -301,3 +301,82 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v", item, xDataType)
 	}
 }
+
+func (c *Config) IndexExpr(xDataType, idxDataType gotypes.DataType) (gotypes.DataType, string, error) {
+	// One can not do &(&(a))
+	var indexExpr gotypes.DataType
+	pointer, ok := xDataType.(*gotypes.Pointer)
+	if ok {
+		indexExpr = pointer.Def
+	} else {
+		indexExpr = xDataType
+	}
+	glog.Infof("IndexExprDef: %#v", indexExpr)
+	// In case we have
+	// type A []int
+	// type B A
+	// type C B
+	// c := (C)([]int{1,2,3})
+	// c[1]
+	if indexExpr.GetType() == gotypes.IdentifierType || indexExpr.GetType() == gotypes.SelectorType {
+		for {
+			var symbolDef *symbols.SymbolDef
+			if indexExpr.GetType() == gotypes.IdentifierType {
+				xType := indexExpr.(*gotypes.Identifier)
+
+				if xType.Package == "builtin" {
+					break
+				}
+				def, _, err := c.symbolsAccessor.LookupDataType(xType)
+				if err != nil {
+					return nil, "", err
+				}
+				symbolDef = def
+			} else {
+				_, sd, err := c.symbolsAccessor.RetrieveQidDataType(indexExpr.(*gotypes.Selector).Prefix, &ast.Ident{Name: indexExpr.(*gotypes.Selector).Item})
+				if err != nil {
+					return nil, "", err
+				}
+				symbolDef = sd
+			}
+
+			if symbolDef.Def == nil {
+				return nil, "", fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
+			}
+
+			indexExpr = symbolDef.Def
+			if symbolDef.Def.GetType() == gotypes.IdentifierType || symbolDef.Def.GetType() == gotypes.SelectorType {
+				continue
+			}
+			break
+		}
+	}
+	// TODO(jchaloup): check idxDataType as well, .e.g. it is an integer type when accessing slice, array or string
+
+	// Get definition of the X from the symbol Table (it must be a variable of a data type)
+	// and get data type of its array/map members
+	switch xType := indexExpr.(type) {
+	case *gotypes.Map:
+		return xType.Valuetype, indexExpr.GetType(), nil
+	case *gotypes.Array:
+		return xType.Elmtype, indexExpr.GetType(), nil
+	case *gotypes.Slice:
+		return xType.Elmtype, indexExpr.GetType(), nil
+	case *gotypes.Builtin:
+		if xType.Def == "string" {
+			// Checked at https://play.golang.org/
+			return &gotypes.Builtin{Def: "uint8"}, gotypes.BuiltinType, nil
+		}
+		return nil, "", fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
+	case *gotypes.Identifier:
+		if xType.Def == "string" && xType.Package == "builtin" {
+			// Checked at https://play.golang.org/
+			return &gotypes.Builtin{Def: "uint8"}, gotypes.BuiltinType, nil
+		}
+		return nil, "", fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
+	case *gotypes.Ellipsis:
+		return xType.Def, indexExpr.GetType(), nil
+	default:
+		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDataType))
+	}
+}

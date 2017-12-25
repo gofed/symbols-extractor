@@ -101,6 +101,9 @@ func New(config *types.Config) *Runner {
 				if isVariable(d.X) {
 					storeVar(d.X.(*typevars.Variable), c)
 				}
+				if d.Key != nil && isVariable(d.Key) {
+					storeVar(d.Key.(*typevars.Variable), c)
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -146,6 +149,8 @@ func (r *Runner) isTypevarEvaluated(i typevars.Interface) bool {
 		return r.isTypevarEvaluated(d.Function)
 	case *typevars.ListValue:
 		return r.isTypevarEvaluated(d.X)
+	case *typevars.ListKey:
+		return true
 	case *typevars.MapKey:
 		return r.isTypevarEvaluated(d.X)
 	case *typevars.MapValue:
@@ -194,6 +199,9 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 			case *contracts.IsIndexable:
 				if r.isTypevarEvaluated(d.X) {
 					ready = true
+				}
+				if d.Key != nil && !r.isTypevarEvaluated(d.Key) {
+					ready = false
 				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
@@ -277,34 +285,36 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 				return nil, fmt.Errorf("Variable %v does not exist", td.X.String())
 			}
 			fmt.Printf("item: %#v, ok: %v\n", item, ok)
-			switch l := item.dataType.(type) {
-			case *gotypes.Slice:
-				return &varTableItem{
-					dataType:    l.Elmtype,
-					packageName: item.packageName,
-					symbolTable: item.symbolTable,
-				}, nil
-			case *gotypes.Array:
-				return &varTableItem{
-					dataType:    l.Elmtype,
-					packageName: item.packageName,
-					symbolTable: item.symbolTable,
-				}, nil
-			case *gotypes.Map:
-				// only in case the keyType is integer
-				if b, ok := l.Keytype.(*gotypes.Builtin); ok {
-					if b.Def == "int" {
-						return &varTableItem{
-							dataType:    l.Valuetype,
-							packageName: item.packageName,
-							symbolTable: item.symbolTable,
-						}, nil
-					}
-				}
-				return nil, fmt.Errorf("ListValue of %#v is not an Integer type, it's %#v instead", l, l.Keytype)
-			default:
-				return nil, fmt.Errorf("ListValue.X expected to be a Slice, Array or Map, got %#v instead", td.X)
+			yDataType, _, err := propagation.New(r.symbolAccessor).IndexExpr(
+				item.dataType,
+				nil,
+			)
+			if err != nil {
+				return nil, err
 			}
+			return &varTableItem{
+				dataType:    yDataType,
+				packageName: item.packageName,
+				symbolTable: item.symbolTable,
+			}, nil
+		case *typevars.MapValue:
+			item, ok := getVar(td.X)
+			if !ok {
+				return nil, fmt.Errorf("Variable %v does not exist", td.X.String())
+			}
+			fmt.Printf("item: %#v, ok: %v\n", item, ok)
+			yDataType, _, err := propagation.New(r.symbolAccessor).IndexExpr(
+				item.dataType,
+				nil,
+			)
+			if err != nil {
+				return nil, err
+			}
+			return &varTableItem{
+				dataType:    yDataType,
+				packageName: item.packageName,
+				symbolTable: item.symbolTable,
+			}, nil
 		default:
 			panic(fmt.Sprintf("Unrecognized typevar %#v", i))
 		}
@@ -429,15 +439,39 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		if xErr != nil {
 			return xErr
 		}
+		// pkg.A = []string, pkg.Index int = 0
+		// pkg.A = map[string]string, pkg.Index string = "0"
+		// as long as I use the pkg.A as:
+		//   pkg.A[pkg.Index]
+		// the change is backward compatible
 		if _, ok := item.dataType.(*gotypes.Slice); ok {
+			// Both min:max must be compatible with Integer type which is checked in the
+			// IsCompatibleWith(ListKey, Min/Max) contract
 			return nil
 		}
 		if _, ok := item.dataType.(*gotypes.Map); ok {
+			// This is the most benevolent case, index type can change to basically anything
+			// that can be an index, not just an Integer type
 			return nil
 		}
 		if _, ok := item.dataType.(*gotypes.Array); ok {
+			// The index must be an Integer type
+			indexItem, err := typevar2varTableItem(d.Key)
+			if err != nil {
+				return err
+			}
+			// TODO(jchaloup): check the index is compatible with Integer type
+			fmt.Printf("Checking index type %#v compatibility with Integer type not yet implemented", indexItem)
 			return nil
 		}
+		if d, ok := item.dataType.(*gotypes.Builtin); ok {
+			if d.Def == "string" {
+				// TODO(jchaloup): check the index is compatible with Integer type
+				return nil
+			}
+			// error
+		}
+		// error
 		fmt.Printf("item: %#v\n", item)
 		panic("|||")
 	default:
@@ -481,12 +515,16 @@ func (r *Runner) Run() error {
 		for _, d := range ready.contracts() {
 			for _, c := range d {
 				if err := r.evaluateContract(c); err != nil {
-					return nil
+					return err
 				}
 			}
 		}
 		ready, unready = r.splitContracts(unready)
 	}
+	fmt.Printf("Ready:\n")
+	ready.dump()
+	fmt.Printf("Unready:\n")
+	unready.dump()
 	// r.dumpTypeVars()
 	return nil
 }
