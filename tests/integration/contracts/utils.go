@@ -139,7 +139,7 @@ func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runn
 		if !reflect.DeepEqual(tested.DataType(), e.DataType) {
 			tByteSlice, _ := json.Marshal(tested.DataType())
 			eByteSlice, _ := json.Marshal(e.DataType)
-			t.Errorf("%v: got %v, expected %v", e.Name, string(tByteSlice), string(eByteSlice))
+			t.Errorf("%v: got\n%v, expected\n%v", e.Name, string(tByteSlice), string(eByteSlice))
 		}
 	}
 

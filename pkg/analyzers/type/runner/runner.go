@@ -104,6 +104,14 @@ func New(config *types.Config) *Runner {
 				if d.Key != nil && isVariable(d.Key) {
 					storeVar(d.Key.(*typevars.Variable), c)
 				}
+			case *contracts.IsDereferenceable:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
+			case *contracts.DereferenceOf:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -202,6 +210,14 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 				}
 				if d.Key != nil && !r.isTypevarEvaluated(d.Key) {
 					ready = false
+				}
+			case *contracts.IsDereferenceable:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
+			case *contracts.DereferenceOf:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
 				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
@@ -474,6 +490,24 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		// error
 		fmt.Printf("item: %#v\n", item)
 		panic("|||")
+	case *contracts.IsDereferenceable:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		if item.dataType.GetType() != gotypes.PointerType {
+			return fmt.Errorf("Expected pointer, got %#v instead", item.dataType)
+		}
+	case *contracts.DereferenceOf:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		setVar(d.Y, &varTableItem{
+			dataType:    item.dataType.(*gotypes.Pointer).Def,
+			packageName: item.packageName,
+			symbolTable: item.symbolTable,
+		})
 	default:
 		panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 	}
