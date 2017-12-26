@@ -1,7 +1,6 @@
 package contracts
 
 import (
-	"go/token"
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
@@ -29,10 +28,12 @@ func TestPointersContracts(t *testing.T) {
 				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			// ra := &a
-			&contracts.UnaryOp{
-				X:       typevars.MakeLocalVar("a", vars["a"]),
-				Y:       typevars.MakeVirtualVar(1),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeLocalVar("a", vars["a"]),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),

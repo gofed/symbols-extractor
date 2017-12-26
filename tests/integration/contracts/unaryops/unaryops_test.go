@@ -36,10 +36,12 @@ func TestUnaryOpContracts(t *testing.T) {
 			//
 			// ra := &a
 			//
-			&contracts.UnaryOp{
-				X:       typevars.MakeLocalVar("a", vars["a"]),
-				Y:       typevars.MakeVirtualVar(1),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeLocalVar("a", vars["a"]),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeLocalVar("a", vars["a"]),
+				Y: typevars.MakeVirtualVar(1),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(1),

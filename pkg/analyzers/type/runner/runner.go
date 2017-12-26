@@ -112,6 +112,18 @@ func New(config *types.Config) *Runner {
 				if isVariable(d.X) {
 					storeVar(d.X.(*typevars.Variable), c)
 				}
+			case *contracts.IsReferenceable:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
+			case *contracts.ReferenceOf:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
+			case *contracts.IsReceiveableFrom:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -220,6 +232,18 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 					ready = true
 				}
 			case *contracts.DereferenceOf:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
+			case *contracts.IsReferenceable:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
+			case *contracts.ReferenceOf:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
+			case *contracts.IsReceiveableFrom:
 				if r.isTypevarEvaluated(d.X) {
 					ready = true
 				}
@@ -510,6 +534,32 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		}
 		setVar(d.Y, &varTableItem{
 			dataType:    item.dataType.(*gotypes.Pointer).Def,
+			packageName: item.packageName,
+			symbolTable: item.symbolTable,
+		})
+	case *contracts.IsReferenceable:
+		// TODO(jchaloup): is there anything to check?
+	case *contracts.ReferenceOf:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		setVar(d.Y, &varTableItem{
+			dataType:    &gotypes.Pointer{Def: item.dataType},
+			packageName: item.packageName,
+			symbolTable: item.symbolTable,
+		})
+	case *contracts.IsReceiveableFrom:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		if item.dataType.GetType() != gotypes.ChannelType {
+			return fmt.Errorf("Expected channel, got %#v instead", item.dataType)
+		}
+		// TODO(jchaloup): check the direction as well
+		setVar(d.Y, &varTableItem{
+			dataType:    item.dataType.(*gotypes.Channel).Value,
 			packageName: item.packageName,
 			symbolTable: item.symbolTable,
 		})

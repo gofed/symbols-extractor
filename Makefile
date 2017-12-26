@@ -145,6 +145,7 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/typepropagation/pointers \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/selectors \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/type_casting \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/unaryops \
 				$(GLOG_FLAGS) $(WLOG)
 
 gen:

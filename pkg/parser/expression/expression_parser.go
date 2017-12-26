@@ -495,13 +495,24 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 			Y:            y,
 			ExpectedType: yDataType,
 		})
+		// TODO(jchaloup): add ReceivedFrom contract
 	} else {
-		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
-			OpToken:      expr.Op,
-			X:            attr.TypeVarList[0],
-			Y:            y,
-			ExpectedType: yDataType,
-		})
+		if expr.Op == token.AND {
+			ep.Config.ContractTable.AddContract(&contracts.IsReferenceable{
+				X: attr.TypeVarList[0],
+			})
+			ep.Config.ContractTable.AddContract(&contracts.ReferenceOf{
+				X: attr.TypeVarList[0],
+				Y: y,
+			})
+		} else {
+			ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+				OpToken:      expr.Op,
+				X:            attr.TypeVarList[0],
+				Y:            y,
+				ExpectedType: yDataType,
+			})
+		}
 	}
 
 	return types.ExprAttributeFromDataType(yDataType).AddTypeVar(y), nil
