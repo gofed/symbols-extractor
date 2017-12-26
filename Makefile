@@ -143,6 +143,7 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/typepropagation/function_literals \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/indexable \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/pointers \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/selectors \
 				$(GLOG_FLAGS) $(WLOG)
 
 gen:

@@ -147,7 +147,11 @@ func (r *Runner) isTypevarEvaluated(i typevars.Interface) bool {
 		return v != nil
 	case *typevars.Field:
 		if r.isTypevarEvaluated(d.X) {
-			_, exists := r.varTable.GetField(d.X.String(), d.Name)
+			if d.Name != "" {
+				_, exists := r.varTable.GetField(d.X.String(), d.Name)
+				return exists
+			}
+			_, exists := r.varTable.GetFieldAt(d.X.String(), d.Index)
 			return exists
 		}
 		return false
@@ -394,6 +398,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		// fmt.Println(contracts.Contract2String(d))
 
 		if d.Field != "" {
+			fmt.Printf("xVarItem: %#v\n", xVarItem)
 			yDataType, err := propagation.New(r.symbolAccessor).SelectorExpr(
 				xVarItem.dataType,
 				d.Field,
@@ -559,7 +564,10 @@ func (r *Runner) Run() error {
 	ready.dump()
 	fmt.Printf("Unready:\n")
 	unready.dump()
-	// r.dumpTypeVars()
+	if !unready.isEmpty() {
+		return fmt.Errorf("There are still some unprocessed contract")
+	}
+
 	return nil
 }
 

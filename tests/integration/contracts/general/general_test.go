@@ -65,6 +65,10 @@ func TestGeneralContracts(t *testing.T) {
 				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeVar(packageName, "d", vars["d"]),
 			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Def: "int"}),
+				Y: typevars.MakeVar(packageName, "d", vars["d"]),
+			},
 			&contracts.BinaryOp{
 				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),

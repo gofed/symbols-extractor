@@ -232,6 +232,11 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symbols.SymbolDef, err
 						Y:            typevars.VariableFromSymbolDef(sDef),
 						ExpectedType: sDef.Def,
 					})
+					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X:            typevars.MakeConstant(sp.Config.PackageName, typeDef),
+						Y:            typevars.VariableFromSymbolDef(sDef),
+						ExpectedType: sDef.Def,
+					})
 				}
 				symbolsDef = append(symbolsDef, sDef)
 			}

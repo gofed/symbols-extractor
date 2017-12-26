@@ -1144,8 +1144,13 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 
 	y := ep.Config.ContractTable.NewVirtualVar()
 
+	receiverDef, err := ep.TypeParser.Parse(dataTypeIdent)
+	if err != nil {
+		return true, nil, err
+	}
+
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-		X: typevars.MakeConstant(typeSymbolDef.Package, typeSymbolDef.Def),
+		X: typevars.MakeConstant(ep.Config.PackageName, receiverDef),
 		Y: y,
 	})
 

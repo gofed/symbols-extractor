@@ -37,8 +37,9 @@ func TestSelectorsTypes(t *testing.T) {
 		"../../testdata/selectors.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
+					Def:     "D",
+					Package: packageName,
 				}),
 				Y: typevars.MakeVirtualVar(1),
 			},
@@ -107,6 +108,13 @@ func TestSelectorsTypes(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVirtualVar(5),
+				Y: typevars.MakeLocalVar("ia", vars["ia"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
+					Def:     "D2",
+					Package: packageName,
+				}),
 				Y: typevars.MakeLocalVar("ia", vars["ia"]),
 			},
 			&contracts.HasField{
