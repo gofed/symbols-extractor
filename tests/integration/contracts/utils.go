@@ -145,6 +145,16 @@ func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runn
 
 	names := testedVarTable.Names()
 	if len(names) > len(expected) {
+		var eNames []string
+		for _, n := range expected {
+			eNames = append(eNames, n.Name)
+		}
+		sort.Strings(eNames)
+		sort.Strings(names)
+		for i := 0; i < len(eNames) && i < len(names); i++ {
+			fmt.Printf("test.name: %v\t\te.name: %v\n", names[i], eNames[i])
+		}
+
 		t.Errorf("There is %v variables not yet checked", len(names)-len(expected))
 	}
 

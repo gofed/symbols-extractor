@@ -124,6 +124,21 @@ func New(config *types.Config) *Runner {
 				if isVariable(d.X) {
 					storeVar(d.X.(*typevars.Variable), c)
 				}
+			case *contracts.IsSendableTo:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
+				if isVariable(d.Y) {
+					storeVar(d.Y.(*typevars.Variable), c)
+				}
+			case *contracts.IsIncDecable:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
+			case *contracts.IsRangeable:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -178,6 +193,10 @@ func (r *Runner) isTypevarEvaluated(i typevars.Interface) bool {
 	case *typevars.MapKey:
 		return r.isTypevarEvaluated(d.X)
 	case *typevars.MapValue:
+		return r.isTypevarEvaluated(d.X)
+	case *typevars.RangeKey:
+		return r.isTypevarEvaluated(d.X)
+	case *typevars.RangeValue:
 		return r.isTypevarEvaluated(d.X)
 	default:
 		panic(fmt.Sprintf("Unrecognized typevar: %#v", i))
@@ -244,6 +263,18 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 					ready = true
 				}
 			case *contracts.IsReceiveableFrom:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
+			case *contracts.IsSendableTo:
+				if r.isTypevarEvaluated(d.X) && r.isTypevarEvaluated(d.Y) {
+					ready = true
+				}
+			case *contracts.IsIncDecable:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
+			case *contracts.IsRangeable:
 				if r.isTypevarEvaluated(d.X) {
 					ready = true
 				}
@@ -356,6 +387,34 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			}
 			return &varTableItem{
 				dataType:    yDataType,
+				packageName: item.packageName,
+				symbolTable: item.symbolTable,
+			}, nil
+		case *typevars.RangeKey:
+			item, ok := getVar(td.X)
+			if !ok {
+				return nil, fmt.Errorf("Variable %v does not exist", td.X.String())
+			}
+			keyDT, _, err := propagation.New(r.symbolAccessor).RangeExpr(item.dataType)
+			if err != nil {
+				return nil, err
+			}
+			return &varTableItem{
+				dataType:    keyDT,
+				packageName: item.packageName,
+				symbolTable: item.symbolTable,
+			}, nil
+		case *typevars.RangeValue:
+			item, ok := getVar(td.X)
+			if !ok {
+				return nil, fmt.Errorf("Variable %v does not exist", td.X.String())
+			}
+			_, valueDT, err := propagation.New(r.symbolAccessor).RangeExpr(item.dataType)
+			if err != nil {
+				return nil, err
+			}
+			return &varTableItem{
+				dataType:    valueDT,
 				packageName: item.packageName,
 				symbolTable: item.symbolTable,
 			}, nil
@@ -563,6 +622,43 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			packageName: item.packageName,
 			symbolTable: item.symbolTable,
 		})
+	case *contracts.IsSendableTo:
+		yItem, yErr := typevar2varTableItem(d.Y)
+		if yErr != nil {
+			return yErr
+		}
+		if yItem.dataType.GetType() != gotypes.ChannelType {
+			return fmt.Errorf("Expected channel, got %#v instead", yItem.dataType)
+		}
+		xItem, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		// TODO(chaloup): check the xItem (value) is compatible with yItem.Value
+		fmt.Printf("Checking item %#v compatibility with channel", xItem)
+	case *contracts.IsIncDecable:
+		xItem, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		// TODO(jchaloup): Check the
+		fmt.Printf("About to check %#v can be inc/decremented", xItem)
+	case *contracts.IsRangeable:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		switch item.dataType.GetType() {
+		case gotypes.SliceType, gotypes.MapType, gotypes.ArrayType:
+			return nil
+		case gotypes.BuiltinType:
+			if item.dataType.(*gotypes.Builtin).Def == "string" {
+				return nil
+			}
+			return fmt.Errorf("Builtin expected to be a string, got %v instead", item.dataType.(*gotypes.Builtin).Def)
+		default:
+			return fmt.Errorf("Expression %#v not rangeable", item.dataType)
+		}
 	default:
 		panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 	}

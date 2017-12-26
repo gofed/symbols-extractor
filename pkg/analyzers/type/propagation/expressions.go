@@ -380,3 +380,55 @@ func (c *Config) IndexExpr(xDataType, idxDataType gotypes.DataType) (gotypes.Dat
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDataType))
 	}
 }
+
+func (c *Config) RangeExpr(xDataType gotypes.DataType) (gotypes.DataType, gotypes.DataType, error) {
+	var rangeExpr gotypes.DataType
+	// over-approximation but given we run the go build before the procesing
+	// this is a valid processing
+	pointer, ok := xDataType.(*gotypes.Pointer)
+	if ok {
+		rangeExpr = pointer.Def
+	} else {
+		rangeExpr = xDataType
+	}
+
+	// Identifier or a qid.Identifier
+	var err error
+	rangeExpr, err = c.symbolsAccessor.FindFirstNonidDataType(rangeExpr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// From https://golang.org/ref/spec#For_range
+	//
+	// Range expression                          1st value          2nd value
+	//
+	// array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
+	// string          s  string type            index    i  int    see below  rune
+	// map             m  map[K]V                key      k  K      m[k]       V
+	// channel         c  chan E, <-chan E       element  e  E
+	switch xExprType := rangeExpr.(type) {
+	case *gotypes.Array:
+		return &gotypes.Builtin{Def: "int"}, xExprType.Elmtype, nil
+	case *gotypes.Slice:
+		return &gotypes.Builtin{Def: "int"}, xExprType.Elmtype, nil
+	case *gotypes.Builtin:
+		if xExprType.Def != "string" {
+			fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xDataType)
+		}
+		return &gotypes.Builtin{Def: "int"}, &gotypes.Builtin{Def: "rune"}, nil
+	case *gotypes.Identifier:
+		if xExprType.Def != "string" {
+			fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xDataType)
+		}
+		return &gotypes.Builtin{Def: "int"}, &gotypes.Builtin{Def: "rune"}, nil
+	case *gotypes.Map:
+		return xExprType.Keytype, xExprType.Valuetype, nil
+	case *gotypes.Channel:
+		return xExprType.Value, nil, nil
+	case *gotypes.Ellipsis:
+		return &gotypes.Builtin{Def: "int"}, xExprType.Def, nil
+	default:
+		return nil, nil, fmt.Errorf("Unknown type of range expression: %#v", rangeExpr)
+	}
+}
