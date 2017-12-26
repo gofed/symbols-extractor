@@ -144,6 +144,7 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/typepropagation/indexable \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/pointers \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/selectors \
+			$(PROJECT_ROOT)/tests/integration/typepropagation/type_casting \
 				$(GLOG_FLAGS) $(WLOG)
 
 gen:
