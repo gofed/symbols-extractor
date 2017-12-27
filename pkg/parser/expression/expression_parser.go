@@ -93,7 +93,8 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	}
 
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
-		X: outputTypeVar,
+		X:   outputTypeVar,
+		Key: keyTypeVar,
 	})
 
 	for _, litElement := range lit.Elts {
@@ -494,13 +495,24 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 			Y:            y,
 			ExpectedType: yDataType,
 		})
+		// TODO(jchaloup): add ReceivedFrom contract
 	} else {
-		ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
-			OpToken:      expr.Op,
-			X:            attr.TypeVarList[0],
-			Y:            y,
-			ExpectedType: yDataType,
-		})
+		if expr.Op == token.AND {
+			ep.Config.ContractTable.AddContract(&contracts.IsReferenceable{
+				X: attr.TypeVarList[0],
+			})
+			ep.Config.ContractTable.AddContract(&contracts.ReferenceOf{
+				X: attr.TypeVarList[0],
+				Y: y,
+			})
+		} else {
+			ep.Config.ContractTable.AddContract(&contracts.UnaryOp{
+				OpToken:      expr.Op,
+				X:            attr.TypeVarList[0],
+				Y:            y,
+				ExpectedType: yDataType,
+			})
+		}
 	}
 
 	return types.ExprAttributeFromDataType(yDataType).AddTypeVar(y), nil
@@ -1011,7 +1023,8 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, err
 	}
 
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
-		X: exprDefAttr.TypeVarList[0],
+		X:       exprDefAttr.TypeVarList[0],
+		IsSlice: true,
 	})
 
 	return exprDefAttr, nil
@@ -1142,8 +1155,13 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 
 	y := ep.Config.ContractTable.NewVirtualVar()
 
+	receiverDef, err := ep.TypeParser.Parse(dataTypeIdent)
+	if err != nil {
+		return true, nil, err
+	}
+
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-		X: typevars.MakeConstant(typeSymbolDef.Package, typeSymbolDef.Def),
+		X: typevars.MakeConstant(ep.Config.PackageName, receiverDef),
 		Y: y,
 	})
 
@@ -1219,6 +1237,18 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 	), nil
 }
 
+func (ep *Parser) typevar2variable(xTypeVar typevars.Interface) *typevars.Variable {
+	if d, ok := xTypeVar.(*typevars.Variable); ok {
+		return d
+	}
+	yVarType := ep.Config.ContractTable.NewVirtualVar()
+	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+		X: xTypeVar,
+		Y: yVarType,
+	})
+	return yVarType
+}
+
 // parseIndexExpr consumes ast.IndexExpr and produces:
 // - if the expression is a map, data type of the map values is returned
 // - if the expression is an array, data type of the array value is returned
@@ -1243,134 +1273,36 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 
-	// One can not do &(&(a))
-	var indexExpr gotypes.DataType
-	pointer, ok := xDefAttr.DataTypeList[0].(*gotypes.Pointer)
-	if ok {
-		indexExpr = pointer.Def
-	} else {
-		indexExpr = xDefAttr.DataTypeList[0]
-	}
-	glog.Infof("IndexExprDef: %#v", indexExpr)
-	// In case we have
-	// type A []int
-	// type B A
-	// type C B
-	// c := (C)([]int{1,2,3})
-	// c[1]
-	if indexExpr.GetType() == gotypes.IdentifierType || indexExpr.GetType() == gotypes.SelectorType {
-		for {
-			var symbolDef *symbols.SymbolDef
-			if indexExpr.GetType() == gotypes.IdentifierType {
-				xType := indexExpr.(*gotypes.Identifier)
-
-				if xType.Package == "builtin" {
-					break
-				}
-				def, _, err := ep.SymbolsAccessor.LookupDataType(xType)
-				if err != nil {
-					return nil, err
-				}
-				symbolDef = def
-			} else {
-				_, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(indexExpr.(*gotypes.Selector).Prefix, &ast.Ident{Name: indexExpr.(*gotypes.Selector).Item})
-				if err != nil {
-					return nil, err
-				}
-				symbolDef = sd
-			}
-
-			if symbolDef.Def == nil {
-				return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
-			}
-
-			indexExpr = symbolDef.Def
-			if symbolDef.Def.GetType() == gotypes.IdentifierType || symbolDef.Def.GetType() == gotypes.SelectorType {
-				continue
-			}
-			break
-		}
+	indexExpr, xDefType, err := propagation.New(ep.Config.SymbolsAccessor).IndexExpr(xDefAttr.DataTypeList[0], indexAttr.DataTypeList[0])
+	if err != nil {
+		return nil, err
 	}
 
-	var yVarType *typevars.Variable
-	if d, ok := xDefAttr.TypeVarList[0].(*typevars.Variable); ok {
-		yVarType = d
-	} else {
-		yVarType = ep.Config.ContractTable.NewVirtualVar()
-		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-			X: xDefAttr.TypeVarList[0],
-			Y: yVarType,
-		})
-	}
-
+	yVarType := ep.typevar2variable(xDefAttr.TypeVarList[0])
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
-		X: yVarType,
+		X:   yVarType,
+		Key: indexAttr.TypeVarList[0],
 	})
 
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)
 	// and get data type of its array/map members
-	switch xType := indexExpr.(type) {
-	case *gotypes.Map:
-		var keyVarType *typevars.Variable
-		if d, ok := indexAttr.TypeVarList[0].(*typevars.Variable); ok {
-			keyVarType = d
-		} else {
-			keyVarType = ep.Config.ContractTable.NewVirtualVar()
-			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-				X: indexAttr.TypeVarList[0],
-				Y: keyVarType,
-			})
-		}
-
+	switch xDefType {
+	case gotypes.MapType:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
-			Y: typevars.MakeMapKey(keyVarType),
+			Y: typevars.MakeMapKey(ep.typevar2variable(indexAttr.TypeVarList[0])),
 		})
-		y := typevars.MakeMapValue(yVarType)
-		return types.ExprAttributeFromDataType(xType.Valuetype).AddTypeVar(y), nil
-	case *gotypes.Array:
+		return types.ExprAttributeFromDataType(indexExpr).AddTypeVar(
+			typevars.MakeMapValue(yVarType),
+		), nil
+	case gotypes.ArrayType, gotypes.SliceType, gotypes.BuiltinType, gotypes.EllipsisType:
 		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 			X: indexAttr.TypeVarList[0],
 			Y: typevars.MakeListKey(),
 		})
-		y := typevars.MakeListValue(yVarType)
-		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
-	case *gotypes.Slice:
-		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-			X: indexAttr.TypeVarList[0],
-			Y: typevars.MakeListKey(),
-		})
-		y := typevars.MakeListValue(yVarType)
-		return types.ExprAttributeFromDataType(xType.Elmtype).AddTypeVar(y), nil
-	case *gotypes.Builtin:
-		if xType.Def == "string" {
-			// Checked at https://play.golang.org/
-			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-				X: indexAttr.TypeVarList[0],
-				Y: typevars.MakeListKey(),
-			})
-			y := typevars.MakeListValue(yVarType)
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
-		}
-		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
-	case *gotypes.Identifier:
-		if xType.Def == "string" && xType.Package == "builtin" {
-			// Checked at https://play.golang.org/
-			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-				X: indexAttr.TypeVarList[0],
-				Y: typevars.MakeListKey(),
-			})
-			y := typevars.MakeListValue(yVarType)
-			return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "uint8"}).AddTypeVar(y), nil
-		}
-		return nil, fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
-	case *gotypes.Ellipsis:
-		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-			X: indexAttr.TypeVarList[0],
-			Y: typevars.MakeListKey(),
-		})
-		y := typevars.MakeListValue(yVarType)
-		return types.ExprAttributeFromDataType(xType.Def).AddTypeVar(y), nil
+		return types.ExprAttributeFromDataType(indexExpr).AddTypeVar(
+			typevars.MakeListValue(yVarType),
+		), nil
 	default:
 		panic(fmt.Errorf("Unrecognized indexExpr type: %#v at %v", xDefAttr.DataTypeList[0], expr.Pos()))
 	}

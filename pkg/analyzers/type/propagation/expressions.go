@@ -273,11 +273,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 	case *gotypes.Struct:
 		_, currentSt := c.symbolsAccessor.CurrentTable()
 		return c.symbolsAccessor.RetrieveDataTypeField(
-			accessors.NewFieldAccessor(currentSt, &symbols.SymbolDef{
-				Name:    "",
-				Package: "",
-				Def:     xType,
-			}, &ast.Ident{Name: item}),
+			accessors.NewFieldAccessor(currentSt, &symbols.SymbolDef{Def: xType}, &ast.Ident{Name: item}),
 		)
 	case *gotypes.Interface:
 		// TODO(jchaloup): test the case when the interface is anonymous
@@ -303,5 +299,136 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 		)
 	default:
 		return nil, fmt.Errorf("Trying to retrieve a %v field from a non-struct data type when parsing selector expression %#v", item, xDataType)
+	}
+}
+
+func (c *Config) IndexExpr(xDataType, idxDataType gotypes.DataType) (gotypes.DataType, string, error) {
+	// One can not do &(&(a))
+	var indexExpr gotypes.DataType
+	pointer, ok := xDataType.(*gotypes.Pointer)
+	if ok {
+		indexExpr = pointer.Def
+	} else {
+		indexExpr = xDataType
+	}
+	glog.Infof("IndexExprDef: %#v", indexExpr)
+	// In case we have
+	// type A []int
+	// type B A
+	// type C B
+	// c := (C)([]int{1,2,3})
+	// c[1]
+	if indexExpr.GetType() == gotypes.IdentifierType || indexExpr.GetType() == gotypes.SelectorType {
+		for {
+			var symbolDef *symbols.SymbolDef
+			if indexExpr.GetType() == gotypes.IdentifierType {
+				xType := indexExpr.(*gotypes.Identifier)
+
+				if xType.Package == "builtin" {
+					break
+				}
+				def, _, err := c.symbolsAccessor.LookupDataType(xType)
+				if err != nil {
+					return nil, "", err
+				}
+				symbolDef = def
+			} else {
+				_, sd, err := c.symbolsAccessor.RetrieveQidDataType(indexExpr.(*gotypes.Selector).Prefix, &ast.Ident{Name: indexExpr.(*gotypes.Selector).Item})
+				if err != nil {
+					return nil, "", err
+				}
+				symbolDef = sd
+			}
+
+			if symbolDef.Def == nil {
+				return nil, "", fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
+			}
+
+			indexExpr = symbolDef.Def
+			if symbolDef.Def.GetType() == gotypes.IdentifierType || symbolDef.Def.GetType() == gotypes.SelectorType {
+				continue
+			}
+			break
+		}
+	}
+	// TODO(jchaloup): check idxDataType as well, .e.g. it is an integer type when accessing slice, array or string
+
+	// Get definition of the X from the symbol Table (it must be a variable of a data type)
+	// and get data type of its array/map members
+	switch xType := indexExpr.(type) {
+	case *gotypes.Map:
+		return xType.Valuetype, indexExpr.GetType(), nil
+	case *gotypes.Array:
+		return xType.Elmtype, indexExpr.GetType(), nil
+	case *gotypes.Slice:
+		return xType.Elmtype, indexExpr.GetType(), nil
+	case *gotypes.Builtin:
+		if xType.Def == "string" {
+			// Checked at https://play.golang.org/
+			return &gotypes.Builtin{Def: "uint8"}, gotypes.BuiltinType, nil
+		}
+		return nil, "", fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
+	case *gotypes.Identifier:
+		if xType.Def == "string" && xType.Package == "builtin" {
+			// Checked at https://play.golang.org/
+			return &gotypes.Builtin{Def: "uint8"}, gotypes.BuiltinType, nil
+		}
+		return nil, "", fmt.Errorf("Accessing item of built-in non-string type: %#v", xType)
+	case *gotypes.Ellipsis:
+		return xType.Def, indexExpr.GetType(), nil
+	default:
+		panic(fmt.Errorf("Unrecognized indexExpr type: %#v", xDataType))
+	}
+}
+
+func (c *Config) RangeExpr(xDataType gotypes.DataType) (gotypes.DataType, gotypes.DataType, error) {
+	var rangeExpr gotypes.DataType
+	// over-approximation but given we run the go build before the procesing
+	// this is a valid processing
+	pointer, ok := xDataType.(*gotypes.Pointer)
+	if ok {
+		rangeExpr = pointer.Def
+	} else {
+		rangeExpr = xDataType
+	}
+
+	// Identifier or a qid.Identifier
+	var err error
+	rangeExpr, err = c.symbolsAccessor.FindFirstNonidDataType(rangeExpr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// From https://golang.org/ref/spec#For_range
+	//
+	// Range expression                          1st value          2nd value
+	//
+	// array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
+	// string          s  string type            index    i  int    see below  rune
+	// map             m  map[K]V                key      k  K      m[k]       V
+	// channel         c  chan E, <-chan E       element  e  E
+	switch xExprType := rangeExpr.(type) {
+	case *gotypes.Array:
+		return &gotypes.Builtin{Def: "int"}, xExprType.Elmtype, nil
+	case *gotypes.Slice:
+		return &gotypes.Builtin{Def: "int"}, xExprType.Elmtype, nil
+	case *gotypes.Builtin:
+		if xExprType.Def != "string" {
+			fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xDataType)
+		}
+		return &gotypes.Builtin{Def: "int"}, &gotypes.Builtin{Def: "rune"}, nil
+	case *gotypes.Identifier:
+		if xExprType.Def != "string" {
+			fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xDataType)
+		}
+		return &gotypes.Builtin{Def: "int"}, &gotypes.Builtin{Def: "rune"}, nil
+	case *gotypes.Map:
+		return xExprType.Keytype, xExprType.Valuetype, nil
+	case *gotypes.Channel:
+		return xExprType.Value, nil, nil
+	case *gotypes.Ellipsis:
+		return &gotypes.Builtin{Def: "int"}, xExprType.Def, nil
+	default:
+		return nil, nil, fmt.Errorf("Unknown type of range expression: %#v", rangeExpr)
 	}
 }

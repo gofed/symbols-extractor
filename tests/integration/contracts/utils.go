@@ -139,12 +139,22 @@ func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runn
 		if !reflect.DeepEqual(tested.DataType(), e.DataType) {
 			tByteSlice, _ := json.Marshal(tested.DataType())
 			eByteSlice, _ := json.Marshal(e.DataType)
-			t.Errorf("%v: got %v, expected %v", e.Name, string(tByteSlice), string(eByteSlice))
+			t.Errorf("%v: got\n%v, expected\n%v", e.Name, string(tByteSlice), string(eByteSlice))
 		}
 	}
 
 	names := testedVarTable.Names()
 	if len(names) > len(expected) {
+		var eNames []string
+		for _, n := range expected {
+			eNames = append(eNames, n.Name)
+		}
+		sort.Strings(eNames)
+		sort.Strings(names)
+		for i := 0; i < len(eNames) && i < len(names); i++ {
+			fmt.Printf("test.name: %v\t\te.name: %v\n", names[i], eNames[i])
+		}
+
 		t.Errorf("There is %v variables not yet checked", len(names)-len(expected))
 	}
 

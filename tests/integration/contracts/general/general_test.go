@@ -65,6 +65,10 @@ func TestGeneralContracts(t *testing.T) {
 				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y: typevars.MakeVar(packageName, "d", vars["d"]),
 			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Def: "int"}),
+				Y: typevars.MakeVar(packageName, "d", vars["d"]),
+			},
 			&contracts.BinaryOp{
 				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
 				Y:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
@@ -217,10 +221,12 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			// id := interface{}(&c)
 			// intD, intOk := id.(*int)
-			&contracts.UnaryOp{
-				X:       typevars.MakeVar(packageName, "c", vars["c"]),
-				Y:       typevars.MakeVirtualVar(7),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeVar(packageName, "c", vars["c"]),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVar(packageName, "c", vars["c"]),
+				Y: typevars.MakeVirtualVar(7),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVirtualVar(7),
@@ -311,10 +317,12 @@ func TestGeneralContracts(t *testing.T) {
 				Y: typevars.MakeField(typevars.MakeLocalVar("s", vars["s"]), "a", 0),
 			},
 			// *(&c) = 2
-			&contracts.UnaryOp{
-				X:       typevars.MakeVar(packageName, "c", vars["c"]),
-				Y:       typevars.MakeVirtualVar(10),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeVar(packageName, "c", vars["c"]),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVar(packageName, "c", vars["c"]),
+				Y: typevars.MakeVirtualVar(10),
 			},
 			&contracts.IsDereferenceable{
 				X: typevars.MakeVirtualVar(10),

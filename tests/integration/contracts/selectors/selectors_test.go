@@ -1,7 +1,6 @@
 package contracts
 
 import (
-	"go/token"
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
@@ -37,8 +36,9 @@ func TestSelectorsTypes(t *testing.T) {
 		"../../testdata/selectors.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Struct{
-					Fields: []gotypes.StructFieldsItem{},
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
+					Def:     "D",
+					Package: packageName,
 				}),
 				Y: typevars.MakeVirtualVar(1),
 			},
@@ -100,13 +100,22 @@ func TestSelectorsTypes(t *testing.T) {
 				}),
 				Y: typevars.MakeVirtualVar(4),
 			},
-			&contracts.UnaryOp{
-				X:       typevars.MakeVirtualVar(4),
-				Y:       typevars.MakeVirtualVar(5),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeVirtualVar(4),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVirtualVar(4),
+				Y: typevars.MakeVirtualVar(5),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVirtualVar(5),
+				Y: typevars.MakeLocalVar("ia", vars["ia"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
+					Def:     "D2",
+					Package: packageName,
+				}),
 				Y: typevars.MakeLocalVar("ia", vars["ia"]),
 			},
 			&contracts.HasField{
@@ -165,10 +174,12 @@ func TestSelectorsTypes(t *testing.T) {
 			},
 			// idc := &ida
 			// idd := idc.imethod()
-			&contracts.UnaryOp{
-				X:       typevars.MakeLocalVar("ida", vars["ida"]),
-				Y:       typevars.MakeVirtualVar(9),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeLocalVar("ida", vars["ida"]),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeLocalVar("ida", vars["ida"]),
+				Y: typevars.MakeVirtualVar(9),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(9),
@@ -224,10 +235,12 @@ func TestSelectorsTypes(t *testing.T) {
 				}),
 				Y: typevars.MakeVirtualVar(11),
 			},
-			&contracts.UnaryOp{
-				X:       typevars.MakeVirtualVar(11),
-				Y:       typevars.MakeVirtualVar(12),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeVirtualVar(11),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVirtualVar(11),
+				Y: typevars.MakeVirtualVar(12),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(12),
@@ -339,10 +352,12 @@ func TestSelectorsTypes(t *testing.T) {
 				}),
 				Y: typevars.MakeVirtualVar(15),
 			},
-			&contracts.UnaryOp{
-				X:       typevars.MakeVirtualVar(15),
-				Y:       typevars.MakeVirtualVar(16),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeVirtualVar(15),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVirtualVar(15),
+				Y: typevars.MakeVirtualVar(16),
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeVirtualVar(16),

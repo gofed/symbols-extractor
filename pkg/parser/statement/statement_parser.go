@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/analyzers/type/propagation"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
@@ -229,6 +230,11 @@ func (sp *Parser) ParseValueSpec(spec *ast.ValueSpec) ([]*symbols.SymbolDef, err
 					}
 					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 						X:            valueExprAttr.TypeVarList[i],
+						Y:            typevars.VariableFromSymbolDef(sDef),
+						ExpectedType: sDef.Def,
+					})
+					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X:            typevars.MakeConstant(sp.Config.PackageName, typeDef),
 						Y:            typevars.VariableFromSymbolDef(sDef),
 						ExpectedType: sDef.Def,
 					})
@@ -1128,60 +1134,9 @@ func (sp *Parser) parseRangeStmt(statement *ast.RangeStmt) error {
 		X: xVarType,
 	})
 
-	var rangeExpr gotypes.DataType
-	// over-approximation but given we run the go build before the procesing
-	// this is a valid processing
-	pointer, ok := xExprAttr.DataTypeList[0].(*gotypes.Pointer)
-	if ok {
-		rangeExpr = pointer.Def
-	} else {
-		rangeExpr = xExprAttr.DataTypeList[0]
-	}
-
-	// Identifier or a qid.Identifier
-	rangeExpr, err = sp.SymbolsAccessor.FindFirstNonidDataType(rangeExpr)
-	if err != nil {
-		return err
-	}
-
-	var key, value gotypes.DataType
-	// From https://golang.org/ref/spec#For_range
-	//
-	// Range expression                          1st value          2nd value
-	//
-	// array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
-	// string          s  string type            index    i  int    see below  rune
-	// map             m  map[K]V                key      k  K      m[k]       V
-	// channel         c  chan E, <-chan E       element  e  E
-	switch xExprType := rangeExpr.(type) {
-	case *gotypes.Array:
-		key = &gotypes.Builtin{Def: "int"}
-		value = xExprType.Elmtype
-	case *gotypes.Slice:
-		key = &gotypes.Builtin{Def: "int"}
-		value = xExprType.Elmtype
-	case *gotypes.Builtin:
-		if xExprType.Def != "string" {
-			fmt.Errorf("Expecting string in range Builtin expression. Got %#v instead.", xExprAttr.DataTypeList[0])
-		}
-		key = &gotypes.Builtin{Def: "int"}
-		value = &gotypes.Builtin{Def: "rune"}
-	case *gotypes.Identifier:
-		if xExprType.Def != "string" {
-			fmt.Errorf("Expecting string in range Identifier expression. Got %#v instead.", xExprAttr.DataTypeList[0])
-		}
-		key = &gotypes.Builtin{Def: "int"}
-		value = &gotypes.Builtin{Def: "rune"}
-	case *gotypes.Map:
-		key = xExprType.Keytype
-		value = xExprType.Valuetype
-	case *gotypes.Channel:
-		key = xExprType.Value
-	case *gotypes.Ellipsis:
-		key = &gotypes.Builtin{Def: "int"}
-		value = xExprType.Def
-	default:
-		panic(fmt.Errorf("Unknown type of range expression: %#v at %v", rangeExpr, statement.Pos()))
+	key, value, rErr := propagation.New(sp.Config.SymbolsAccessor).RangeExpr(xExprAttr.DataTypeList[0])
+	if rErr != nil {
+		return rErr
 	}
 
 	if statement.Key != nil {

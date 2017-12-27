@@ -1,7 +1,6 @@
 package multi_packages
 
 import (
-	"go/token"
 	"sort"
 	"testing"
 
@@ -64,10 +63,12 @@ func TestMultiPackageContracts(t *testing.T) {
 				X: typevars.MakeConstant("pkgA", &gotypes.Selector{Item: "A", Prefix: &gotypes.Packagequalifier{Path: "pkgA", Name: "pkgA"}}),
 				Y: typevars.MakeVirtualVar(1),
 			},
-			&contracts.UnaryOp{
-				X:       typevars.MakeVirtualVar(1),
-				Y:       typevars.MakeVirtualVar(2),
-				OpToken: token.AND,
+			&contracts.IsReferenceable{
+				X: typevars.MakeVirtualVar(1),
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVirtualVar(1),
+				Y: typevars.MakeVirtualVar(2),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeVirtualVar(2),

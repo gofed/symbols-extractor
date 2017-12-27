@@ -1,4 +1,4 @@
-package typepropagation
+package basic
 
 import (
 	"testing"

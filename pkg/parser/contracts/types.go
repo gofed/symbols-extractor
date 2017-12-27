@@ -126,7 +126,8 @@ type DereferenceOf struct {
 }
 
 type IsIndexable struct {
-	X typevars.Interface
+	X, Key  typevars.Interface
+	IsSlice bool
 }
 
 type IsSendableTo struct {

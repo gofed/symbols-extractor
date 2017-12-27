@@ -1,4 +1,4 @@
-package typepropagation
+package binaryops
 
 import (
 	"testing"

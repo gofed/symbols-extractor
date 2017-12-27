@@ -311,6 +311,22 @@ func (f *FieldAccessor) SetDropFieldsOnly() *FieldAccessor {
 	return f
 }
 
+func (a *Accessor) RetrieveStructFieldAtIndex(structDef *gotypes.Struct, idx int) (gotypes.DataType, error) {
+	glog.Infof("Retrieving struct field at %q-th position from %#v\n", idx, structDef)
+
+	if idx < 0 || idx >= len(structDef.Fields) {
+		return nil, fmt.Errorf("Invalid index %v out of struct's <0; %v> interval", idx, len(structDef.Fields))
+	}
+
+	for i, field := range structDef.Fields {
+		if i == idx {
+			return field.Def, nil
+		}
+	}
+
+	panic("RetrieveStructFieldAtIndex: unexpected behaviour, end of the world")
+}
+
 // Get a struct's field.
 // Given a struct can embedded another struct from a different package, the method must be able to access
 // symbol tables of other packages. Thus recursively process struct's definition up to all its embedded fields.
