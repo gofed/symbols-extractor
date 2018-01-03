@@ -56,7 +56,7 @@ func TestSelfTypePropagation(t *testing.T) {
 		Def: &gotypes.Function{
 			Package: gopkg,
 			Results: []gotypes.DataType{
-				&gotypes.Builtin{Def: "int"},
+				&gotypes.Identifier{Package: "builtin", Def: "int"},
 			},
 		}}
 
@@ -71,31 +71,31 @@ func TestSelfTypePropagation(t *testing.T) {
 			makeLocal("dD6", &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D6", Package: gopkg}}),
 			makeLocal("frA", Method),
 			makeLocal("ia", &gotypes.Identifier{Def: "D2", Package: gopkg}),
-			makeLocal("ib", &gotypes.Builtin{Def: "int"}),
+			makeLocal("ib", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("ida", &gotypes.Identifier{Def: "D4", Package: gopkg}),
-			makeLocal("idb", &gotypes.Builtin{Def: "int"}),
+			makeLocal("idb", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("idc", &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D4", Package: gopkg}}),
-			makeLocal("idd", &gotypes.Builtin{Def: "int"}),
+			makeLocal("idd", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("ide", &gotypes.Pointer{
 				Def: &gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						{
 							Name: "d",
-							Def:  &gotypes.Builtin{Def: "int"},
+							Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 						},
 					},
 				}}),
-			makeLocal("idf", &gotypes.Builtin{Def: "int"}),
+			makeLocal("idf", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("idg", &gotypes.Identifier{Def: "D6", Package: gopkg}),
-			makeLocal("idh", &gotypes.Builtin{Def: "int"}),
+			makeLocal("idh", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("idi", &gotypes.Struct{
 				Fields: []gotypes.StructFieldsItem{
 					{
 						Name: "d",
-						Def:  &gotypes.Builtin{Def: "int"},
+						Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				}}),
-			makeLocal("idj", &gotypes.Builtin{Def: "int"}),
+			makeLocal("idj", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("idk", &gotypes.Interface{
 				Methods: []gotypes.InterfaceMethodsItem{
 					{
@@ -103,14 +103,14 @@ func TestSelfTypePropagation(t *testing.T) {
 						Def: &gotypes.Function{
 							Package: gopkg,
 							Results: []gotypes.DataType{
-								&gotypes.Builtin{Def: "int"},
+								&gotypes.Identifier{Package: "builtin", Def: "int"},
 							},
 						},
 					},
 				}}),
-			makeLocal("idl", &gotypes.Builtin{Def: "int"}),
+			makeLocal("idl", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("mA", &gotypes.Identifier{Def: "D", Package: gopkg}),
-			makeLocal("mB", &gotypes.Builtin{Def: "int"}),
+			makeLocal("mB", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeVirtual(1, &gotypes.Identifier{Def: "D", Package: gopkg}),
 			makeVirtual(2, &gotypes.Identifier{Def: "D", Package: gopkg}),
 			makeVirtual(3, Method),
@@ -119,7 +119,7 @@ func TestSelfTypePropagation(t *testing.T) {
 			makeVirtual(6, &gotypes.Function{
 				Package: gopkg,
 				Results: []gotypes.DataType{
-					&gotypes.Builtin{Def: "int"},
+					&gotypes.Identifier{Package: "builtin", Def: "int"},
 				}}),
 			makeVirtual(7, &gotypes.Identifier{Def: "D4", Package: gopkg}),
 			makeVirtual(8, &gotypes.Method{
@@ -127,7 +127,7 @@ func TestSelfTypePropagation(t *testing.T) {
 				Def: &gotypes.Function{
 					Package: gopkg,
 					Results: []gotypes.DataType{
-						&gotypes.Builtin{Def: "int"},
+						&gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				}}),
 			makeVirtual(9, &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D4", Package: gopkg}}),
@@ -136,45 +136,58 @@ func TestSelfTypePropagation(t *testing.T) {
 				Def: &gotypes.Function{
 					Package: gopkg,
 					Results: []gotypes.DataType{
-						&gotypes.Builtin{Def: "int"},
+						&gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				}}),
 			makeVirtual(11, &gotypes.Struct{
 				Fields: []gotypes.StructFieldsItem{
 					{
 						Name: "d",
-						Def:  &gotypes.Builtin{Def: "int"},
+						Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				}}),
 			makeVirtual(12, &gotypes.Pointer{Def: &gotypes.Struct{
 				Fields: []gotypes.StructFieldsItem{
 					{
 						Name: "d",
-						Def:  &gotypes.Builtin{Def: "int"},
+						Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				},
 			}}),
-			makeVirtual(13, &gotypes.Method{
+			makeVirtual(13, &gotypes.Identifier{Def: "D6", Package: gopkg}),
+			makeVirtual(14, &gotypes.Method{
 				Receiver: &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D6", Package: gopkg}},
 				Def: &gotypes.Function{
 					Package: gopkg,
 					Results: []gotypes.DataType{
-						&gotypes.Builtin{Def: "int"},
+						&gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				}}),
-			makeVirtual(14, &gotypes.Struct{
+			makeVirtual(15, &gotypes.Struct{
 				Fields: []gotypes.StructFieldsItem{
 					{
 						Name: "d",
-						Def:  &gotypes.Builtin{Def: "int"},
+						Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 				}}),
-			makeVirtual(15, &gotypes.Identifier{Def: "D3", Package: gopkg}),
-			makeVirtual(16, &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D3", Package: gopkg}}),
-			makeVirtual(17, &gotypes.Function{
+			makeVirtual(16, &gotypes.Identifier{Def: "D3", Package: gopkg}),
+			makeVirtual(17, &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D3", Package: gopkg}}),
+			makeVirtual(18, &gotypes.Interface{
+				Methods: []gotypes.InterfaceMethodsItem{
+					{
+						Name: "imethod",
+						Def: &gotypes.Function{
+							Package: gopkg,
+							Results: []gotypes.DataType{
+								&gotypes.Identifier{Package: "builtin", Def: "int"},
+							}},
+					},
+				},
+			}),
+			makeVirtual(19, &gotypes.Function{
 				Package: gopkg,
 				Results: []gotypes.DataType{
-					&gotypes.Builtin{Def: "int"},
+					&gotypes.Identifier{Package: "builtin", Def: "int"},
 				}}),
 		},
 	)

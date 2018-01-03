@@ -66,6 +66,88 @@ func (a *Accessor) IsBuiltin(name string) bool {
 	return false
 }
 
+func (a *Accessor) IsBuiltinConstantType(name string) bool {
+	if a.IsIntegral(name) {
+		return true
+	}
+	if a.IsFloating(name) {
+		return true
+	}
+	switch name {
+	case "complex64", "complex128":
+		return true
+	case "string":
+		return true
+	case "bool":
+		return true
+	}
+	return false
+}
+
+func (a *Accessor) IsIntegral(name string) bool {
+	switch name {
+	case "int", "int8", "int16", "int32", "int64":
+		return true
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return true
+	case "rune", "byte":
+		return true
+	case "uintptr":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *Accessor) IsCIntegral(name string) bool {
+	// TODO(jchaloup): read the list from a external resource
+	switch name {
+	case "int", "long", "size_t", "uintptr_t":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *Accessor) IsUintegral(name string) bool {
+	switch name {
+	case "int", "int8", "int16", "int32", "int64":
+		return false
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return true
+	case "rune", "byte":
+		return true
+	case "uintptr":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *Accessor) IsFloating(name string) bool {
+	return name == "float32" || name == "float64"
+}
+
+func (a *Accessor) IsComplex(name string) bool {
+	return name == "complex64" || name == "complex128"
+}
+
+func (a *Accessor) IsPointerType(def gotypes.DataType) bool {
+	switch def.GetType() {
+	case gotypes.PointerType,
+		gotypes.InterfaceType,
+		gotypes.NilType,
+		gotypes.FunctionType,
+		gotypes.MethodType,
+		gotypes.ArrayType,
+		gotypes.SliceType,
+		gotypes.MapType,
+		gotypes.ChannelType:
+		return true
+	}
+	return false
+}
+
 // Lookup retrieves a definition of identifier ident
 func (a *Accessor) Lookup(ident *gotypes.Identifier) (*symbols.SymbolDef, symbols.SymbolType, error) {
 	if ident.Package == "" {
@@ -93,6 +175,20 @@ func (a *Accessor) LookupMethod(ident *gotypes.Identifier, method string) (*symb
 		return nil, err
 	}
 	return table.LookupMethod(ident.Def, method)
+}
+
+func (a *Accessor) LookupAllMethods(ident *gotypes.Identifier) (map[string]*symbols.SymbolDef, error) {
+	if ident.Package == "" {
+		return nil, fmt.Errorf("Identifier %#v does not set its Package field", ident)
+	}
+	if ident.Package == a.packageName {
+		return a.symbolTable.LookupAllMethods(ident.Def)
+	}
+	table, err := a.globalSymbolTable.Lookup(ident.Package)
+	if err != nil {
+		return nil, err
+	}
+	return table.LookupAllMethods(ident.Def)
 }
 
 func (a *Accessor) LookupDataType(ident *gotypes.Identifier) (*symbols.SymbolDef, symbols.SymbolLookable, error) {
@@ -141,15 +237,54 @@ func (a *Accessor) RetrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ide
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
 	}
-
 	dataTypeDef, piErr := qidst.LookupDataType(item.String())
+	if qid.Path == "C" {
+		fmt.Printf("dataTypeDef, piErr: %#v, %v\n", dataTypeDef, piErr)
+	}
 	if piErr != nil {
 		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", item.String(), qid.Path, piErr)
 	}
 	return qidst, dataTypeDef, nil
 }
 
+func (a *Accessor) IsDataTypeInterface(typeDef gotypes.DataType) (bool, error) {
+	var symbolDef *symbols.SymbolDef
+	switch typeDefType := typeDef.(type) {
+	case *gotypes.Interface:
+		return true, nil
+	case *gotypes.Selector:
+		_, def, err := a.RetrieveQidDataType(typeDefType.Prefix, &ast.Ident{Name: typeDefType.Item})
+		if err != nil {
+			return false, err
+		}
+		symbolDef = def
+	case *gotypes.Identifier:
+		if typeDefType.Package == "builtin" {
+			// error interface
+			if typeDefType.Def == "error" {
+				return true, nil
+			}
+			return false, nil
+		}
+		def, _, err := a.LookupDataType(typeDefType)
+		if err != nil {
+			return false, err
+		}
+		symbolDef = def
+	default:
+		return false, nil
+	}
+	if symbolDef.Def == nil {
+		return false, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
+	}
+	if symbolDef.Package == "C" {
+		return false, nil
+	}
+	return a.IsDataTypeInterface(symbolDef.Def)
+}
+
 func (a *Accessor) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.DataType, error) {
+	glog.Infof("FindFirstNonidDataType: %#v", typeDef)
 	var symbolDef *symbols.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
@@ -159,6 +294,9 @@ func (a *Accessor) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.Dat
 		}
 		symbolDef = def
 	case *gotypes.Identifier:
+		if typeDefType.Package == "builtin" {
+			return typeDef, nil
+		}
 		def, _, err := a.LookupDataType(typeDefType)
 		if err != nil {
 			return nil, err
@@ -170,7 +308,238 @@ func (a *Accessor) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.Dat
 	if symbolDef.Def == nil {
 		return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
 	}
+	if symbolDef.Package == "C" {
+		return typeDef, nil
+	}
 	return a.FindFirstNonidDataType(symbolDef.Def)
+}
+
+func (a *Accessor) FindLastIdDataType(typeDef gotypes.DataType) (gotypes.DataType, error) {
+	var symbolDef *symbols.SymbolDef
+	switch typeDefType := typeDef.(type) {
+	case *gotypes.Selector:
+		_, def, err := a.RetrieveQidDataType(typeDefType.Prefix, &ast.Ident{Name: typeDefType.Item})
+		if err != nil {
+			return nil, err
+		}
+		symbolDef = def
+	case *gotypes.Identifier:
+		if typeDefType.Package == "builtin" {
+			return typeDef, nil
+		}
+		def, _, err := a.LookupDataType(typeDefType)
+		if err != nil {
+			return nil, err
+		}
+		symbolDef = def
+	default:
+		return nil, fmt.Errorf("Expected identifier, got %#v instead", typeDef)
+	}
+	if symbolDef.Def == nil {
+		return nil, fmt.Errorf("Symbol %q not yet fully processed", symbolDef.Name)
+	}
+	return a.FindFirstNonidDataType(symbolDef.Def)
+}
+
+// I need to end up with:
+// - anonymous struct definition 		=> "" + struct definition
+// - typed struct (its identifier) 	=> qid.id + struct definition
+// - pointer (and its type)					=> just it is a pointer for now
+// - builtin												=> just the type name
+
+type UnderlyingType struct {
+	Def        gotypes.DataType
+	SymbolType string
+	Id         string
+	Package    string
+}
+
+func (a *Accessor) ResolveToUnderlyingType(typeDef gotypes.DataType) (*UnderlyingType, error) {
+	glog.Infof("ResolveToUnderlyingType: %#v\n", typeDef)
+	switch d := typeDef.(type) {
+	// anonymous struct
+	case *gotypes.Struct:
+		return &UnderlyingType{
+			Def:        typeDef,
+			SymbolType: gotypes.StructType,
+		}, nil
+	// interfaces
+	case *gotypes.Interface:
+		return &UnderlyingType{
+			SymbolType: gotypes.InterfaceType,
+		}, nil
+	// nil is still special
+	case *gotypes.Nil:
+		return &UnderlyingType{
+			SymbolType: gotypes.NilType,
+		}, nil
+	case *gotypes.Pointer:
+		return &UnderlyingType{
+			SymbolType: gotypes.PointerType,
+			Def:        typeDef,
+		}, nil
+	// any pointer type
+	case *gotypes.Array,
+		*gotypes.Channel,
+		// Function, Slice and Map only comparable with nil
+		*gotypes.Function,
+		*gotypes.Method,
+		*gotypes.Slice,
+		*gotypes.Map:
+		return &UnderlyingType{
+			SymbolType: gotypes.PointerType,
+			Def:        typeDef,
+		}, nil
+	// identifier
+	case *gotypes.Builtin:
+		return &UnderlyingType{
+			Def:        typeDef,
+			SymbolType: gotypes.BuiltinType,
+		}, nil
+	case *gotypes.Identifier, *gotypes.Constant:
+		var ident *gotypes.Identifier
+		if constant, ok := d.(*gotypes.Constant); ok {
+			ident = &gotypes.Identifier{
+				Package: constant.Package,
+				Def:     constant.Def,
+			}
+		} else {
+			ident = d.(*gotypes.Identifier)
+		}
+
+		if ident.Package == "builtin" {
+			if ident.Def == "error" {
+				def, _, err := a.Lookup(ident)
+				if err != nil {
+					return nil, err
+				}
+				return &UnderlyingType{
+					SymbolType: gotypes.InterfaceType,
+					Package:    "builtin",
+					Id:         "error",
+					Def:        def.Def,
+				}, nil
+			}
+			return &UnderlyingType{
+				Def:        ident,
+				SymbolType: gotypes.BuiltinType,
+			}, nil
+		}
+		if ident.Package == "C" {
+			return &UnderlyingType{
+				Def:        ident,
+				SymbolType: gotypes.IdentifierType,
+			}, nil
+		}
+		fmt.Printf("ident: %#v\n", ident)
+		def, _, err := a.LookupDataType(ident)
+		if err != nil {
+			return nil, err
+		}
+		if def.Def == nil {
+			return nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
+		}
+		switch def.Def.(type) {
+		case *gotypes.Struct:
+			return &UnderlyingType{
+				Def:        def.Def,
+				SymbolType: gotypes.StructType,
+				Id:         ident.Def,
+				Package:    ident.Package,
+			}, nil
+		case *gotypes.Interface:
+			return &UnderlyingType{
+				Def:        def.Def,
+				SymbolType: gotypes.InterfaceType,
+				Id:         ident.Def,
+				Package:    ident.Package,
+			}, nil
+		}
+
+		return a.ResolveToUnderlyingType(def.Def)
+	case *gotypes.Selector:
+		_, def, err := a.RetrieveQidDataType(d.Prefix, &ast.Ident{Name: d.Item})
+		if err != nil {
+			return nil, err
+		}
+		if def.Def == nil {
+			return nil, fmt.Errorf("Symbol %q not yet fully processed", def.Name)
+		}
+
+		switch def.Def.(type) {
+		case *gotypes.Struct:
+			return &UnderlyingType{
+				Def:        def.Def,
+				SymbolType: gotypes.StructType,
+				Id:         d.Item,
+				Package:    d.Prefix.(*gotypes.Packagequalifier).Path,
+			}, nil
+		case *gotypes.Interface:
+			return &UnderlyingType{
+				Def:        def.Def,
+				SymbolType: gotypes.InterfaceType,
+				Id:         d.Item,
+				Package:    d.Prefix.(*gotypes.Packagequalifier).Path,
+			}, nil
+		}
+		return a.ResolveToUnderlyingType(def.Def)
+	default:
+		panic(fmt.Errorf("Unrecognized underlying type %#v", typeDef))
+	}
+}
+
+func (a *Accessor) TypeToSimpleBuiltin(typeDef gotypes.DataType) (*gotypes.Identifier, error) {
+	builtin, err := a.FindFirstNonidDataType(typeDef)
+	if err != nil {
+		return nil, fmt.Errorf("Expected a type %#v to have simple buitin underlying type: %v", typeDef, err)
+	}
+	if ident, ok := builtin.(*gotypes.Identifier); ok {
+		if ident.Package == "C" {
+			// just assume it is correctly used
+			return ident, nil
+		}
+	}
+	if sel, ok := builtin.(*gotypes.Selector); ok {
+		qid := sel.Prefix.(*gotypes.Packagequalifier)
+		if qid.Path == "C" {
+			return &gotypes.Identifier{
+				Package: "C",
+				Def:     sel.Item,
+			}, nil
+		}
+	}
+	// pointer to C?
+	if pointer, ok := builtin.(*gotypes.Pointer); ok {
+		fmt.Printf("pointer: %#v\n", pointer.Def)
+	}
+	if a.IsPointerType(builtin) {
+		return &gotypes.Identifier{
+			Package: "<builtin>",
+			// better idea?
+			Def: "pointer",
+		}, nil
+	}
+	if builtin.GetType() != gotypes.IdentifierType {
+		return nil, fmt.Errorf("Expected a type %#v to have simple buitin underlying type. Got %v instead", typeDef, builtin.GetType())
+	}
+	ident := builtin.(*gotypes.Identifier)
+	if ident.Package != "builtin" || !a.IsBuiltinConstantType(ident.Def) {
+		return nil, fmt.Errorf("Expected identifier %#v to have simple buitin underlying type. Got %#v instead", typeDef, ident)
+	}
+	return ident, nil
+}
+
+func (a *Accessor) CToGoUnderlyingType(cIdent *gotypes.Identifier) (*gotypes.Identifier, error) {
+	if cIdent.Package != "C" {
+		return nil, fmt.Errorf("Expected C identifier, got %v identifier instead", cIdent.Package)
+	}
+
+	switch cIdent.Def {
+	case "size_t":
+		return &gotypes.Identifier{Package: "builtin", Def: "int"}, nil
+	}
+
+	return nil, fmt.Errorf("Unrecognized C identifier %q", cIdent.Def)
 }
 
 // TODO(jchaloup): return symbol table of the returned data type
@@ -221,10 +590,21 @@ func (a *Accessor) RetrieveInterfaceMethod(pkgsymboltable symbols.SymbolLookable
 					methodItem = &item
 					break
 				}
+				var def *symbols.SymbolDef
+				var err error
 				// check if the field is an embedded struct
-				def, err := itemSymbolTable.LookupDataType(fieldType.Def)
+				if fieldType.Package == "builtin" {
+					table, e := a.globalSymbolTable.Lookup("builtin")
+					if e != nil {
+						return nil, fmt.Errorf("Unable to retrieve a symbol table for 'builtin' package: %v", e)
+					}
+					def, err = table.LookupDataType(fieldType.Def)
+				} else {
+					def, err = itemSymbolTable.LookupDataType(fieldType.Def)
+				}
+
 				if err != nil {
-					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
+					return nil, fmt.Errorf("Unable to retrieve1 %q type definition when retrieving a field", fieldType.Def)
 				}
 				if def.Def == nil {
 					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
@@ -443,35 +823,25 @@ ITEMS_LOOP:
 				itemExpr = itemExpr.(*gotypes.Pointer).Def
 			}
 			switch fieldType := itemExpr.(type) {
-			case *gotypes.Builtin:
-				if !accessor.methodsOnly && fieldType.Def == accessor.field.String() {
-					fieldItem = &item
-					break ITEMS_LOOP
-				}
-				table, err := a.globalSymbolTable.Lookup("builtin")
-				if err != nil {
-					return nil, fmt.Errorf("Unable to retrieve a symbol table for 'builtin' package: %v", err)
-				}
-
-				// check if the field is an embedded struct
-				def, err := table.LookupDataType(fieldType.Def)
-				if err != nil {
-					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
-				}
-				if def.Def == nil {
-					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)
-				}
-				embeddedDataTypes = append(embeddedDataTypes, embeddedDataTypesItem{symbolTable: table, symbolDef: def})
-				continue
 			case *gotypes.Identifier:
 				if !accessor.methodsOnly && fieldType.Def == accessor.field.String() {
 					fieldItem = &item
 					break ITEMS_LOOP
 				}
+				var def *symbols.SymbolDef
+				var err error
 				// check if the field is an embedded struct
-				def, err := accessor.symbolTable.LookupDataType(fieldType.Def)
+				if fieldType.Package == "builtin" {
+					table, e := a.globalSymbolTable.Lookup("builtin")
+					if e != nil {
+						return nil, fmt.Errorf("Unable to retrieve a symbol table for 'builtin' package: %v", e)
+					}
+					def, err = table.LookupDataType(fieldType.Def)
+				} else {
+					def, err = accessor.symbolTable.LookupDataType(fieldType.Def)
+				}
 				if err != nil {
-					return nil, fmt.Errorf("Unable to retrieve %q type definition when retrieving a field", fieldType.Def)
+					return nil, fmt.Errorf("Unable to retrieve3 %q type definition when retrieving a field", fieldType.Def)
 				}
 				if def.Def == nil {
 					return nil, fmt.Errorf("Symbol %q not yet fully processed", fieldType.Def)

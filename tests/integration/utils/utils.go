@@ -237,6 +237,11 @@ func CompareContracts(t *testing.T, expected, tested contracts.Contract) {
 	case *contracts.IsRangeable:
 		y := tested.(*contracts.IsRangeable)
 		CompareTypeVars(t, x.X, y.X)
+	case *contracts.TypecastsTo:
+		y := tested.(*contracts.TypecastsTo)
+		CompareTypeVars(t, x.X, y.X)
+		CompareTypeVars(t, x.Y, y.Y)
+		CompareTypeVars(t, x.Type, y.Type)
 	default:
 		t.Errorf("Contract %#v not recognized", expected)
 	}

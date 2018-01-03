@@ -47,21 +47,30 @@ type Parser struct {
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error) {
 	glog.Infof("Processing BasicLit: %#v\n", lit)
 	// TODO(jchaloup): store the literal as well so one can argue about []int{1, 2.0} and []int{1, 2.2}
-	var builtin *gotypes.Builtin
+	var builtin *gotypes.Constant
 	switch lit.Kind {
 	case token.INT:
-		builtin = &gotypes.Builtin{Def: "int", Untyped: true}
+		builtin = &gotypes.Constant{Def: "int"}
 	case token.FLOAT:
-		builtin = &gotypes.Builtin{Def: "float", Untyped: true}
+		builtin = &gotypes.Constant{Def: "float64"}
 	case token.IMAG:
-		builtin = &gotypes.Builtin{Def: "imag", Untyped: true}
+		builtin = &gotypes.Constant{Def: "complex128"}
 	case token.STRING:
-		builtin = &gotypes.Builtin{Def: "string", Untyped: true}
+		builtin = &gotypes.Constant{Def: "string"}
 	case token.CHAR:
-		builtin = &gotypes.Builtin{Def: "char", Untyped: true}
+		builtin = &gotypes.Constant{Def: "rune"}
 	default:
 		return nil, fmt.Errorf("Unrecognize BasicLit: %#v\n", lit.Kind)
 	}
+
+	builtin.Untyped = true
+	if lit.Kind == token.CHAR {
+		// convert rune to uint8 number
+		builtin.Literal = fmt.Sprintf("%v", lit.Value[1])
+	} else {
+		builtin.Literal = lit.Value
+	}
+	builtin.Package = "builtin"
 
 	return types.ExprAttributeFromDataType(builtin).AddTypeVar(typevars.MakeConstant("builtin", builtin)), nil
 }
@@ -436,16 +445,18 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		case symbols.VariableSymbol:
 			switch ident.Name {
 			case "true", "false":
-				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "bool"}).AddTypeVar(
-					typevars.MakeConstant("builtin", &gotypes.Builtin{Def: "bool"}),
+				c := &gotypes.Constant{Package: "builtin", Def: "bool", Literal: ident.Name, Untyped: true}
+				return types.ExprAttributeFromDataType(c).AddTypeVar(
+					typevars.MakeConstant("builtin", c),
 				), nil
 			case "nil":
 				return types.ExprAttributeFromDataType(&gotypes.Nil{}).AddTypeVar(
 					typevars.MakeConstant("builtin", &gotypes.Nil{}),
 				), nil
 			case "iota":
-				return types.ExprAttributeFromDataType(&gotypes.Builtin{Def: "iota"}).AddTypeVar(
-					typevars.MakeConstant("builtin", &gotypes.Builtin{Def: "iota"}),
+				c := &gotypes.Constant{Def: "int", Package: "builtin", Untyped: true, Literal: fmt.Sprintf("%v", ep.Config.Iota)}
+				return types.ExprAttributeFromDataType(c).AddTypeVar(
+					typevars.MakeConstant("builtin", c),
 				), nil
 			default:
 				return nil, fmt.Errorf("Unsupported built-in type: %v", ident.Name)
@@ -571,7 +582,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 
 	zDataType, err := propagation.New(ep.Config.SymbolsAccessor).BinaryExpr(expr.Op, xAttr.DataTypeList[0], yAttr.DataTypeList[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parseBinaryExpr: %v, at pos %v", err, expr.Pos())
 	}
 
 	z := ep.Config.ContractTable.NewVirtualVar()
@@ -864,15 +875,23 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 			return nil, fmt.Errorf("Argument %#v of a call expression does not have one return value", expr.Args[0])
 		}
 
-		y := typevars.MakeConstant(ep.Config.PackageName, def)
+		castedDef, err := propagation.New(ep.Config.SymbolsAccessor).TypecastExpr(attr.DataTypeList[0], def)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to type-cast: %v", err)
+		}
 
-		ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+		glog.Infof("Casted to %#v\n", castedDef)
+
+		newVar := ep.Config.ContractTable.NewVirtualVar()
+
+		ep.Config.ContractTable.AddContract(&contracts.TypecastsTo{
 			X:            attr.TypeVarList[0],
-			Y:            y,
-			ExpectedType: attr.DataTypeList[0],
+			Type:         typevars.MakeConstant(ep.Config.PackageName, def),
+			Y:            newVar,
+			ExpectedType: def,
 		})
 
-		return types.ExprAttributeFromDataType(def).AddTypeVar(y), nil
+		return types.ExprAttributeFromDataType(castedDef).AddTypeVar(newVar), nil
 	}
 	glog.Infof("isDataType of %#v is false", expr.Fun)
 
@@ -932,6 +951,86 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				).AddTypeVar(
 					typevars.MakeConstant(ep.Config.PackageName, &gotypes.Pointer{Def: typeDef}),
 				), err
+			case "len":
+				// if the argument is array or a pointer to an array
+				// check if the len can be determined (in case then len is a constant).
+				// See https://golang.org/ref/spec#Length_and_capacity
+				// TODO(jchaloup): return the correct value/type of the len built-in function
+				if err := processArgs(typevars.MakeVar("builtin", ident.Name, ""), []ast.Expr{expr.Args[0]}, nil); err != nil {
+					return nil, err
+				}
+				// Produce an int typed constant for the moment so we don't report any false alarms
+				c := &gotypes.Constant{
+					Package: "builtin",
+					Def:     "int",
+					Literal: "*", // Greedy approximation
+				}
+				return types.ExprAttributeFromDataType(c).AddTypeVar(
+					typevars.MakeConstant("builtin", c),
+				), nil
+			case "imag", "real":
+				attr, err := ep.Parse(expr.Args[0])
+				if err != nil {
+					return nil, err
+				}
+
+				if len(attr.DataTypeList) != 1 {
+					return nil, fmt.Errorf("%v's argument is not a single expression", ident.Name)
+				}
+
+				fmt.Printf("attr: %#v\n", attr)
+				results, err = propagation.New(ep.Config.SymbolsAccessor).BuiltinFunctionInvocation(ident.Name, attr.DataTypeList)
+				if err != nil {
+					return nil, err
+				}
+				return types.ExprAttributeFromDataType(results[0]).AddTypeVar(
+					typevars.MakeConstant("builtin", results[0]),
+				), nil
+			case "complex":
+				realAttr, err := ep.Parse(expr.Args[0])
+				if err != nil {
+					return nil, err
+				}
+				if len(realAttr.DataTypeList) != 1 {
+					return nil, fmt.Errorf("%v's real argument is not a single expression", ident.Name)
+				}
+				imagAttr, err := ep.Parse(expr.Args[1])
+				if err != nil {
+					return nil, err
+				}
+				if len(imagAttr.DataTypeList) != 1 {
+					return nil, fmt.Errorf("%v's imag argument is not a single expression", ident.Name)
+				}
+				results, err = propagation.New(ep.Config.SymbolsAccessor).BuiltinFunctionInvocation(ident.Name, []gotypes.DataType{realAttr.DataTypeList[0], imagAttr.DataTypeList[0]})
+				if err != nil {
+					return nil, err
+				}
+				fmt.Printf("complex: %#v\n", results[0])
+				return types.ExprAttributeFromDataType(results[0]).AddTypeVar(
+					typevars.MakeConstant("builtin", results[0]),
+				), nil
+			}
+		}
+		// built-in unsafe.Sizeof
+		// https://golang.org/pkg/unsafe/
+		if sel, isSel := expr.Fun.(*ast.SelectorExpr); isSel {
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				if ident.Name == "unsafe" {
+					if sel.Sel.Name == "Sizeof" || sel.Sel.Name == "Alignof" || sel.Sel.Name == "Offsetof" {
+						if err := processArgs(typevars.MakeVar("unsafe", sel.Sel.Name, ""), []ast.Expr{expr.Args[0]}, nil); err != nil {
+							return nil, err
+						}
+						// always produces a constant, taking a data type and providing its size (during compilation)
+						c := &gotypes.Constant{
+							Package: "builtin",
+							Def:     "uintptr",
+							Literal: "*", // Greedy approximation
+						}
+						return types.ExprAttributeFromDataType(c).AddTypeVar(
+							typevars.MakeConstant("builtin", c),
+						), nil
+					}
+				}
 			}
 		}
 
@@ -1345,6 +1444,23 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttr
 	return types.ExprAttributeFromDataType(def).AddTypeVar(y), nil
 }
 
+func (ep *Parser) parseEllipsis(expr *ast.Ellipsis) (*types.ExprAttribute, error) {
+	glog.Infof("Processing Ellipsis: %#v\n", expr)
+	if expr.Elt == nil {
+		return types.ExprAttributeFromDataType(&gotypes.Ellipsis{}), nil
+	}
+	def, err := ep.Parse(expr.Elt)
+	if err != nil {
+		return nil, err
+	}
+	if len(def.DataTypeList) != 1 {
+		return nil, fmt.Errorf("Expected a single expression of ellipses, got %#v instead", def.DataTypeList)
+	}
+	return types.ExprAttributeFromDataType(&gotypes.Ellipsis{
+		Def: def.DataTypeList[0],
+	}), nil
+}
+
 func (ep *Parser) Parse(expr ast.Expr) (*types.ExprAttribute, error) {
 	// Given an expression we must always return its final data type
 	// User defined symbols has its corresponding structs under parser/pkg/types.
@@ -1384,6 +1500,8 @@ func (ep *Parser) Parse(expr ast.Expr) (*types.ExprAttribute, error) {
 		return ep.Parse(ep.parseParenExpr(exprType))
 	case *ast.ChanType:
 		return ep.parseChanType(exprType)
+	case *ast.Ellipsis:
+		return ep.parseEllipsis(exprType)
 	default:
 		return nil, fmt.Errorf("Unrecognized expression: %#v\n", expr)
 	}

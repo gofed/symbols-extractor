@@ -13,14 +13,14 @@ func f() {
 	// case token.SHL, token.SHR
 	bopb := 8.0 << 1
 	bopb = 8.0 >> 1
-	var bopc float32
+	var bopc int32
 	bopc = bopc << 1
 	bopc = bopc >> 1
 	// case token.AND, token.OR, token.MUL, token.SUB, token.QUO, token.ADD, token.AND_NOT, token.REM, token.XOR:
-	bopd := true & false
-	bopd = true | false
-	bopd = true &^ false
-	bopd = true ^ false
+	bopd := 1 & 0
+	bopd = 1 | 0
+	bopd = 1 &^ 0
+	bopd = 1 ^ 0
 	bope := 1 * 1
 	bope = 1 - 1
 	bope = 1 / 1

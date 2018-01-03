@@ -17,6 +17,7 @@ type Contract interface {
 var BinaryOpType Type = "binaryop"
 var UnaryOpType Type = "unaryop"
 var PropagatesToType Type = "propagatesto"
+var TypecastsToType Type = "typecaststo"
 var IsCompatibleWithType Type = "iscompatiblewith"
 var IsInvocableType Type = "isinvocable"
 var HasFieldType Type = "hasfield"
@@ -38,6 +39,8 @@ func Contract2String(c Contract) string {
 		return fmt.Sprintf("UnaryOpContract:\n\tX=%v,\n\tY=%v,\n\top=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.OpToken)
 	case *PropagatesTo:
 		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%#v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
+	case *TypecastsTo:
+		return fmt.Sprintf("TypecastsTo:\n\tX=%v,\n\tY=%v,\n\tType=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), typevars.TypeVar2String(d.Type))
 	case *IsCompatibleWith:
 		return fmt.Sprintf("IsCompatibleWith:\n\tX=%v\n\tY=%v\n\tWeak=%v\n\tE=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.Weak, d.ExpectedType)
 	case *IsInvocable:
@@ -87,6 +90,12 @@ type UnaryOp struct {
 
 type PropagatesTo struct {
 	X, Y         typevars.Interface
+	ExpectedType gotypes.DataType
+	ToVariable   bool
+}
+
+type TypecastsTo struct {
+	X, Type, Y   typevars.Interface
 	ExpectedType gotypes.DataType
 }
 
@@ -157,6 +166,10 @@ func (b *UnaryOp) GetType() Type {
 
 func (p *PropagatesTo) GetType() Type {
 	return PropagatesToType
+}
+
+func (p *TypecastsTo) GetType() Type {
+	return TypecastsToType
 }
 
 func (i *IsCompatibleWith) GetType() Type {

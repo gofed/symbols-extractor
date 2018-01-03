@@ -3,6 +3,7 @@ package file
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"path"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 type Payload struct {
 	DataTypes         []*ast.TypeSpec
 	Variables         []*ast.ValueSpec
+	Constants         []types.ConstSpec
 	Functions         []*ast.FuncDecl
 	FunctionDeclsOnly bool
 	Reprocessing      bool
@@ -57,38 +59,83 @@ func MakePayload(f *ast.File) (*Payload, error) {
 	for _, d := range f.Decls {
 		switch decl := d.(type) {
 		case *ast.GenDecl:
-			var lastValueSpecType ast.Expr
-			var lastValueSpecValue ast.Expr
-			for _, spec := range decl.Specs {
-				switch d := spec.(type) {
-				case *ast.TypeSpec:
-					payload.DataTypes = append(payload.DataTypes, d)
-				case *ast.ValueSpec:
-					// Either error or iota as a value
-					if d.Type == nil && d.Values == nil {
-						if lastValueSpecValue == nil {
-							return nil, fmt.Errorf("Missing Type and Value for ValueSpec %#v", d)
-						}
-						d.Values = []ast.Expr{lastValueSpecValue}
-						if lastValueSpecType != nil {
-							d.Type = lastValueSpecType
-						}
-					}
-
-					if len(d.Values) == 1 {
-						lastValueSpecValue = d.Values[0]
-						lastValueSpecType = d.Type
-					} else {
-						lastValueSpecValue = nil
-						lastValueSpecType = nil
-					}
-					payload.Variables = append(payload.Variables, d)
+			// var lastValueSpecType ast.Expr
+			// var lastValueSpecValue ast.Expr
+			fmt.Printf("ast.GenDecl: %v\n", decl.Tok)
+			switch decl.Tok {
+			case token.TYPE:
+				for _, spec := range decl.Specs {
+					payload.DataTypes = append(payload.DataTypes, spec.(*ast.TypeSpec))
 				}
+			case token.VAR:
+				for _, spec := range decl.Specs {
+					payload.Variables = append(payload.Variables, spec.(*ast.ValueSpec))
+				}
+			case token.CONST:
+				var lastConstSpecValue []ast.Expr
+				var lastConstSpecType ast.Expr
+				for i, spec := range decl.Specs {
+					constSpec := spec.(*ast.ValueSpec)
+					// Is the value empty? Copy the previous expression
+					if constSpec.Values == nil {
+						if lastConstSpecValue == nil {
+							return nil, fmt.Errorf("Unable to re-costruct a value for const %#v", constSpec)
+						}
+						constSpec.Values = lastConstSpecValue
+					} else {
+						lastConstSpecType = nil
+					}
+					if constSpec.Type == nil && lastConstSpecType != nil {
+						constSpec.Type = lastConstSpecType
+					}
+					payload.Constants = append(payload.Constants, types.ConstSpec{
+						IotaIdx: uint(i),
+						Spec:    constSpec,
+					})
+					lastConstSpecValue = constSpec.Values
+					// once there is a type it applies to all following untyped constants until there is a new one
+					if constSpec.Type != nil {
+						lastConstSpecType = constSpec.Type
+					}
+				}
+			case token.IMPORT:
+				// already processed
+				continue
+			default:
+				panic(fmt.Sprintf("Unexpected ast.GenDecl %#v", decl))
 			}
+
+			// for _, spec := range decl.Specs {
+			// 	switch d := spec.(type) {
+			// 	case *ast.TypeSpec:
+			// 		payload.DataTypes = append(payload.DataTypes, d)
+			// 	case *ast.ValueSpec:
+			// 		// Either error or iota as a value
+			// 		if d.Type == nil && d.Values == nil {
+			// 			if lastValueSpecValue == nil {
+			// 				return nil, fmt.Errorf("Missing Type and Value for ValueSpec %#v", d)
+			// 			}
+			// 			d.Values = []ast.Expr{lastValueSpecValue}
+			// 			if lastValueSpecType != nil {
+			// 				d.Type = lastValueSpecType
+			// 			}
+			// 		}
+			//
+			// 		if len(d.Values) == 1 {
+			// 			lastValueSpecValue = d.Values[0]
+			// 			lastValueSpecType = d.Type
+			// 		} else {
+			// 			lastValueSpecValue = nil
+			// 			lastValueSpecType = nil
+			// 		}
+			// 		payload.Variables = append(payload.Variables, d)
+			// 	}
+			// }
 		case *ast.FuncDecl:
 			payload.Functions = append(payload.Functions, decl)
 		}
 	}
+
 	return payload, nil
 }
 
@@ -151,6 +198,46 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 	return postponed, nil
 }
 
+func (fp *FileParser) parseConstValueSpecs(specs []types.ConstSpec, reprocessing bool) ([]types.ConstSpec, error) {
+	var postponed []types.ConstSpec
+
+	for {
+		for _, spec := range specs {
+			defs, err := fp.StmtParser.ParseConstValueSpec(spec)
+			if err != nil {
+				glog.Warningf("File parse ValueSpec %#v error: %v\n", spec, err)
+				postponed = append(postponed, spec)
+				continue
+			}
+			fmt.Printf("ConstantDefs: %#v\n", defs)
+			for _, def := range defs {
+				// TPDP(jchaloup): we should store all variables or non.
+				// Given the error is set only if the variable already exists, it should not matter so much.
+				if err := fp.SymbolTable.AddVariable(def); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if !reprocessing {
+			break
+		}
+
+		if len(postponed) < len(specs) {
+			specs = postponed
+			postponed = nil
+			continue
+		}
+		break
+	}
+
+	// if fp.Config.PackageName != "builtin" {
+	// 	fmt.Printf("fp.Config.PackageName: %v\n", fp.Config.PackageName)
+	// 	panic("JJJ")
+	// }
+
+	return postponed, nil
+}
+
 func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool) ([]*ast.ValueSpec, error) {
 	var postponed []*ast.ValueSpec
 
@@ -182,6 +269,11 @@ func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool)
 		}
 		break
 	}
+
+	// if fp.Config.PackageName != "builtin" {
+	// 	fmt.Printf("fp.Config.PackageName: %v\n", fp.Config.PackageName)
+	// 	panic("JJJ")
+	// }
 
 	return postponed, nil
 }
@@ -272,7 +364,7 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 		fp.Config.ContractTable.SetPrefix(spec.Name.Name)
 		if err := fp.StmtParser.ParseFuncBody(spec); err != nil {
 			fp.Config.ContractTable.DropPrefixContracts(spec.Name.Name)
-			glog.Warningf("File parse %q Funcs error: %v\n", spec.Name.Name, err)
+			glog.Warningf("File %q/%q parse %q Funcs error: %v\n", fp.Config.PackageName, fp.Config.FileName, spec.Name.Name, err)
 			postponed = append(postponed, spec)
 			continue
 		}
@@ -340,9 +432,30 @@ func (fp *FileParser) Parse(p *Payload) error {
 		glog.Infof("\n\nAfter parseFuncDecls: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 	}
 
-	// // Vars/constants
+	// Constants
+	{
+		var cNames []string
+		for _, spec := range p.Constants {
+			cNames = append(cNames, printVarNames([]*ast.ValueSpec{spec.Spec})...)
+		}
+		glog.Infof("\n\nBefore const parseValueSpecs: %v\tNames: %v\n", len(p.Constants), strings.Join(cNames, ","))
+		fp.Config.IsConst = true
+		postponed, err := fp.parseConstValueSpecs(p.Constants, p.Reprocessing)
+		if err != nil {
+			return err
+		}
+		p.Constants = postponed
+		cNames = nil
+		for _, spec := range p.Constants {
+			cNames = append(cNames, printVarNames([]*ast.ValueSpec{spec.Spec})...)
+		}
+		glog.Infof("\n\nAfter const parseValueSpecs: %v\tNames: %v\n", len(p.Constants), strings.Join(cNames, ","))
+	}
+
+	// Vars
 	{
 		glog.Infof("\n\nBefore parseValueSpecs: %v\tNames: %v\n", len(p.Variables), strings.Join(printVarNames(p.Variables), ","))
+		fp.Config.IsConst = false
 		postponed, err := fp.parseValueSpecs(p.Variables, p.Reprocessing)
 		if err != nil {
 			return err
@@ -354,6 +467,7 @@ func (fp *FileParser) Parse(p *Payload) error {
 	// // Funcs
 	if !p.FunctionDeclsOnly {
 		glog.Infof("\n\nBefore parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
+		fp.Config.IsConst = false
 		postponed, err := fp.parseFuncs(p.Functions)
 		if err != nil {
 			return err

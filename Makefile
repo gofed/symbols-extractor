@@ -120,7 +120,6 @@ test:
 #            $(WLOG)
 	@ $(GO_TEST) $(GO_TEST_FLAGS) $(PROJECT_ROOT)/pkg/parser/file \
             $(PROJECT_ROOT)/pkg/types \
-						$(PROJECT_ROOT)/pkg/parser/expression \
             $(PROJECT_ROOT)/pkg/parser/statement \
             $(GLOG_FLAGS) $(WLOG)
 
@@ -136,7 +135,6 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/contracts/type_casting  \
 			$(PROJECT_ROOT)/tests/integration/contracts/unaryops \
 			$(PROJECT_ROOT)/tests/integration/contracts/multi_packages \
-			$(PROJECT_ROOT)/tests/integration/typepropagation/basic \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/binaryops \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/function_invocation \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/composite_literals \
@@ -148,6 +146,8 @@ integration:
 			$(PROJECT_ROOT)/tests/integration/typepropagation/unaryops \
 			$(PROJECT_ROOT)/tests/integration/typepropagation/general \
 				$(GLOG_FLAGS) $(WLOG)
+
+		# $(PROJECT_ROOT)/tests/integration/typepropagation/basic
 
 gen:
 	./gentypes.sh

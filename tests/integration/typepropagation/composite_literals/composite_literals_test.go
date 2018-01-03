@@ -38,24 +38,24 @@ func TestSelfTypePropagation(t *testing.T) {
 		Elmtype: &gotypes.Identifier{Def: "Int", Package: gopkg},
 	}
 	Map := &gotypes.Map{
-		Keytype:   &gotypes.Builtin{Def: "string"},
-		Valuetype: &gotypes.Builtin{Def: "int"},
+		Keytype:   &gotypes.Identifier{Package: "builtin", Def: "string"},
+		Valuetype: &gotypes.Identifier{Package: "builtin", Def: "int"},
 	}
 	Struct := &gotypes.Struct{
 		Fields: []gotypes.StructFieldsItem{
 			{
 				Name: "key1",
-				Def:  &gotypes.Builtin{Def: "string"},
+				Def:  &gotypes.Identifier{Package: "builtin", Def: "string"},
 			},
 			{
 				Name: "key2",
-				Def:  &gotypes.Builtin{Def: "int"},
+				Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 			},
 		},
 	}
 
 	intSlice := &gotypes.Slice{
-		Elmtype: &gotypes.Builtin{Def: "int"},
+		Elmtype: &gotypes.Identifier{Package: "builtin", Def: "int"},
 	}
 	SliceSlice := &gotypes.Slice{
 		Elmtype: intSlice,

@@ -30,7 +30,7 @@ func TestUnaryOpContracts(t *testing.T) {
 		[]contracts.Contract{
 			// a := "ahoj"
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "string", Literal: "\"ahoj\""}),
 				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			//
@@ -53,7 +53,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Channel{
 					Dir:   "3",
-					Value: &gotypes.Builtin{Untyped: false, Def: "int"},
+					Value: &gotypes.Identifier{Package: "builtin", Def: "int"},
 				}),
 				Y: typevars.MakeLocalVar("chanA", vars["chanA"]),
 			},
@@ -72,7 +72,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopa := ^1
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
 				Y:       typevars.MakeVirtualVar(3),
 				OpToken: token.XOR,
 			},
@@ -84,7 +84,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopb := -1
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
 				Y:       typevars.MakeVirtualVar(4),
 				OpToken: token.SUB,
 			},
@@ -96,7 +96,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopc := !true
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: false, Def: "bool"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "bool", Literal: "true"}),
 				Y:       typevars.MakeVirtualVar(5),
 				OpToken: token.NOT,
 			},
@@ -108,7 +108,7 @@ func TestUnaryOpContracts(t *testing.T) {
 			// uopd := +1
 			//
 			&contracts.UnaryOp{
-				X:       typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				X:       typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
 				Y:       typevars.MakeVirtualVar(6),
 				OpToken: token.ADD,
 			},

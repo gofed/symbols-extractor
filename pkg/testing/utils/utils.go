@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -84,13 +85,15 @@ func ParseNonFunc(config *types.Config, astF *ast.File) error {
 					if err != nil {
 						return err
 					}
-					config.SymbolTable.AddVariable(&symbols.SymbolDef{
+					err = config.SymbolTable.AddVariable(&symbols.SymbolDef{
 						Name:    d.Names[0].Name,
 						Package: config.PackageName,
 						Def: &gotypes.Identifier{
-							Def: d.Names[0].Name,
+							Def:     d.Names[0].Name,
+							Package: config.PackageName,
 						},
 					})
+					fmt.Printf("Storing %v..., err: %v\n", d.Names[0].Name, err)
 				}
 			}
 		default:

@@ -139,6 +139,13 @@ func New(config *types.Config) *Runner {
 				if isVariable(d.X) {
 					storeVar(d.X.(*typevars.Variable), c)
 				}
+			case *contracts.TypecastsTo:
+				if isVariable(d.X) {
+					storeVar(d.X.(*typevars.Variable), c)
+				}
+				if isVariable(d.Y) {
+					storeVar(d.Y.(*typevars.Variable), c)
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -278,6 +285,10 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 				if r.isTypevarEvaluated(d.X) {
 					ready = true
 				}
+			case *contracts.TypecastsTo:
+				if r.isTypevarEvaluated(d.X) {
+					ready = true
+				}
 			default:
 				panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 			}
@@ -354,6 +365,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			default:
 				return nil, fmt.Errorf("typevars.ReturnType expected to be a funtion/method, got %#v instead", item.dataType)
 			}
+		//case *typevars.ListKey:
 		case *typevars.ListValue:
 			item, ok := getVar(td.X)
 			if !ok {
@@ -457,7 +469,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 
 		// have the BinaryExpr return symbol table and the package name as well
 		// it will be either builtin or the current package
-		zDataType, err := propagation.New(nil).BinaryExpr(
+		zDataType, err := propagation.New(r.symbolAccessor).BinaryExpr(
 			d.OpToken,
 			xVarItem.dataType,
 			yVarItem.dataType,
@@ -522,6 +534,12 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			return err
 		}
 
+		if d.ToVariable {
+			if constant, ok := item.dataType.(*gotypes.Constant); ok {
+				item.dataType = &gotypes.Identifier{Package: constant.Package, Def: constant.Def}
+			}
+		}
+
 		setVar(d.Y, item)
 		// fmt.Println(contracts.Contract2String(d))
 	case *contracts.IsInvocable:
@@ -568,15 +586,20 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			fmt.Printf("Checking index type %#v compatibility with Integer type not yet implemented", indexItem)
 			return nil
 		}
-		if d, ok := item.dataType.(*gotypes.Builtin); ok {
+		switch d := item.dataType.(type) {
+		case *gotypes.Builtin:
 			if d.Def == "string" {
 				// TODO(jchaloup): check the index is compatible with Integer type
 				return nil
 			}
-			// error
+		case *gotypes.Constant:
+			if d.Package == "builtin" && d.Def == "string" {
+				// TODO(jchaloup): check the index is compatible with Integer type
+				return nil
+			}
 		}
 		// error
-		fmt.Printf("item: %#v\n", item)
+		fmt.Printf("item: %#v\n", item.dataType)
 		panic("|||")
 	case *contracts.IsDereferenceable:
 		item, xErr := typevar2varTableItem(d.X)
@@ -659,6 +682,18 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		default:
 			return fmt.Errorf("Expression %#v not rangeable", item.dataType)
 		}
+	case *contracts.TypecastsTo:
+		item, xErr := typevar2varTableItem(d.X)
+		if xErr != nil {
+			return xErr
+		}
+		// TODO(jchaloup): check the X can be type-casted to Type
+		fmt.Printf("TODO: need to check %#v is compatible with %#v\n", item, d.Type)
+		yItem, err := typevar2varTableItem(d.Type)
+		if err != nil {
+			return err
+		}
+		setVar(d.Y, yItem)
 	default:
 		panic(fmt.Sprintf("Unrecognized contract: %#v", c))
 	}

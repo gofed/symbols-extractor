@@ -30,6 +30,10 @@ func TestSelectorsTypes(t *testing.T) {
 		"idj": ":727",
 		"idk": ":742",
 		"idl": ":790",
+		"d3":  ":247",
+		"d4":  ":356",
+		"d6":  ":606",
+		"d":   ":42",
 	}
 	utils.ParseAndCompareContracts(t,
 		packageName,
@@ -210,7 +214,7 @@ func TestSelectorsTypes(t *testing.T) {
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeField(typevars.MakeVirtualVar(11), "", 0),
 				Y: typevars.MakeConstant(packageName,
-					&gotypes.Builtin{Untyped: true, Def: "int"},
+					&gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"},
 				),
 			},
 			&contracts.IsCompatibleWith{
@@ -218,7 +222,7 @@ func TestSelectorsTypes(t *testing.T) {
 					Fields: []gotypes.StructFieldsItem{
 						{
 							Name: "d",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+							Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 						},
 					},
 				}),
@@ -229,7 +233,7 @@ func TestSelectorsTypes(t *testing.T) {
 					Fields: []gotypes.StructFieldsItem{
 						{
 							Name: "d",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+							Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 						},
 					},
 				}),
@@ -258,18 +262,16 @@ func TestSelectorsTypes(t *testing.T) {
 			// func (d *D6) imethod() int { return 0 }
 			// idg := D6("string")
 			// idh := idg.imethod()
-			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
-				Y: typevars.MakeConstant(packageName, &gotypes.Identifier{
+			&contracts.TypecastsTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "string", Literal: "\"string\""}),
+				Y: typevars.MakeVirtualVar(13),
+				Type: typevars.MakeConstant(packageName, &gotypes.Identifier{
 					Def:     "D6",
 					Package: packageName,
 				}),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
-					Def:     "D6",
-					Package: packageName,
-				}),
+				X: typevars.MakeVirtualVar(13),
 				Y: typevars.MakeLocalVar("idg", vars["idg"]),
 			},
 			&contracts.HasField{
@@ -278,26 +280,26 @@ func TestSelectorsTypes(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeField(typevars.MakeLocalVar("idg", vars["idg"]), "imethod", 0),
-				Y: typevars.MakeVirtualVar(13),
+				Y: typevars.MakeVirtualVar(14),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualVar(13),
+				F:         typevars.MakeVirtualVar(14),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualVar(13), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(14), 0),
 				Y: typevars.MakeLocalVar("idh", vars["idh"]),
 			},
 			// idi := struct{ d int }{2}
 			// idj := idi.d
 			&contracts.HasField{
-				X:     typevars.MakeVirtualVar(14),
+				X:     typevars.MakeVirtualVar(15),
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(14), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(15), "", 0),
 				Y: typevars.MakeConstant(packageName,
-					&gotypes.Builtin{Untyped: true, Def: "int"},
+					&gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"},
 				),
 			},
 			&contracts.IsCompatibleWith{
@@ -305,25 +307,25 @@ func TestSelectorsTypes(t *testing.T) {
 					Fields: []gotypes.StructFieldsItem{
 						{
 							Name: "d",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+							Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 						},
 					},
 				}),
-				Y: typevars.MakeVirtualVar(14),
+				Y: typevars.MakeVirtualVar(15),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Struct{
 					Fields: []gotypes.StructFieldsItem{
 						{
 							Name: "d",
-							Def:  &gotypes.Builtin{Untyped: false, Def: "int"},
+							Def:  &gotypes.Identifier{Package: "builtin", Def: "int"},
 						},
 					},
 				}),
-				Y: typevars.MakeVirtualVar(14),
+				Y: typevars.MakeVirtualVar(15),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeVirtualVar(14),
+				X: typevars.MakeVirtualVar(15),
 				Y: typevars.MakeLocalVar("idi", vars["idi"]),
 			},
 			&contracts.HasField{
@@ -343,32 +345,33 @@ func TestSelectorsTypes(t *testing.T) {
 					Def:     "D3",
 					Package: packageName,
 				}),
-				Y: typevars.MakeVirtualVar(15),
+				Y: typevars.MakeVirtualVar(16),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Identifier{
 					Def:     "D3",
 					Package: packageName,
 				}),
-				Y: typevars.MakeVirtualVar(15),
-			},
-			&contracts.IsReferenceable{
-				X: typevars.MakeVirtualVar(15),
-			},
-			&contracts.ReferenceOf{
-				X: typevars.MakeVirtualVar(15),
 				Y: typevars.MakeVirtualVar(16),
 			},
-			&contracts.IsCompatibleWith{
+			&contracts.IsReferenceable{
 				X: typevars.MakeVirtualVar(16),
-				Y: typevars.MakeConstant(packageName, &gotypes.Interface{
+			},
+			&contracts.ReferenceOf{
+				X: typevars.MakeVirtualVar(16),
+				Y: typevars.MakeVirtualVar(17),
+			},
+			&contracts.TypecastsTo{
+				X: typevars.MakeVirtualVar(17),
+				Y: typevars.MakeVirtualVar(18),
+				Type: typevars.MakeConstant(packageName, &gotypes.Interface{
 					Methods: []gotypes.InterfaceMethodsItem{
 						gotypes.InterfaceMethodsItem{
 							Name: "imethod",
 							Def: &gotypes.Function{
 								Package: packageName,
 								Results: []gotypes.DataType{
-									&gotypes.Builtin{Untyped: false, Def: "int"},
+									&gotypes.Identifier{Package: "builtin", Def: "int"},
 								},
 							},
 						},
@@ -376,19 +379,7 @@ func TestSelectorsTypes(t *testing.T) {
 				}),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Interface{
-					Methods: []gotypes.InterfaceMethodsItem{
-						gotypes.InterfaceMethodsItem{
-							Name: "imethod",
-							Def: &gotypes.Function{
-								Package: packageName,
-								Results: []gotypes.DataType{
-									&gotypes.Builtin{Untyped: false, Def: "int"},
-								},
-							},
-						},
-					},
-				}),
+				X: typevars.MakeVirtualVar(18),
 				Y: typevars.MakeLocalVar("idk", vars["idk"]),
 			},
 			&contracts.HasField{
@@ -397,15 +388,31 @@ func TestSelectorsTypes(t *testing.T) {
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeField(typevars.MakeLocalVar("idk", vars["idk"]), "imethod", 0),
-				Y: typevars.MakeVirtualVar(17),
+				Y: typevars.MakeVirtualVar(19),
 			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeVirtualVar(17),
+				F:         typevars.MakeVirtualVar(19),
 				ArgsCount: 0,
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeVirtualVar(17), 0),
+				X: typevars.MakeReturn(typevars.MakeVirtualVar(19), 0),
 				Y: typevars.MakeLocalVar("idl", vars["idl"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Pointer{Def: &gotypes.Identifier{Package: packageName, Def: "D3"}}),
+				Y: typevars.MakeLocalVar("d", vars["d3"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Pointer{Def: &gotypes.Identifier{Package: packageName, Def: "D4"}}),
+				Y: typevars.MakeLocalVar("d", vars["d4"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Pointer{Def: &gotypes.Identifier{Package: packageName, Def: "D6"}}),
+				Y: typevars.MakeLocalVar("d", vars["d6"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Pointer{Def: &gotypes.Identifier{Package: packageName, Def: "D"}}),
+				Y: typevars.MakeLocalVar("d", vars["d"]),
 			},
 		})
 }

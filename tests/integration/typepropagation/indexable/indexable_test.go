@@ -38,8 +38,8 @@ func TestSelfTypePropagation(t *testing.T) {
 	Int := &gotypes.Identifier{Package: gopkg, Def: "Int"}
 	Slice := &gotypes.Slice{Elmtype: Int}
 	Map := &gotypes.Map{
-		Keytype:   &gotypes.Builtin{Def: "string"},
-		Valuetype: &gotypes.Builtin{Def: "int"},
+		Keytype:   &gotypes.Identifier{Package: "builtin", Def: "string"},
+		Valuetype: &gotypes.Identifier{Package: "builtin", Def: "int"},
 	}
 
 	cutils.ParseAndCompareVarTable(
@@ -51,12 +51,12 @@ func TestSelfTypePropagation(t *testing.T) {
 			makeLocal("list", Slice),
 			makeLocal("mapV", Map),
 			makeLocal("lb", Int),
-			makeLocal("ma", &gotypes.Builtin{Def: "int"}),
-			makeLocal("sa", &gotypes.Builtin{Def: "uint8"}),
+			makeLocal("ma", &gotypes.Identifier{Package: "builtin", Def: "int"}),
+			makeLocal("sa", &gotypes.Identifier{Package: "builtin", Def: "uint8"}),
 			makeVirtual(1, Slice),
 			makeVirtual(2, Map),
-			makeVirtual(3, &gotypes.Builtin{Def: "string", Untyped: true}),
-			makeVirtual(4, &gotypes.Builtin{Def: "string", Untyped: true}),
+			makeVirtual(3, &gotypes.Constant{Package: "builtin", Def: "string", Literal: "\"3\"", Untyped: true}),
+			makeVirtual(4, &gotypes.Constant{Package: "builtin", Def: "string", Literal: "\"ahoj\"", Untyped: true}),
 		},
 	)
 }

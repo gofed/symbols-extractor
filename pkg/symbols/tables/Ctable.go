@@ -68,8 +68,27 @@ func processDataType(m map[interface{}]interface{}) gotypes.DataType {
 				Package: "C",
 			}
 		}
+		// TODO(jchaloup): replace the Builtin with Identifier
 		return &gotypes.Builtin{
 			Def: ident.(string),
+		}
+	}
+	if ident, ok := m["constant"]; ok {
+		str := ident.(string)
+		l := len(str)
+		if l > 1 && str[0] == 'C' && str[1] == '.' {
+			return &gotypes.Constant{
+				Def:     str[2:l],
+				Package: "C",
+				Untyped: true,
+				Literal: "*",
+			}
+		}
+		return &gotypes.Constant{
+			Def:     ident.(string),
+			Package: "builtin",
+			Untyped: true,
+			Literal: "*",
 		}
 	}
 	if pointer, ok := m["pointer"]; ok {
@@ -123,6 +142,10 @@ type cgoFile struct {
 		Name string   `yaml:"name"`
 		Type DataType `yaml:"type"`
 	}
+	Constants []struct {
+		Name string   `yaml:"name"`
+		Type DataType `yaml:"type"`
+	}
 }
 
 func (c *CGOTable) LoadFromFile(file string) error {
@@ -143,6 +166,16 @@ func (c *CGOTable) LoadFromFile(file string) error {
 			Def:     typeDef.Type.DataType,
 		}); err != nil {
 			return fmt.Errorf("AddDataType %q failed: %v", typeDef.Name, err)
+		}
+	}
+
+	for _, varDef := range cgo.Constants {
+		if err := c.AddVariable(&symbols.SymbolDef{
+			Name:    varDef.Name,
+			Package: "C",
+			Def:     varDef.Type.DataType,
+		}); err != nil {
+			return fmt.Errorf("AddVariable %q failed: %v", varDef.Name, err)
 		}
 	}
 

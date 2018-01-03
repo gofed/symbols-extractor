@@ -69,6 +69,7 @@ type FileContext struct {
 
 	DataTypes []*ast.TypeSpec
 	Variables []*ast.ValueSpec
+	Constants []types.ConstSpec
 	Functions []*ast.FuncDecl
 
 	AllocatedSymbolsTable *alloctable.Table
@@ -370,6 +371,48 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 	return nil
 }
 
+func (pp *ProjectParser) reprocessConstants(p *PackageContext) error {
+	fLen := len(p.Files)
+	pkgPostponedCounter := 0
+	for i := 0; i < fLen; i++ {
+		fileContext := p.Files[i]
+		pkgPostponedCounter += len(fileContext.Constants)
+	}
+
+	for {
+		counter := 0
+		for i := 0; i < fLen; i++ {
+			fileContext := p.Files[i]
+			glog.Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+			if fileContext.Constants != nil {
+				payload := &fileparser.Payload{
+					Constants:    fileContext.Constants,
+					Reprocessing: true,
+				}
+				glog.Infof("Constants before reprocessing: %#v\n", payload.Variables)
+				for _, spec := range fileContext.FileAST.Imports {
+					payload.Imports = append(payload.Imports, spec)
+				}
+				p.Config.AllocatedSymbolsTable = fileContext.AllocatedSymbolsTable
+				p.Config.FileName = fileContext.Filename
+				if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
+					return err
+				}
+				glog.Infof("Constants after reprocessing: %#v\n", payload.Constants)
+				fileContext.Constants = payload.Constants
+				counter += len(payload.Variables)
+			}
+		}
+		glog.Infof("len(postponed) before: %v, len(postponsed) after: %v\n", pkgPostponedCounter, counter)
+		if counter < pkgPostponedCounter {
+			pkgPostponedCounter = counter
+			continue
+		}
+		break
+	}
+	return nil
+}
+
 func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error {
 	printFuncNames := func(funcs []*ast.FuncDecl) []string {
 		var names []string
@@ -542,6 +585,7 @@ PACKAGE_STACK:
 				return err
 			}
 			fileContext.DataTypes = payload.DataTypes
+			fileContext.Constants = payload.Constants
 			fileContext.Variables = payload.Variables
 			fileContext.Functions = payload.Functions
 			glog.Infof("Storing possible postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
@@ -558,6 +602,12 @@ PACKAGE_STACK:
 		glog.Infof("\n\n========REPROCESSING FUNC DECLS========\n\n")
 		if err := pp.reprocessFunctionDeclarations(p); err != nil {
 			glog.Warningf("Processing function declarations with error: %v", err)
+		}
+
+		// re-process variables
+		glog.Infof("\n\n========REPROCESSING VARIABLES========\n\n")
+		if err := pp.reprocessConstants(p); err != nil {
+			return err
 		}
 
 		// re-process variables

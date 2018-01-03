@@ -42,7 +42,7 @@ func TestSelfTypePropagation(t *testing.T) {
 		}
 	}
 
-	str := &gotypes.Builtin{Def: "string"}
+	str := &gotypes.Identifier{Package: "builtin", Def: "string"}
 
 	cutils.ParseAndCompareVarTable(
 		t,
@@ -77,15 +77,15 @@ func TestSelfTypePropagation(t *testing.T) {
 				Package: gopkg,
 				Params: []gotypes.DataType{
 					str,
-					&gotypes.Ellipsis{Def: &gotypes.Builtin{Def: "int"}},
+					&gotypes.Ellipsis{Def: &gotypes.Identifier{Package: "builtin", Def: "int"}},
 				},
 				Results: []gotypes.DataType{
 					str,
 				},
 			}),
 			makeLocal("g2_a", str),
-			makeLocal("g2_b", &gotypes.Ellipsis{Def: &gotypes.Builtin{Def: "int"}}),
-			makeLocal("a", &gotypes.Builtin{Def: "string", Untyped: true}),
+			makeLocal("g2_b", &gotypes.Ellipsis{Def: &gotypes.Identifier{Package: "builtin", Def: "int"}}),
+			makeLocal("a", &gotypes.Identifier{Package: "builtin", Def: "string"}),
 			makeLocal("aa", str),
 			makeLocal("ab", str),
 			makeLocal("b", str),

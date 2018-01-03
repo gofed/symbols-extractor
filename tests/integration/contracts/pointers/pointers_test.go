@@ -24,7 +24,7 @@ func TestPointersContracts(t *testing.T) {
 		[]contracts.Contract{
 			// a := "ahoj"
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "string"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "string", Literal: "\"ahoj\""}),
 				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			// ra := &a

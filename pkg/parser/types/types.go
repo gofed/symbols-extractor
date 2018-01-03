@@ -44,6 +44,11 @@ type ExpressionParser interface {
 	Parse(expr ast.Expr) (*ExprAttribute, error)
 }
 
+type ConstSpec struct {
+	IotaIdx uint
+	Spec    *ast.ValueSpec
+}
+
 // StatementParser implemenation is responsible for:
 // - statement parsing/processing (block is considered a statement)
 // -
@@ -54,8 +59,10 @@ type StatementParser interface {
 	ParseFuncDecl(d *ast.FuncDecl) (gotypes.DataType, error)
 	// ParseFuncBody parses function body with pushing function parameter(s) and/or its receiver into the symbol table
 	ParseFuncBody(funcDecl *ast.FuncDecl) error
-	// ParseValueSpec parses variable/constant definition/declaration
+	// ParseValueSpec parses variable definition/declaration
 	ParseValueSpec(spec *ast.ValueSpec) ([]*symbols.SymbolDef, error)
+	// ParseValueSpec parses constant definition/declaration
+	ParseConstValueSpec(spec ConstSpec) ([]*symbols.SymbolDef, error)
 }
 
 // Config for a parser
@@ -74,6 +81,8 @@ type Config struct {
 	TypeParser TypeParser
 	// expresesion parser
 	ExprParser ExpressionParser
+	IsConst    bool
+	Iota       uint
 	// statement parser
 	StmtParser StatementParser
 	// per-file contract table

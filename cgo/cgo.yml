@@ -11,22 +11,22 @@ files:
 variables:
 - name: AI_CANONNAME
   type:
-    identifier: C.int
+    constant: int
 - name: AI_V4MAPPED
   type:
-    identifier: C.int
+    constant: int
 - name: AI_ALL
   type:
-    identifier: C.int
+    constant: int
 - name: NI_NAMEREQD
   type:
     identifier: C.int
 - name: EAI_AGAIN
   type:
-    identifier: C.int
+    constant: int
 - name: SOCK_STREAM
   type:
-    identifier: C.int
+    constant: int
 - name: IPPROTO_TCP
   type:
     identifier: C.int
@@ -50,16 +50,16 @@ variables:
     identifier: C.int
 - name: EAI_OVERFLOW
   type:
-    identifier: C.int
+    constant: int
 - name: _SC_GETPW_R_SIZE_MAX
   type:
-    identifier: C.int
+    constant: int
 - name: _SC_GETGR_R_SIZE_MAX
   type:
-    identifier: C.int
+    constant: int
 - name: PATH_MAX
   type:
-    identifier: C.int
+    constant: int
 # no need to know definition of the data type, just its name
 types:
 - name: struct_sockaddr
@@ -150,8 +150,7 @@ functions:
   result:
 - name: getaddrinfo
   result:
-  - pointer:
-      identifier: C.int
+  - identifier: C.int
 - name: freeaddrinfo
   result:
 - name: mygetgrouplist
@@ -258,4 +257,5 @@ functions:
       pointer:
         identifier: C.char
   result:
-  - identifier: unsafe.Pointer
+  - pointer:
+      identifier: C.void

@@ -315,7 +315,7 @@ if __name__ == "__main__":
     with open("golang-project-exported-api.json", "r") as f:
         data = json.load(f)
 
-    dataTypes = ["identifier", "builtin", "packagequalifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
+    dataTypes = ["identifier", "builtin", "constant", "packagequalifier", "selector", "channel", "slice", "array", "map", "pointer", "ellipsis", "function", "method", "interface", "struct"]
 
     with open("pkg/types/types.go", "w") as file:
         file.write(str(DataTypeGenerator(data["definitions"], dataTypes).parse()))

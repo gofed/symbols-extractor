@@ -6,6 +6,7 @@ type SymbolLookable interface {
 	LookupFunction(key string) (*SymbolDef, error)
 	LookupDataType(key string) (*SymbolDef, error)
 	LookupMethod(datatype, methodName string) (*SymbolDef, error)
+	LookupAllMethods(datatype string) (map[string]*SymbolDef, error)
 	Lookup(key string) (*SymbolDef, SymbolType, error)
 	Exists(name string) bool
 }

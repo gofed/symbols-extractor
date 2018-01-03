@@ -107,6 +107,17 @@ func (s *Stack) LookupMethod(datatype, methodName string) (*symbols.SymbolDef, e
 	return nil, fmt.Errorf("Method %q of data type %q not found", methodName, datatype)
 }
 
+func (s *Stack) LookupAllMethods(datatype string) (map[string]*symbols.SymbolDef, error) {
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := s.Size - 1; i >= 0; i-- {
+		defs, err := s.Tables[i].LookupAllMethods(datatype)
+		if err == nil {
+			return defs, nil
+		}
+	}
+	return nil, fmt.Errorf("Methods of data type %q not found", datatype)
+}
+
 func (s *Stack) LookupFunction(name string) (*symbols.SymbolDef, error) {
 	glog.Infof("====Looking up a function %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice

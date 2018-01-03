@@ -23,16 +23,16 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 		"../../testdata/function_literals.go",
 		[]contracts.Contract{
 			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{Package: "builtin", Def: "int"}),
 				Y: typevars.MakeLocalVar("a", vars["a"]),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Function{
 					Params: []gotypes.DataType{
-						&gotypes.Builtin{Untyped: false, Def: "int"},
+						&gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 					Results: []gotypes.DataType{
-						&gotypes.Builtin{Untyped: false, Def: "int"},
+						&gotypes.Identifier{Package: "builtin", Def: "int"},
 					},
 					Package: packageName,
 				}),
@@ -47,7 +47,7 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(packageName, &gotypes.Builtin{Untyped: true, Def: "int"}),
+				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 				Y: typevars.MakeArgument(typevars.MakeLocalVar("ffA", vars["ffA"]), 0),
 			},
 			&contracts.PropagatesTo{

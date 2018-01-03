@@ -16,19 +16,19 @@ func TestSelfTypePropagation(t *testing.T) {
 		"bopa": ":120",
 		"bopb": ":239",
 		"bopc": ":278",
-		"bopd": ":439",
-		"bope": ":525",
-		"bopf": ":600",
-		"bopg": ":655",
+		"bopd": ":437",
+		"bope": ":495",
+		"bopf": ":570",
+		"bopg": ":625",
 	}
 
 	// A := &gotypes.Identifier{Package: gopkg, Def: "A"}
 	// ptrA := &gotypes.Pointer{Def: A}
-	bInt := &gotypes.Builtin{Def: "int", Untyped: true}
-	bBool := &gotypes.Builtin{Def: "bool"}
-	//bTInt := &gotypes.Builtin{Def: "int"}
-	bFloat := &gotypes.Builtin{Def: "float32"}
-	bInt16 := &gotypes.Builtin{Def: "int16"}
+	bInt := &gotypes.Identifier{Package: "builtin", Def: "int"}
+	bBool := &gotypes.Identifier{Package: "builtin", Def: "bool"}
+	//bTInt := &gotypes.Identifier{Package: "builtin", Def: "int"}
+	bInt32 := &gotypes.Identifier{Package: "builtin", Def: "int32"}
+	bInt16 := &gotypes.Identifier{Package: "builtin", Def: "int16"}
 	Int := &gotypes.Identifier{Def: "Int", Package: gopkg}
 
 	makeLocal := func(name string, dataType gotypes.DataType) cutils.VarTableTest {
@@ -52,32 +52,32 @@ func TestSelfTypePropagation(t *testing.T) {
 		[]cutils.VarTableTest{
 			makeLocal("bopa", bBool),
 			makeLocal("bopb", bInt),
-			makeLocal("bopc", bFloat),
-			makeLocal("bopd", bBool),
+			makeLocal("bopc", bInt32),
+			makeLocal("bopd", bInt),
 			makeLocal("bope", bInt),
 			makeLocal("bopf", bInt16),
 			makeLocal("bopg", Int),
 			makeVirtual(1, bBool),
-			makeVirtual(2, bBool),
-			makeVirtual(3, bBool),
-			makeVirtual(4, bBool),
-			makeVirtual(5, bBool),
-			makeVirtual(6, bBool),
+			makeVirtual(2, &gotypes.Constant{Package: "builtin", Def: "bool", Untyped: true, Literal: "true"}),
+			makeVirtual(3, &gotypes.Constant{Package: "builtin", Def: "bool", Untyped: true, Literal: "true"}),
+			makeVirtual(4, &gotypes.Constant{Package: "builtin", Def: "bool", Untyped: true, Literal: "true"}),
+			makeVirtual(5, &gotypes.Constant{Package: "builtin", Def: "bool", Untyped: true, Literal: "false"}),
+			makeVirtual(6, &gotypes.Constant{Package: "builtin", Def: "bool", Untyped: true, Literal: "false"}),
 			makeVirtual(7, bInt),
-			makeVirtual(8, bInt),
-			makeVirtual(9, bFloat),
-			makeVirtual(10, bFloat),
-			makeVirtual(11, bBool),
-			makeVirtual(12, bBool),
-			makeVirtual(13, bBool),
-			makeVirtual(14, bBool),
+			makeVirtual(8, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "4"}),
+			makeVirtual(9, bInt32),
+			makeVirtual(10, bInt32),
+			makeVirtual(11, bInt),
+			makeVirtual(12, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "1"}),
+			makeVirtual(13, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "1"}),
+			makeVirtual(14, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "1"}),
 			makeVirtual(15, bInt),
-			makeVirtual(16, bInt),
-			makeVirtual(17, bInt),
-			makeVirtual(18, bInt),
-			makeVirtual(19, bInt),
+			makeVirtual(16, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "0"}),
+			makeVirtual(17, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "1"}),
+			makeVirtual(18, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "2"}),
+			makeVirtual(19, &gotypes.Constant{Package: "builtin", Def: "int", Untyped: true, Literal: "0"}),
 			makeVirtual(20, bInt16),
-			makeVirtual(21, bBool),
+			makeVirtual(21, &gotypes.Constant{Package: "builtin", Def: "bool", Untyped: true, Literal: "false"}),
 			makeVirtual(22, Int),
 			makeVirtual(23, Int),
 		},

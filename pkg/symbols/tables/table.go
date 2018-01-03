@@ -211,6 +211,14 @@ func (t *Table) LookupMethod(datatype, methodName string) (*symbols.SymbolDef, e
 	return method, nil
 }
 
+func (t *Table) LookupAllMethods(datatype string) (map[string]*symbols.SymbolDef, error) {
+	methods, ok := t.methods[datatype]
+	if !ok {
+		return nil, fmt.Errorf("Data type %q not found", datatype)
+	}
+	return methods, nil
+}
+
 func (t *Table) Exists(name string) bool {
 	if _, _, err := t.Lookup(name); err == nil {
 		return true
