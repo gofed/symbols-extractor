@@ -35,10 +35,10 @@ func TestSelfTypePropagation(t *testing.T) {
 	F := &gotypes.Function{
 		Package: gopkg,
 		Params: []gotypes.DataType{
-			&gotypes.Builtin{Def: "int"},
+			&gotypes.Identifier{Package: "builtin", Def: "int"},
 		},
 		Results: []gotypes.DataType{
-			&gotypes.Builtin{Def: "int"},
+			&gotypes.Identifier{Package: "builtin", Def: "int"},
 		},
 	}
 
@@ -47,9 +47,9 @@ func TestSelfTypePropagation(t *testing.T) {
 		gopkg,
 		"../../testdata/function_literals.go",
 		[]cutils.VarTableTest{
-			makeLocal("a", &gotypes.Builtin{Def: "int"}),
+			makeLocal("a", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("ffA", F),
-			makeLocal("ffB", &gotypes.Builtin{Def: "int"}),
+			makeLocal("ffB", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeVirtual(1, F),
 		},
 	)

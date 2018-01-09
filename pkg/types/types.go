@@ -620,6 +620,60 @@ func (o *Slice) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+const ConstantType = "constant"
+
+type Constant struct {
+	Untyped bool   `json:"untyped"`
+	Literal string `json:"literal"`
+	Def     string `json:"def"`
+	Package string `json:"package"`
+}
+
+func (o *Constant) GetType() string {
+	return ConstantType
+}
+
+func (o *Constant) MarshalJSON() (b []byte, e error) {
+	type Copy Constant
+	return json.Marshal(&struct {
+		Type string `json:"type"`
+		*Copy
+	}{
+		Type: ConstantType,
+		Copy: (*Copy)(o),
+	})
+}
+
+func (o *Constant) UnmarshalJSON(b []byte) error {
+	var objMap map[string]*json.RawMessage
+
+	if err := json.Unmarshal(b, &objMap); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["untyped"] actually exists
+	if err := json.Unmarshal(*objMap["untyped"], &o.Untyped); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["literal"] actually exists
+	if err := json.Unmarshal(*objMap["literal"], &o.Literal); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["def"] actually exists
+	if err := json.Unmarshal(*objMap["def"], &o.Def); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["package"] actually exists
+	if err := json.Unmarshal(*objMap["package"], &o.Package); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 const StructFieldsItemType = "structfieldsitem"
 
 type StructFieldsItem struct {
@@ -1014,6 +1068,7 @@ const BuiltinType = "builtin"
 
 type Builtin struct {
 	Untyped bool   `json:"untyped"`
+	Literal string `json:"literal"`
 	Def     string `json:"def"`
 }
 
@@ -1041,6 +1096,11 @@ func (o *Builtin) UnmarshalJSON(b []byte) error {
 
 	// TODO(jchaloup): check the objMap["untyped"] actually exists
 	if err := json.Unmarshal(*objMap["untyped"], &o.Untyped); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["literal"] actually exists
+	if err := json.Unmarshal(*objMap["literal"], &o.Literal); err != nil {
 		return err
 	}
 
@@ -1330,6 +1390,8 @@ func (o *Ellipsis) UnmarshalJSON(b []byte) error {
 const ArrayType = "array"
 
 type Array struct {
+	Len string `json:"len"`
+
 	Elmtype DataType `json:"elmtype"`
 }
 
@@ -1352,6 +1414,11 @@ func (o *Array) UnmarshalJSON(b []byte) error {
 	var objMap map[string]*json.RawMessage
 
 	if err := json.Unmarshal(b, &objMap); err != nil {
+		return err
+	}
+
+	// TODO(jchaloup): check the objMap["len"] actually exists
+	if err := json.Unmarshal(*objMap["len"], &o.Len); err != nil {
 		return err
 	}
 

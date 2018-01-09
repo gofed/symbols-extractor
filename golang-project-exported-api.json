@@ -223,10 +223,47 @@
 				},
 				"untyped": {
 					"type": "boolean",
-					"description": "Presence of data type"
+					"description": "Untyped or not"
+				},
+				"literal": {
+					"type": "string",
+					"description": "Literal value",
+					"minLength": 1
 				}
 			},
 			"required": ["type", "def"]
+		},
+		"constant": {
+			"type": "object",
+			"description": "Constant type definition",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "Constant type identifier",
+					"oneOf": [
+						{"enum": ["constant"]}
+					]
+				},
+				"def": {
+					"type": "string",
+					"description": "Type identifier",
+					"minLength": 1
+				},
+				"package": {
+					"type": "string",
+					"description": "Symbol origin",
+					"minLength": 1
+				},
+				"untyped": {
+					"type": "boolean",
+					"description": "Untyped or not"
+				},
+				"literal": {
+					"type": "string",
+					"description": "Literal value"
+				}
+			},
+			"required": ["type", "def", "package", "untyped", "literal"]
 		},
 		"selector": {
 			"type": "object",
@@ -336,6 +373,10 @@
 					"oneOf": [
 						{"enum": ["array"]}
 					]
+				},
+				"len": {
+					"type": "string",
+					"description": "Array length"
 				},
 				"elmtype": {
 					"type": "object",

@@ -32,18 +32,18 @@ func TestSelfTypePropagation(t *testing.T) {
 		}
 	}
 
-	Pointer := &gotypes.Pointer{Def: &gotypes.Builtin{Def: "string", Untyped: true}}
+	Pointer := &gotypes.Pointer{Def: &gotypes.Identifier{Package: "builtin", Def: "string"}}
 
 	cutils.ParseAndCompareVarTable(
 		t,
 		gopkg,
 		"../../testdata/pointers.go",
 		[]cutils.VarTableTest{
-			makeLocal("a", &gotypes.Builtin{Def: "string", Untyped: true}),
-			makeLocal("da", &gotypes.Builtin{Def: "string", Untyped: true}),
+			makeLocal("a", &gotypes.Identifier{Package: "builtin", Def: "string"}),
+			makeLocal("da", &gotypes.Identifier{Package: "builtin", Def: "string"}),
 			makeLocal("ra", Pointer),
 			makeVirtual(1, Pointer),
-			makeVirtual(2, &gotypes.Builtin{Def: "string", Untyped: true}),
+			makeVirtual(2, &gotypes.Identifier{Package: "builtin", Def: "string"}),
 		},
 	)
 }

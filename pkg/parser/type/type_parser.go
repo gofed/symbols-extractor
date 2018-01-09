@@ -61,7 +61,7 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 		if _, err := table.LookupDataType(typedExpr.Name); err != nil {
 			return nil, err
 		}
-		return &gotypes.Builtin{Def: typedExpr.Name}, nil
+		return &gotypes.Identifier{Package: "builtin", Def: typedExpr.Name}, nil
 	}
 
 	// Check if the identifier is available in the symbol table

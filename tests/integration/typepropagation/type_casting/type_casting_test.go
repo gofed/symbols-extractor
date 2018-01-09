@@ -24,13 +24,21 @@ func TestSelfTypePropagation(t *testing.T) {
 		}
 	}
 
+	makeVirtual := func(idx int, dataType gotypes.DataType) cutils.VarTableTest {
+		return cutils.VarTableTest{
+			Name:     typevars.MakeVirtualVar(idx).String(),
+			DataType: dataType,
+		}
+	}
+
 	cutils.ParseAndCompareVarTable(
 		t,
 		gopkg,
 		"../../testdata/type_casting.go",
 		[]cutils.VarTableTest{
 			makeLocal("asA", &gotypes.Identifier{Def: "Int", Package: gopkg}),
-			makeLocal("asB", &gotypes.Builtin{Def: "int"}),
+			makeLocal("asB", &gotypes.Identifier{Package: "builtin", Def: "int"}),
+			makeVirtual(1, &gotypes.Identifier{Package: gopkg, Def: "Int"}),
 		},
 	)
 }
