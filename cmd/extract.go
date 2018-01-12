@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"sort"
 
 	"github.com/gofed/symbols-extractor/pkg/parser"
+	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
 	"github.com/golang/glog"
 )
 
@@ -23,6 +25,22 @@ func (f *flags) parse() error {
 	}
 
 	return nil
+}
+
+func PrintAllocTables(allocTable *allocglobal.Table) {
+	for _, pkg := range allocTable.Packages() {
+		fmt.Printf("Package: %v\n", pkg)
+		filesList := allocTable.Files(pkg)
+		sort.Strings(filesList)
+		for _, f := range filesList {
+			fmt.Printf("\tFile: %v\n", f)
+			at, err := allocTable.Lookup(pkg, f)
+			if err != nil {
+				glog.Fatalf("AC error: %v", err)
+			}
+			at.Print()
+		}
+	}
 }
 
 // Flow:
@@ -48,6 +66,7 @@ func main() {
 		// TODO(jchaloup): extend it with a hiearchy of cgo symbol files
 		cgoSymbolsPath: flag.String("cgo-symbols-path", "", "Symbol table with CGO symbols (per entire project space)"),
 		goVersion:      flag.String("go-version", "", "Go std library version"),
+		// TODO(jchaloup): produce a list of allocated symbols
 	}
 
 	if err := f.parse(); err != nil {
@@ -57,9 +76,12 @@ func main() {
 	// TODO(jchaloup): Check the version is of the form d.d for now (later extend with alpha/beta/rc...)
 
 	fmt.Printf("Parsing: %v\n", *(f.packagePath))
-	if err := parser.New(*(f.packagePath), *(f.symbolTablePath), *(f.cgoSymbolsPath)).Parse(); err != nil {
+	p := parser.New(*(f.packagePath), *(f.symbolTablePath), *(f.cgoSymbolsPath))
+	if err := p.Parse(); err != nil {
 		glog.Fatalf("Parse error: %v", err)
 	}
+
+	PrintAllocTables(p.GlobalAllocTable())
 
 	fmt.Printf("PASSED\n")
 }

@@ -57,18 +57,6 @@ func TestGeneralContracts(t *testing.T) {
 		packageName,
 		"../../testdata/general.go",
 		[]contracts.Contract{
-			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
-				Y: typevars.MakeVar(packageName, "c", vars["c"]),
-			},
-			&contracts.IsCompatibleWith{
-				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "3"}),
-				Y: typevars.MakeVar(packageName, "d", vars["d"]),
-			},
-			&contracts.PropagatesTo{
-				X: typevars.MakeConstant(packageName, &gotypes.Identifier{Package: "builtin", Def: "int"}),
-				Y: typevars.MakeVar(packageName, "d", vars["d"]),
-			},
 			&contracts.BinaryOp{
 				X:       typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 				Y:       typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
@@ -134,6 +122,18 @@ func TestGeneralContracts(t *testing.T) {
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant("builtin", &gotypes.Identifier{Package: "builtin", Def: "float32"}),
 				Y: typevars.MakeVar(packageName, "tb", vars["tb"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
+				Y: typevars.MakeVar(packageName, "c", vars["c"]),
+			},
+			&contracts.IsCompatibleWith{
+				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "3"}),
+				Y: typevars.MakeVar(packageName, "d", vars["d"]),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeConstant(packageName, &gotypes.Identifier{Package: "builtin", Def: "int"}),
+				Y: typevars.MakeVar(packageName, "d", vars["d"]),
 			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Channel{Dir: "3", Value: &gotypes.Identifier{Package: "builtin", Def: "int"}}),
@@ -285,7 +285,7 @@ func TestGeneralContracts(t *testing.T) {
 				Field: "a",
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(10), "a", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(10), "a", 0, ""),
 				Y: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 			},
 			&contracts.IsCompatibleWith{
@@ -321,7 +321,7 @@ func TestGeneralContracts(t *testing.T) {
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
-				Y: typevars.MakeField(typevars.MakeLocalVar("s", vars["s"]), "a", 0),
+				Y: typevars.MakeField(typevars.MakeLocalVar("s", vars["s"]), "a", 0, ""),
 			},
 			// *(&c) = 2
 			&contracts.IsReferenceable{
@@ -347,6 +347,10 @@ func TestGeneralContracts(t *testing.T) {
 				X: typevars.MakeConstant(packageName, &gotypes.Function{
 					Package: packageName,
 				}),
+				Y: typevars.MakeVirtualVar(13),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(13),
 				Y: typevars.MakeVirtualVar(13),
 			},
 			&contracts.IsInvocable{
@@ -546,6 +550,10 @@ func TestGeneralContracts(t *testing.T) {
 				X: typevars.MakeConstant(packageName, &gotypes.Function{
 					Package: packageName,
 				}),
+				Y: typevars.MakeVirtualVar(19),
+			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeVirtualVar(19),
 				Y: typevars.MakeVirtualVar(19),
 			},
 			&contracts.IsInvocable{

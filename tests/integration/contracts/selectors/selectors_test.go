@@ -51,7 +51,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "method",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeVirtualVar(1), "method", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(1), "method", 0, ""),
 				Y: typevars.MakeLocalVar("frA", vars["frA"]),
 			},
 			&contracts.IsCompatibleWith{
@@ -77,7 +77,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "method",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("mA", vars["mA"]), "method", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("mA", vars["mA"]), "method", 0, ""),
 				Y: typevars.MakeVirtualVar(3),
 			},
 			&contracts.IsInvocable{
@@ -127,7 +127,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("ia", vars["ia"]), "imethod", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("ia", vars["ia"]), "imethod", 0, ""),
 				Y: typevars.MakeVirtualVar(6),
 			},
 			&contracts.IsInvocable{
@@ -165,7 +165,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("ida", vars["ida"]), "imethod", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("ida", vars["ida"]), "imethod", 0, ""),
 				Y: typevars.MakeVirtualVar(8),
 			},
 			&contracts.IsInvocable{
@@ -194,7 +194,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("idc", vars["idc"]), "imethod", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("idc", vars["idc"]), "imethod", 0, ""),
 				Y: typevars.MakeVirtualVar(10),
 			},
 			&contracts.IsInvocable{
@@ -212,7 +212,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(11), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(11), "", 0, ""),
 				Y: typevars.MakeConstant(packageName,
 					&gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"},
 				),
@@ -255,7 +255,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "d",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("ide", vars["ide"]), "d", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("ide", vars["ide"]), "d", 0, ""),
 				Y: typevars.MakeLocalVar("idf", vars["idf"]),
 			},
 			// type D6 string
@@ -279,7 +279,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("idg", vars["idg"]), "imethod", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("idg", vars["idg"]), "imethod", 0, ""),
 				Y: typevars.MakeVirtualVar(14),
 			},
 			&contracts.IsInvocable{
@@ -297,7 +297,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(15), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(15), "", 0, ""),
 				Y: typevars.MakeConstant(packageName,
 					&gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"},
 				),
@@ -333,7 +333,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "d",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("idi", vars["idi"]), "d", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("idi", vars["idi"]), "d", 0, ""),
 				Y: typevars.MakeLocalVar("idj", vars["idj"]),
 			},
 			// idk := (interface {
@@ -387,7 +387,7 @@ func TestSelectorsTypes(t *testing.T) {
 				Field: "imethod",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("idk", vars["idk"]), "imethod", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("idk", vars["idk"]), "imethod", 0, ""),
 				Y: typevars.MakeVirtualVar(19),
 			},
 			&contracts.IsInvocable{

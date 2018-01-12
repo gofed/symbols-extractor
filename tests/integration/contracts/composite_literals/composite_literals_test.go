@@ -122,7 +122,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Field: "key1",
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(3), "key1", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(3), "key1", 0, ""),
 				Y: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "string", Literal: "\"key1\""}),
 			},
 			&contracts.HasField{
@@ -130,7 +130,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Field: "key2",
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(3), "key2", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(3), "key2", 0, ""),
 				Y: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 			},
 			// structV <-> struct {
@@ -186,7 +186,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(4), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(4), "", 0, ""),
 				Y: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "string", Literal: "\"key1\""}),
 			},
 			&contracts.HasField{
@@ -194,7 +194,7 @@ func TestCompositeLiteralsContracts(t *testing.T) {
 				Index: 1,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(4), "", 1),
+				X: typevars.MakeField(typevars.MakeVirtualVar(4), "", 1, ""),
 				Y: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 			},
 			// structV2 <-> struct {

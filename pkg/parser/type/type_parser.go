@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -49,7 +50,8 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 
 	// Check if the identifier is a built-in type
 	if typedExpr.Name != "Type" && p.SymbolsAccessor.IsBuiltin(typedExpr.Name) {
-		p.AllocatedSymbolsTable.AddSymbol(
+		p.AllocatedSymbolsTable.AddDataType(
+			//&gotypes.Identifier{Package: "builtin", Def: typedExpr.Name},
 			"builtin",
 			typedExpr.Name,
 			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
@@ -65,20 +67,31 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	}
 
 	// Check if the identifier is available in the symbol table
-	def, _, err := p.SymbolTable.Lookup(typedExpr.Name)
+	def, defType, err := p.SymbolTable.Lookup(typedExpr.Name)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
 	}
 
 	// TODO(jchaloup): consider if we should count the recursive use of a data type into its allocation count
-	p.AllocatedSymbolsTable.AddSymbol(
-		def.Package,
-		typedExpr.Name,
-		fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
-	)
+	switch defType {
+	case symbols.DataTypeSymbol:
+		p.AllocatedSymbolsTable.AddDataType(
+			def.Package,
+			typedExpr.Name,
+			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
+		)
+	case symbols.FunctionSymbol:
+		p.AllocatedSymbolsTable.AddFunction(
+			def.Package,
+			typedExpr.Name,
+			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
+		)
+	case symbols.VariableSymbol:
+		// TODO(jchaloup): allocated variable as well
+	}
 
 	return &gotypes.Identifier{
-		Def:     typedExpr.Name,
+		Def:     def.Name,
 		Package: def.Package,
 	}, nil
 }
@@ -150,7 +163,8 @@ func (p *Parser) parseSelector(typedExpr *ast.SelectorExpr) (*gotypes.Selector, 
 		if !ok {
 			return nil, fmt.Errorf("Qualified id %q does not correspond to an import path", id.Name)
 		}
-		p.AllocatedSymbolsTable.AddSymbol(
+
+		p.AllocatedSymbolsTable.AddDataType(
 			qid.Path,
 			typedExpr.Sel.Name,
 			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
@@ -327,7 +341,7 @@ func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 				return nil, err
 			}
 
-			// results can be iderigin="buntifier free
+			// results can be identifier free
 			if len(field.Names) == 0 {
 				results = append(results, def)
 			} else {

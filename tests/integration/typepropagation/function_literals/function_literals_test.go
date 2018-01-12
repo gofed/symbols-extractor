@@ -13,9 +13,10 @@ func TestSelfTypePropagation(t *testing.T) {
 	gopkg := "github.com/gofed/symbols-extractor/tests/integration/typepropagation/function_literals"
 
 	var vars = map[string]string{
-		"ffA": typevars.MakeLocalVar("ffA", ":33").String(),
-		"a":   typevars.MakeLocalVar("a", ":45").String(),
-		"ffB": typevars.MakeLocalVar("ffB", ":70").String(),
+		"ffA":  typevars.MakeLocalVar("ffA", ":33").String(),
+		"ffA2": typevars.MakeLocalVar("ffA", ":77").String(),
+		"a":    typevars.MakeLocalVar("a", ":45").String(),
+		"ffB":  typevars.MakeLocalVar("ffB", ":70").String(),
 	}
 
 	makeLocal := func(name string, dataType gotypes.DataType) cutils.VarTableTest {
@@ -49,6 +50,7 @@ func TestSelfTypePropagation(t *testing.T) {
 		[]cutils.VarTableTest{
 			makeLocal("a", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("ffA", F),
+			makeLocal("ffA2", F),
 			makeLocal("ffB", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeVirtual(1, F),
 		},

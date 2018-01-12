@@ -114,7 +114,7 @@ func TestSelfTypePropagation(t *testing.T) {
 			makeLocal("ta", &gotypes.Identifier{Package: "builtin", Def: "float32"}),
 			makeLocal("tb", &gotypes.Identifier{Package: "builtin", Def: "float32"}),
 
-			makeVirtual(1, &gotypes.Identifier{Package: "builtin", Def: "int"}),
+			makeVirtual(1, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "3"}),
 			makeVirtual(2, &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeVirtual(3, &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeVirtual(4, &gotypes.Slice{Elmtype: &gotypes.Identifier{Package: "builtin", Def: "string"}}),

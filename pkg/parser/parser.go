@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
@@ -631,6 +632,12 @@ PACKAGE_STACK:
 		}
 		fmt.Printf("Global storing %q\n", p.PackagePath)
 		if err := pp.globalSymbolTable.Add(p.PackagePath, table); err != nil {
+			panic(err)
+		}
+
+		// evaluate contracts to collect remaining allocated symbols
+		r := runner.New(p.Config, pp.globalAllocSymbolTable)
+		if err := r.Run(); err != nil {
 			panic(err)
 		}
 

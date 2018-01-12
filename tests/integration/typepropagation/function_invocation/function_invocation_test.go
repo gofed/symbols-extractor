@@ -13,13 +13,13 @@ func TestSelfTypePropagation(t *testing.T) {
 	gopkg := "github.com/gofed/symbols-extractor/tests/integration/typepropagation/function_invocation"
 
 	var vars = map[string]string{
-		"g":    typevars.MakeVar(gopkg, "g", ":20").String(),
+		"g":    typevars.MakeVar(gopkg, "g", ":330").String(),
 		"g_a":  typevars.MakeLocalVar("a", ":27").String(),
 		"g_b":  typevars.MakeLocalVar("b", ":30").String(),
 		"g_c":  typevars.MakeLocalVar("c", ":33").String(),
-		"g1":   typevars.MakeVar(gopkg, "g1", ":69").String(),
+		"g1":   typevars.MakeVar(gopkg, "g1", ":297").String(),
 		"g1_a": typevars.MakeLocalVar("a", ":77").String(),
-		"g2":   typevars.MakeVar(gopkg, "g2", ":113").String(),
+		"g2":   typevars.MakeVar(gopkg, "g2", ":314").String(),
 		"g2_a": typevars.MakeLocalVar("a", ":121").String(),
 		"g2_b": typevars.MakeLocalVar("b", ":131").String(),
 		"a":    typevars.MakeLocalVar("a", ":179").String(),
@@ -89,9 +89,9 @@ func TestSelfTypePropagation(t *testing.T) {
 			makeLocal("aa", str),
 			makeLocal("ab", str),
 			makeLocal("b", str),
-			makeVirtual(1, str),
-			makeVirtual(2, str),
-			makeVirtual(3, str),
+			makeVirtual(1, &gotypes.Constant{Package: "builtin", Untyped: false, Def: "string", Literal: ""}),
+			makeVirtual(2, &gotypes.Constant{Package: "builtin", Untyped: false, Def: "string", Literal: ""}),
+			makeVirtual(3, &gotypes.Constant{Package: "builtin", Untyped: false, Def: "string", Literal: ""}),
 		},
 	)
 }

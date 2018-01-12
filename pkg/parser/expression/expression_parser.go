@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/propagation"
@@ -104,6 +105,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
 		X:   outputTypeVar,
 		Key: keyTypeVar,
+		Pos: fmt.Sprintf("(3)%v:%v", ep.Config.FileName, lit.Pos()),
 	})
 
 	for _, litElement := range lit.Elts {
@@ -231,28 +233,23 @@ func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, 
 			if !ok {
 				return nil, fmt.Errorf("Struct's field %#v is not an identifier", litElement)
 			}
-			if structSymbol != nil {
-				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, keyDefIdentifier.Name)
-			}
 			ep.Config.ContractTable.AddContract(&contracts.HasField{
 				X:     structOutputTypeVar,
 				Field: keyDefIdentifier.Name,
+				Pos:   fmt.Sprintf("%v:%v", ep.Config.FileName, keyDefIdentifier.Pos()),
 			})
-			fieldTypeVar = typevars.MakeField(structOutputTypeVar, keyDefIdentifier.Name, 0)
+			fieldTypeVar = typevars.MakeField(structOutputTypeVar, keyDefIdentifier.Name, 0, fmt.Sprintf("%v:%v", ep.Config.FileName, keyDefIdentifier.Pos()))
 			valueExpr = kvExpr.Value
 		} else {
 			if fieldCounter >= fieldLen {
 				return nil, fmt.Errorf("Number of fields of the CL is greater than the number of fields of underlying struct %#v", structDef)
 			}
-			if structSymbol != nil {
-				// TODO(jchaloup): Should we count the anonymous field as well? Maybe make a AddDataTypeAnonymousField?
-				ep.AllocatedSymbolsTable.AddDataTypeField(structSymbol.Package, structSymbol.Name, structDef.Fields[fieldCounter].Name)
-			}
 			ep.Config.ContractTable.AddContract(&contracts.HasField{
 				X:     structOutputTypeVar,
 				Index: fieldCounter,
+				Pos:   fmt.Sprintf("%v:%v", ep.Config.FileName, litElement.Pos()),
 			})
-			fieldTypeVar = typevars.MakeField(structOutputTypeVar, "", fieldCounter)
+			fieldTypeVar = typevars.MakeField(structOutputTypeVar, "", fieldCounter, fmt.Sprintf("%v:%v", ep.Config.FileName, litElement.Pos()))
 			valueExpr = litElement
 		}
 
@@ -387,6 +384,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 			X:            typevars.MakeConstant(ep.Config.PackageName, def),
 			Y:            typeVar,
 			ExpectedType: def,
+			Pos:          fmt.Sprintf("%v:%v", ep.Config.FileName, lit.Pos()),
 		})
 	}
 
@@ -418,6 +416,10 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		if def, st, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
 			byteSlice, _ := json.Marshal(def)
 			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
+
+			if def.Block == 0 && st == symbols.VariableSymbol && def.Def.GetType() != gotypes.PackagequalifierType {
+				ep.AllocatedSymbolsTable.AddVariable(def.Package, def.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, ident.Pos()))
+			}
 			// The data type of the variable is not accounted as it is not implicitely used
 			// The variable itself carries the data type and as long as the variable does not
 			// get used, the data type can change.
@@ -592,6 +594,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 		Y:            yAttr.TypeVarList[0],
 		Z:            z,
 		ExpectedType: zDataType,
+		Pos:          fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 	return types.ExprAttributeFromDataType(zDataType).AddTypeVar(z), nil
 }
@@ -884,9 +887,35 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 		newVar := ep.Config.ContractTable.NewVirtualVar()
 
+		// get type's origin
+		dt := attr.DataTypeList[0]
+		var dtOrigin string
+		pointer, ok := dt.(*gotypes.Pointer)
+		for {
+			pointer, ok = dt.(*gotypes.Pointer)
+			if !ok {
+				break
+			}
+			dt = pointer.Def
+		}
+
+		switch d := dt.(type) {
+		case *gotypes.Identifier:
+			dtOrigin = d.Package
+		case *gotypes.Selector:
+			qid, ok := d.Prefix.(*gotypes.Packagequalifier)
+			if !ok {
+				fmt.Printf("slector not qid: %#v\n", d.Prefix)
+				panic("SELECTOR not QID!!!")
+			}
+			dtOrigin = qid.Path
+		default:
+			dtOrigin = ep.Config.PackageName
+		}
+
 		ep.Config.ContractTable.AddContract(&contracts.TypecastsTo{
 			X:            attr.TypeVarList[0],
-			Type:         typevars.MakeConstant(ep.Config.PackageName, def),
+			Type:         typevars.MakeConstant(dtOrigin, def),
 			Y:            newVar,
 			ExpectedType: def,
 		})
@@ -920,24 +949,34 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				// arglen == 1: make(type) type
 				// arglen == 2: make(type, size) type
 				// arglen == 3: make(type, size, cap) type
-				switch arglen := len(expr.Args); arglen {
+				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+				arglen := len(expr.Args)
+				switch arglen {
 				case 1:
 					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
 				case 2:
 					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
-					if err := processArgs(typevars.MakeVar("builtin", "make", ""), []ast.Expr{expr.Args[1]}, nil); err != nil {
+					if err := processArgs(f, []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
 				case 3:
 					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
-					if err := processArgs(typevars.MakeVar("builtin", "make", ""), []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
+					if err := processArgs(f, []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
 				default:
 					return nil, fmt.Errorf("Expecting 1, 2 or 3 arguments of built-in function make, got %q instead", arglen)
 				}
+				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+					F:         f,
+					ArgsCount: arglen,
+				})
+
 				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(typevars.MakeConstant(ep.Config.PackageName, typeDef)), err
+				// TODO(jchaloup): set the right type's package
+				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(
+					typevars.MakeConstant(ep.Config.PackageName, typeDef),
+				), err
 			case "new":
 				// The new built-in function allocates memory. The first argument is a type,
 				// not a value, and the value returned is a pointer to a newly
@@ -945,10 +984,17 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				if len(expr.Args) != 1 {
 					return nil, fmt.Errorf("Len of new args != 1, it is %#v", expr.Args)
 				}
+				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+					F:         f,
+					ArgsCount: 1,
+				})
+
 				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
 				return types.ExprAttributeFromDataType(
 					&gotypes.Pointer{Def: typeDef},
 				).AddTypeVar(
+					// TODO(jchaloup): set the right type's package
 					typevars.MakeConstant(ep.Config.PackageName, &gotypes.Pointer{Def: typeDef}),
 				), err
 			case "len":
@@ -956,9 +1002,15 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				// check if the len can be determined (in case then len is a constant).
 				// See https://golang.org/ref/spec#Length_and_capacity
 				// TODO(jchaloup): return the correct value/type of the len built-in function
-				if err := processArgs(typevars.MakeVar("builtin", ident.Name, ""), []ast.Expr{expr.Args[0]}, nil); err != nil {
+				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+				if err := processArgs(f, []ast.Expr{expr.Args[0]}, nil); err != nil {
 					return nil, err
 				}
+				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+					F:         f,
+					ArgsCount: 1,
+				})
+
 				// Produce an int typed constant for the moment so we don't report any false alarms
 				c := &gotypes.Constant{
 					Package: "builtin",
@@ -978,11 +1030,15 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					return nil, fmt.Errorf("%v's argument is not a single expression", ident.Name)
 				}
 
-				fmt.Printf("attr: %#v\n", attr)
 				results, err = propagation.New(ep.Config.SymbolsAccessor).BuiltinFunctionInvocation(ident.Name, attr.DataTypeList)
 				if err != nil {
 					return nil, err
 				}
+				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+					F:         f,
+					ArgsCount: 1,
+				})
 				return types.ExprAttributeFromDataType(results[0]).AddTypeVar(
 					typevars.MakeConstant("builtin", results[0]),
 				), nil
@@ -1005,7 +1061,11 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				if err != nil {
 					return nil, err
 				}
-				fmt.Printf("complex: %#v\n", results[0])
+				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+					F:         f,
+					ArgsCount: 2,
+				})
 				return types.ExprAttributeFromDataType(results[0]).AddTypeVar(
 					typevars.MakeConstant("builtin", results[0]),
 				), nil
@@ -1016,7 +1076,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		if sel, isSel := expr.Fun.(*ast.SelectorExpr); isSel {
 			if ident, ok := sel.X.(*ast.Ident); ok {
 				if ident.Name == "unsafe" {
-					if sel.Sel.Name == "Sizeof" || sel.Sel.Name == "Alignof" || sel.Sel.Name == "Offsetof" {
+					switch sel.Sel.Name {
+					case "Sizeof", "Alignof", "Offsetof":
 						if err := processArgs(typevars.MakeVar("unsafe", sel.Sel.Name, ""), []ast.Expr{expr.Args[0]}, nil); err != nil {
 							return nil, err
 						}
@@ -1046,12 +1107,26 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 	var f *typevars.Variable
 	switch d := attr.TypeVarList[0].(type) {
 	case *typevars.Variable:
-		f = typevars.MakeVar(d.Package, d.Name, d.Pos)
+		if !strings.HasPrefix(d.Name, "virtual.var") {
+			f = &typevars.Variable{Package: d.Package, Name: d.Name, Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos())}
+		} else {
+			f = &typevars.Variable{Package: d.Package, Name: d.Name}
+		}
+		if d.Package == "" {
+			// function literals defined through file level variables need to be
+			// propagated to positions where they are invoked
+			ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X:   d,
+				Y:   f,
+				Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
+			})
+		}
 	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
 		newVar := ep.Config.ContractTable.NewVirtualVar()
 		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-			X: attr.TypeVarList[0],
-			Y: newVar,
+			X:   attr.TypeVarList[0],
+			Y:   newVar,
+			Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 		})
 		f = newVar
 	default:
@@ -1124,6 +1199,7 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, err
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
 		X:       exprDefAttr.TypeVarList[0],
 		IsSlice: true,
+		Pos:     fmt.Sprintf("(1)%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
 	return exprDefAttr, nil
@@ -1171,8 +1247,9 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 	def, err := ep.TypeParser.Parse(expr.Type)
 	newVar := ep.Config.ContractTable.NewVirtualVar()
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-		X: typevars.MakeConstant(ep.Config.PackageName, def),
-		Y: newVar,
+		X:   typevars.MakeConstant(ep.Config.PackageName, def),
+		Y:   newVar,
+		Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
 	return types.ExprAttributeFromDataType(def).AddTypeVar(
@@ -1219,7 +1296,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 		// qid assumed
 		ident, ok := dtExpr.X.(*ast.Ident)
 		if !ok {
-			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the qid instead", dtExpr.X)
+			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the Qid instead", dtExpr.X)
 		}
 
 		qidAttr, err := ep.parseIdentifier(ident)
@@ -1227,7 +1304,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 			return false, nil, err
 		}
 		if _, isQid := qidAttr.DataTypeList[0].(*gotypes.Packagequalifier); !isQid {
-			return false, nil, fmt.Errorf("Expecting qid.id, got %#v for the qid instead", qidAttr.DataTypeList[0])
+			return false, nil, nil
 		}
 
 		st, sd, err := ep.SymbolsAccessor.RetrieveQidDataType(qidAttr.DataTypeList[0], &ast.Ident{Name: dtExpr.Sel.String()})
@@ -1247,7 +1324,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 	if err != nil {
 		return false, nil, fmt.Errorf("Unable to find method %q of data type %v", expr.Sel.Name, typeSymbolDef.Name)
 	}
-	method, ok := methodDefAttr.(*gotypes.Method)
+	method, ok := methodDefAttr.DataType.(*gotypes.Method)
 	if !ok {
 		return false, nil, fmt.Errorf("Expected a method %q of data type %v, got %#v instead", expr.Sel.Name, typeSymbolDef.Name, methodDefAttr)
 	}
@@ -1260,17 +1337,19 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 	}
 
 	ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-		X: typevars.MakeConstant(ep.Config.PackageName, receiverDef),
-		Y: y,
+		X:   typevars.MakeConstant(ep.Config.PackageName, receiverDef),
+		Y:   y,
+		Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
 	ep.Config.ContractTable.AddContract(&contracts.HasField{
 		X:     y,
 		Field: expr.Sel.Name,
+		Pos:   fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Sel.Pos()),
 	})
 
 	return true, types.ExprAttributeFromDataType(method.Def.(*gotypes.Function)).AddTypeVar(
-		typevars.MakeField(y, expr.Sel.Name, 0),
+		typevars.MakeField(y, expr.Sel.Name, 0, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Sel.Pos())),
 	), nil
 }
 
@@ -1308,31 +1387,31 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 	byteSlice, _ := json.Marshal(xDefAttr.DataTypeList[0])
 	glog.Infof("\n\nSelectorExpr.X:\n\t%#v\n\tTypeVar: %#v\n\tfield:%#v\n\t%v at %v\n", xDefAttr.DataTypeList[0], xDefAttr.TypeVarList[0], expr.Sel, string(byteSlice), expr.Pos())
 
-	yDataType, err := propagation.New(ep.Config.SymbolsAccessor).SelectorExpr(xDefAttr.DataTypeList[0], expr.Sel.Name)
+	fieldAttribute, err := propagation.New(ep.Config.SymbolsAccessor).SelectorExpr(xDefAttr.DataTypeList[0], expr.Sel.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	ep.Config.ContractTable.AddContract(&contracts.HasField{
-		X:     xDefAttr.TypeVarList[0],
-		Field: expr.Sel.Name,
-	})
+	// qid.id?
+	if qid, ok := xDefAttr.DataTypeList[0].(*gotypes.Packagequalifier); ok {
+		ep.AllocatedSymbolsTable.AddVariable(qid.Path, expr.Sel.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, expr.Pos()))
+		return types.ExprAttributeFromDataType(fieldAttribute.DataType).AddTypeVar(
+			typevars.MakeVar(qid.Path, expr.Sel.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, expr.Pos())),
+		), nil
+	}
 
 	// Make sure the Field.X is always a virtual variable.
 	// It is easier to evaluate during the data type propagation analysis.
-	var yVar *typevars.Variable
-	if _, ok := xDefAttr.TypeVarList[0].(*typevars.Variable); !ok {
-		yVar = ep.Config.ContractTable.NewVirtualVar()
-		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-			X: xDefAttr.TypeVarList[0],
-			Y: yVar,
-		})
-	} else {
-		yVar = xDefAttr.TypeVarList[0].(*typevars.Variable)
-	}
+	yVar := ep.typevar2variable(xDefAttr.TypeVarList[0])
 
-	return types.ExprAttributeFromDataType(yDataType).AddTypeVar(
-		typevars.MakeField(yVar, expr.Sel.Name, 0),
+	ep.Config.ContractTable.AddContract(&contracts.HasField{
+		X:     yVar,
+		Field: expr.Sel.Name,
+		Pos:   fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Sel.Pos()),
+	})
+
+	return types.ExprAttributeFromDataType(fieldAttribute.DataType).AddTypeVar(
+		typevars.MakeField(yVar, expr.Sel.Name, 0, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Sel.Pos())),
 	), nil
 }
 
@@ -1381,6 +1460,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
 		X:   yVarType,
 		Key: indexAttr.TypeVarList[0],
+		Pos: fmt.Sprintf("(2)%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)

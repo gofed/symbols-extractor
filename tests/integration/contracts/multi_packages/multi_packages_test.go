@@ -79,7 +79,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Field: "method",
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeField(typevars.MakeLocalVar("a", vars["a"]), "method", 0),
+				X: typevars.MakeField(typevars.MakeLocalVar("a", vars["a"]), "method", 0, ""),
 				Y: typevars.MakeVirtualVar(3),
 			},
 			&contracts.IsInvocable{
@@ -106,7 +106,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(5), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(5), "", 0, ""),
 				Y: typevars.MakeConstant("pkgB", &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
 			},
 			// The first item has its type given explicitly
@@ -127,7 +127,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(6), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(6), "", 0, ""),
 				Y: typevars.MakeConstant("pkgB", &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 			},
 			// The second item has not its type given explicitly => no contract
@@ -171,7 +171,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Index: 0,
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(9), "", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(9), "", 0, ""),
 				Y: typevars.MakeConstant("pkgB", &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
 			},
 			&contracts.PropagatesTo{
@@ -206,7 +206,7 @@ func TestMultiPackageContracts(t *testing.T) {
 				Field: "f",
 			},
 			&contracts.IsCompatibleWith{
-				X: typevars.MakeField(typevars.MakeVirtualVar(12), "f", 0),
+				X: typevars.MakeField(typevars.MakeVirtualVar(12), "f", 0, ""),
 				Y: typevars.MakeConstant("pkgB", &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
 			},
 			&contracts.IsCompatibleWith{

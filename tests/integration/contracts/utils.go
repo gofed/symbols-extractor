@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
+	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
@@ -156,6 +157,9 @@ func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runn
 		}
 
 		t.Errorf("There is %v variables not yet checked", len(names)-len(expected))
+		for i := len(expected); i < len(names); i++ {
+			t.Errorf("%v variables not yet checked", names[i])
+		}
 	}
 
 	// sort.Strings(names)
@@ -175,7 +179,7 @@ func ParseAndCompareVarTable(t *testing.T, gopkg, filename string, expected []Va
 		return
 	}
 
-	r := runner.New(config)
+	r := runner.New(config, allocglobal.New())
 	if err := r.Run(); err != nil {
 		t.Fatal(err)
 	}

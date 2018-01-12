@@ -38,7 +38,7 @@ func TestSelfTypePropagation(t *testing.T) {
 		[]cutils.VarTableTest{
 			makeLocal("asA", &gotypes.Identifier{Def: "Int", Package: gopkg}),
 			makeLocal("asB", &gotypes.Identifier{Package: "builtin", Def: "int"}),
-			makeVirtual(1, &gotypes.Identifier{Package: gopkg, Def: "Int"}),
+			makeVirtual(1, &gotypes.Constant{Package: gopkg, Untyped: false, Def: "Int", Literal: "1"}),
 		},
 	)
 }

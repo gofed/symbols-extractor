@@ -640,7 +640,6 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 				// it's either untyped int, untyped float or untyped complex
 				// Y is int => X must be convertible to int
 				if c.isIntegral(yType) {
-					fmt.Printf("Y is integral\n")
 					if !c.isCompatibleWithInt(xType, xDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -649,7 +648,6 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 						return yDataType, nil
 					}
 				} else if c.isFloating(yType) {
-					fmt.Printf("Y is floating\n")
 					if !c.isCompatibleWithFloat(xType, xDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -661,7 +659,6 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 				targetType = yType
 			} else if yType.untyped {
 				if c.isIntegral(xType) {
-					fmt.Printf("X is integral\n")
 					if !c.isCompatibleWithInt(yType, yDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -670,7 +667,6 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 						return xDataType, nil
 					}
 				} else if c.isFloating(xType) {
-					fmt.Printf("Y is floating\n")
 					if !c.isCompatibleWithFloat(yType, yDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -846,7 +842,6 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 				// it's either untyped int, untyped float or untyped complex
 				// Y is int => X must be convertible to int
 				if c.isIntegral(yType) {
-					fmt.Printf("Y is integral\n")
 					if !c.isCompatibleWithInt(xType, xDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -855,14 +850,12 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 						return &gotypes.Constant{Package: "builtin", Def: "bool", Literal: "*", Untyped: true}, nil
 					}
 				} else if c.isFloating(yType) {
-					fmt.Printf("Y is floating\n")
 					if !c.isCompatibleWithFloat(xType, xDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
 				}
 			} else if yType.untyped {
 				if c.isIntegral(xType) {
-					fmt.Printf("X is integral\n")
 					if !c.isCompatibleWithInt(yType, yDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -871,7 +864,6 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 						return &gotypes.Constant{Package: "builtin", Def: "bool", Literal: "*", Untyped: true}, nil
 					}
 				} else if c.isFloating(xType) {
-					fmt.Printf("Y is floating\n")
 					if !c.isCompatibleWithFloat(yType, yDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -900,12 +892,10 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 		if c.isConstant(yDataType) {
 			if yType.untyped {
 				if c.isIntegral(xType) {
-					fmt.Printf("X is integral\n")
 					if !c.isCompatibleWithInt(yType, yDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
 				} else if c.isFloating(xType) {
-					fmt.Printf("Y is floating\n")
 					if !c.isCompatibleWithFloat(yType, yDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -916,12 +906,10 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 		if c.isConstant(xDataType) {
 			if xType.untyped {
 				if c.isIntegral(yType) {
-					fmt.Printf("X is integral\n")
 					if !c.isCompatibleWithInt(xType, xDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
 				} else if c.isFloating(yType) {
-					fmt.Printf("Y is floating\n")
 					if !c.isCompatibleWithFloat(xType, xDataType) {
 						return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
 					}
@@ -1090,8 +1078,6 @@ func (c *Config) binaryExprStrings(exprOp token.Token, xType, yType *opr, xDataT
 }
 
 func (c *Config) binaryExprStructs(exprOp token.Token, xType, yType *opr, xDataType, yDataType gotypes.DataType) (gotypes.DataType, error) {
-	fmt.Printf("S1(%v): %#v\n", xType.underlyingType.Id, xType.underlyingType.Def)
-	fmt.Printf("S2(%v): %#v\n", yType.underlyingType.Id, yType.underlyingType.Def)
 
 	// structs  must be of the same type
 	if xType.underlyingType.SymbolType != gotypes.StructType {
@@ -1114,9 +1100,6 @@ func (c *Config) binaryExprStructs(exprOp token.Token, xType, yType *opr, xDataT
 }
 
 func (c *Config) binaryExprInterfaces(exprOp token.Token, xType, yType *opr, xDataType, yDataType gotypes.DataType) (gotypes.DataType, error) {
-	fmt.Printf("I1: %#v\n", xType.underlyingType)
-	fmt.Printf("I2: %#v\n", yType.underlyingType)
-
 	// if one of the operands is nil => bool right away
 	if xType.pkg == "<nil>" && yType.pkg == "<nil>" {
 		return nil, fmt.Errorf("mismatched types nil %v nil", exprOp)
@@ -1173,42 +1156,18 @@ func (c *Config) binaryExprInterfaces(exprOp token.Token, xType, yType *opr, xDa
 
 func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.DataType) (gotypes.DataType, error) {
 
-	// if c, ok := xDataType.(*gotypes.Constant); ok {
-	// 	if c.Untyped && c.Literal == "5" {
-	// 		xDataType = &gotypes.Constant{
-	// 			Package: "builtin",
-	// 			Def:     "uintptr",
-	// 			Literal: "*", // Greedy approximation
-	// 		}
-	// 	}
-	// }
-	//
-	// if c, ok := yDataType.(*gotypes.Constant); ok {
-	// 	if c.Untyped && c.Literal == "5" {
-	// 		yDataType = &gotypes.Constant{
-	// 			Package: "builtin",
-	// 			Def:     "uintptr",
-	// 			Literal: "*", // Greedy approximation
-	// 		}
-	// 	}
-	// }
-
 	xType, xE := c.getOperandType(xDataType)
 	if xE != nil {
 		return nil, xE
 	}
-
-	fmt.Printf("OP: %v\n", exprOp)
-	fmt.Printf("xDataType: %#v\n", xDataType)
-	fmt.Printf("xType: %#v\n", xType)
 
 	yType, yE := c.getOperandType(yDataType)
 	if yE != nil {
 		return nil, yE
 	}
 
-	fmt.Printf("yDataType: %#v\n", yDataType)
-	fmt.Printf("yType: %#v\n", yType)
+	glog.Infof("xType: %#v\n", xType)
+	glog.Infof("yType: %#v\n", yType)
 
 	// https://golang.org/ref/spec#Arithmetic_operators
 	// Integer ops
@@ -1219,7 +1178,6 @@ func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.Dat
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("Z=%#v\n\n", dt)
 			return dt, err
 		default:
 			return nil, fmt.Errorf("BinaryExpr: Unsupported operation %v over %v and %v", exprOp, xType.id, yType.id)
@@ -1234,7 +1192,6 @@ func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.Dat
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("Z=%#v\n\n", dt)
 			return dt, err
 		default:
 			return nil, fmt.Errorf("areFloating: Unsupported operation %v over %v and %v", exprOp, xType.id, yType.id)
@@ -1249,7 +1206,6 @@ func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.Dat
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("Z=%#v\n\n", dt)
 			return dt, err
 		default:
 			return nil, fmt.Errorf("areComplex: Unsupported operation %v over %v and %v", exprOp, xType.id, yType.id)
@@ -1264,7 +1220,6 @@ func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.Dat
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("Z=%#v\n\n", dt)
 			return dt, err
 		}
 	}
@@ -1277,7 +1232,6 @@ func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.Dat
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("Z=%v\n\n", dt)
 			return dt, err
 		}
 	}
@@ -1334,10 +1288,6 @@ func (c *Config) UnaryExpr(exprOp token.Token, xDataType gotypes.DataType) (goty
 			return nil, xE
 		}
 
-		fmt.Printf("OP: %v\n", exprOp)
-		fmt.Printf("xDataType: %#v\n", xDataType)
-		fmt.Printf("xType: %#v\n", xType)
-
 		if c.isIntegral(xType) || c.isFloating(xType) || c.isComplex(xType) {
 			ma := NewMultiArith()
 			switch exprOp {
@@ -1377,8 +1327,10 @@ func (c *Config) UnaryExpr(exprOp token.Token, xDataType gotypes.DataType) (goty
 	}
 }
 
-func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.DataType, error) {
+func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accessors.FieldAttribute, error) {
 	// X.Sel a.k.a Prefix.Item
+
+	glog.Infof("SelectorExpr: %#v, %v", xDataType, item)
 
 	jsonMarshal := func(msg string, i interface{}) {
 		byteSlice, _ := json.Marshal(i)
@@ -1398,7 +1350,9 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 		// TODO(jchaloup): check if the packageIdent is a global variable, method, function or a data type
 		//                 based on that, use the corresponding Add method
 		//ep.AllocatedSymbolsTable.AddSymbol(xType.Path, item, "")
-		return packageIdent.Def, nil
+		return &accessors.FieldAttribute{
+			DataType: packageIdent.Def,
+		}, nil
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {
 		case *gotypes.Identifier:
@@ -1466,6 +1420,10 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 			return c.symbolsAccessor.RetrieveDataTypeField(
 				accessors.NewFieldAccessor(symbolTable, defSymbol, &ast.Ident{Name: item}).SetFieldsOnly().SetDropFieldsOnly(),
 			)
+		case *gotypes.Selector:
+			return c.symbolsAccessor.RetrieveDataTypeField(
+				accessors.NewFieldAccessor(symbolTable, defSymbol, &ast.Ident{Name: item}).SetFieldsOnly().SetDropFieldsOnly(),
+			)
 		default:
 			// check data types with receivers
 			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", item, ident)
@@ -1473,7 +1431,10 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (gotypes.
 			if err != nil {
 				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v: %v", defSymbol, err)
 			}
-			return def.Def, nil
+			return &accessors.FieldAttribute{
+				DataType: def.Def,
+				IsMethod: true,
+			}, nil
 		}
 	// anonymous struct
 	case *gotypes.Struct:
@@ -1674,7 +1635,7 @@ func (c *Config) TypecastExpr(xDataType, tDataType gotypes.DataType) (gotypes.Da
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("ident: %#v\n", ident)
+
 		if ident.Package == "<builtin>" && ident.Def == "pointer" {
 			if constant.Package == "builtin" && constant.Def == "string" {
 				// []byte(str)
@@ -1761,9 +1722,6 @@ func (c *Config) BuiltinFunctionInvocation(name string, arguments []gotypes.Data
 		if xE != nil {
 			return nil, xE
 		}
-
-		fmt.Printf("xDataType: %#v\n", arguments[0])
-		fmt.Printf("xType: %#v\n", xType)
 
 		if xType.id == "complex64" {
 			return []gotypes.DataType{

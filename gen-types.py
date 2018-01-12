@@ -264,6 +264,7 @@ type SymbolDef struct {
        Name    string   `json:"name"`
        Package string   `json:"package"`
        Def     gotypes.DataType `json:"def"`
+       Block   int              `json:"block"`
 }
 
 func (o *SymbolDef) UnmarshalJSON(b []byte) error {
@@ -284,6 +285,12 @@ func (o *SymbolDef) UnmarshalJSON(b []byte) error {
     if err := json.Unmarshal(*objMap["package"], &o.Package); err != nil {
 		return err
 	}
+
+    if _, ok := objMap["block"]; ok {
+		if err := json.Unmarshal(*objMap["block"], &o.Block); err != nil {
+			return err
+		}
+    }
 
 	var m map[string]interface{}
 	if err := json.Unmarshal(*objMap["def"], &m); err != nil {
