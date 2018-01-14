@@ -61,7 +61,6 @@ func MakePayload(f *ast.File) (*Payload, error) {
 		case *ast.GenDecl:
 			// var lastValueSpecType ast.Expr
 			// var lastValueSpecValue ast.Expr
-			fmt.Printf("ast.GenDecl: %v\n", decl.Tok)
 			switch decl.Tok {
 			case token.TYPE:
 				for _, spec := range decl.Specs {
@@ -88,10 +87,24 @@ func MakePayload(f *ast.File) (*Payload, error) {
 					if constSpec.Type == nil && lastConstSpecType != nil {
 						constSpec.Type = lastConstSpecType
 					}
-					payload.Constants = append(payload.Constants, types.ConstSpec{
-						IotaIdx: uint(i),
-						Spec:    constSpec,
-					})
+					for j, constName := range constSpec.Names {
+						cSpec := &ast.ValueSpec{
+							Doc:     constSpec.Doc,
+							Names:   []*ast.Ident{constName},
+							Type:    constSpec.Type,
+							Values:  nil,
+							Comment: constSpec.Comment,
+						}
+
+						if constSpec.Values != nil && j < len(constSpec.Values) {
+							cSpec.Values = []ast.Expr{constSpec.Values[j]}
+						}
+
+						payload.Constants = append(payload.Constants, types.ConstSpec{
+							IotaIdx: uint(i),
+							Spec:    cSpec,
+						})
+					}
 					lastConstSpecValue = constSpec.Values
 					// once there is a type it applies to all following untyped constants until there is a new one
 					if constSpec.Type != nil {
@@ -164,7 +177,11 @@ func (fp *FileParser) parseImportedPackages(specs []*ast.ImportSpec) error {
 
 func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, error) {
 	var postponed []*ast.TypeSpec
+	fp.Config.ContractTable.UnsetPrefix()
+	defer fp.Config.ContractTable.UnsetPrefix()
+
 	for _, spec := range specs {
+		fp.Config.ContractTable.SetPrefix(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()))
 		// Store a symbol just with a name and origin.
 		// Setting the symbol's definition to nil means the symbol is being parsed (somewhere in the chain)
 		if err := fp.SymbolTable.AddDataType(&symbols.SymbolDef{
@@ -173,6 +190,7 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 			Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
 			Def:     nil,
 		}); err != nil {
+			fp.Config.ContractTable.DropPrefixContracts(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()))
 			return nil, err
 		}
 
@@ -200,16 +218,19 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 
 func (fp *FileParser) parseConstValueSpecs(specs []types.ConstSpec, reprocessing bool) ([]types.ConstSpec, error) {
 	var postponed []types.ConstSpec
+	fp.Config.ContractTable.UnsetPrefix()
+	defer fp.Config.ContractTable.UnsetPrefix()
 
 	for {
 		for _, spec := range specs {
+			fp.Config.ContractTable.SetPrefix(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Spec.Names[0].Pos()))
 			defs, err := fp.StmtParser.ParseConstValueSpec(spec)
 			if err != nil {
 				glog.Warningf("File parse ValueSpec %#v error: %v\n", spec, err)
 				postponed = append(postponed, spec)
+				fp.Config.ContractTable.DropPrefixContracts(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Spec.Names[0].Pos()))
 				continue
 			}
-			fmt.Printf("ConstantDefs: %#v\n", defs)
 			for _, def := range defs {
 				// TPDP(jchaloup): we should store all variables or non.
 				// Given the error is set only if the variable already exists, it should not matter so much.
@@ -229,24 +250,23 @@ func (fp *FileParser) parseConstValueSpecs(specs []types.ConstSpec, reprocessing
 		}
 		break
 	}
-
-	// if fp.Config.PackageName != "builtin" {
-	// 	fmt.Printf("fp.Config.PackageName: %v\n", fp.Config.PackageName)
-	// 	panic("JJJ")
-	// }
 
 	return postponed, nil
 }
 
 func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool) ([]*ast.ValueSpec, error) {
 	var postponed []*ast.ValueSpec
+	fp.Config.ContractTable.UnsetPrefix()
+	defer fp.Config.ContractTable.UnsetPrefix()
 
 	for {
 		for _, spec := range specs {
+			fp.Config.ContractTable.SetPrefix(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Names[0].Pos()))
 			defs, err := fp.StmtParser.ParseValueSpec(spec)
 			if err != nil {
 				glog.Warningf("File parse ValueSpec %q error: %v\n", spec.Names[0].Name, err)
 				postponed = append(postponed, spec)
+				fp.Config.ContractTable.DropPrefixContracts(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Names[0].Pos()))
 				continue
 			}
 
@@ -269,11 +289,6 @@ func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool)
 		}
 		break
 	}
-
-	// if fp.Config.PackageName != "builtin" {
-	// 	fmt.Printf("fp.Config.PackageName: %v\n", fp.Config.PackageName)
-	// 	panic("JJJ")
-	// }
 
 	return postponed, nil
 }
@@ -412,9 +427,17 @@ func (fp *FileParser) Parse(p *Payload) error {
 		return names
 	}
 
+	printDataTypeNames := func(types []*ast.TypeSpec) []string {
+		var names []string
+		for _, t := range types {
+			names = append(names, t.Name.Name)
+		}
+		return names
+	}
+
 	// Data definitions as second
 	{
-		glog.Infof("\n\nBefore parseTypeSpecs: %v", len(p.DataTypes))
+		glog.Infof("\n\nBefore parseTypeSpecs: %v\n\tNames: %v\n", len(p.DataTypes), strings.Join(printDataTypeNames(p.DataTypes), ","))
 		postponed, err := fp.parseTypeSpecs(p.DataTypes)
 		if err != nil {
 			return err
@@ -476,9 +499,9 @@ func (fp *FileParser) Parse(p *Payload) error {
 		glog.Infof("\n\nAfter parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 	}
 
-	fmt.Printf("AllocST for %q\n", fp.PackageName)
-	fp.AllocatedSymbolsTable.Print()
-	//fp.SymbolTable.Json()
+	// fmt.Printf("AllocST for %q\n", fp.PackageName)
+	// fp.AllocatedSymbolsTable.Print()
+	// fp.SymbolTable.Json()
 
 	return nil
 }

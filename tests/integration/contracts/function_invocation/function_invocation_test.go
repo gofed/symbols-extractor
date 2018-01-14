@@ -15,9 +15,9 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 func TestFunctionInvocationContracts(t *testing.T) {
 	var vars = map[string]string{
 		"a":  ":179",
-		"g":  ":20",
-		"g1": ":69",
-		"g2": ":113",
+		"g":  ":330",
+		"g1": ":297",
+		"g2": ":314",
 		"aa": ":287",
 		"ab": ":304",
 		"b":  ":321",

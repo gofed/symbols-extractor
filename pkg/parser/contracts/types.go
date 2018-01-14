@@ -34,11 +34,11 @@ var IsRangeableType Type = "israngeable"
 func Contract2String(c Contract) string {
 	switch d := c.(type) {
 	case *BinaryOp:
-		return fmt.Sprintf("BinaryOpContract:\n\tX=%v,\n\tY=%v,\n\tZ=%v,\n\top=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), typevars.TypeVar2String(d.Z), d.OpToken)
+		return fmt.Sprintf("BinaryOpContract:\n\tX=%v,\n\tY=%v,\n\tZ=%v,\n\top=%v\n\tPos=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), typevars.TypeVar2String(d.Z), d.OpToken, d.Pos)
 	case *UnaryOp:
 		return fmt.Sprintf("UnaryOpContract:\n\tX=%v,\n\tY=%v,\n\top=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.OpToken)
 	case *PropagatesTo:
-		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%#v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType)
+		return fmt.Sprintf("PropagatesTo:\n\tX=%v,\n\tY=%v,\n\tE=%#v,\n\tToVariable=%v,\n\tPos=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), d.ExpectedType, d.ToVariable, d.Pos)
 	case *TypecastsTo:
 		return fmt.Sprintf("TypecastsTo:\n\tX=%v,\n\tY=%v,\n\tType=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y), typevars.TypeVar2String(d.Type))
 	case *IsCompatibleWith:
@@ -54,9 +54,9 @@ func Contract2String(c Contract) string {
 	case *DereferenceOf:
 		return fmt.Sprintf("DereferenceOf:\n\tX=%v,\n\tY=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y))
 	case *HasField:
-		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v", typevars.TypeVar2String(d.X), d.Field, d.Index)
+		return fmt.Sprintf("HasField:\n\tX=%v,\n\tField=%v,\n\tIndex=%v,\n\tPos=%v", typevars.TypeVar2String(d.X), d.Field, d.Index, d.Pos)
 	case *IsIndexable:
-		return fmt.Sprintf("IsIndexable:\n\tX=%v", typevars.TypeVar2String(d.X))
+		return fmt.Sprintf("IsIndexable:\n\tX=%v\n\tKey=%#v\n\tIsSlice=%v,\n\tPos=%v", typevars.TypeVar2String(d.X), d.Key, d.IsSlice, d.Pos)
 	case *IsSendableTo:
 		return fmt.Sprintf("IsSendableTo:\n\tX=%v\n\tY=%v", typevars.TypeVar2String(d.X), typevars.TypeVar2String(d.Y))
 	case *IsReceiveableFrom:
@@ -64,7 +64,7 @@ func Contract2String(c Contract) string {
 	case *IsIncDecable:
 		return fmt.Sprintf("IsIncDecable:\n\tX=%v", typevars.TypeVar2String(d.X))
 	case *IsRangeable:
-		return fmt.Sprintf("IsRangeable:\n\tX=%v", typevars.TypeVar2String(d.X))
+		return fmt.Sprintf("IsRangeable:\n\tX=%v,\n\tPos=%v", typevars.TypeVar2String(d.X), d.Pos)
 	default:
 		panic(fmt.Sprintf("Contract %#v not recognized", c))
 	}
@@ -79,6 +79,7 @@ type BinaryOp struct {
 	// Z = X op Y
 	X, Y, Z      typevars.Interface
 	ExpectedType gotypes.DataType
+	Pos          string
 }
 
 type UnaryOp struct {
@@ -92,6 +93,7 @@ type PropagatesTo struct {
 	X, Y         typevars.Interface
 	ExpectedType gotypes.DataType
 	ToVariable   bool
+	Pos          string
 }
 
 type TypecastsTo struct {
@@ -116,6 +118,7 @@ type HasField struct {
 	X     typevars.Interface
 	Field string
 	Index int
+	Pos   string
 }
 
 type IsReferenceable struct {
@@ -137,6 +140,7 @@ type DereferenceOf struct {
 type IsIndexable struct {
 	X, Key  typevars.Interface
 	IsSlice bool
+	Pos     string
 }
 
 type IsSendableTo struct {
@@ -153,7 +157,8 @@ type IsIncDecable struct {
 }
 
 type IsRangeable struct {
-	X typevars.Interface
+	X   typevars.Interface
+	Pos string
 }
 
 func (b *BinaryOp) GetType() Type {

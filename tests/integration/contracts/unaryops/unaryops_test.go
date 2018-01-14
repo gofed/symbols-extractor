@@ -50,6 +50,10 @@ func TestUnaryOpContracts(t *testing.T) {
 			//
 			// chanA := make(chan int)
 			//
+			&contracts.IsInvocable{
+				F:         typevars.MakeVar("builtin", "make", ":72"),
+				ArgsCount: 1,
+			},
 			&contracts.PropagatesTo{
 				X: typevars.MakeConstant(packageName, &gotypes.Channel{
 					Dir:   "3",

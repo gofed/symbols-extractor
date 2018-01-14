@@ -21,6 +21,7 @@ func TestSelfTypePropagation(t *testing.T) {
 		"uopb":     typevars.MakeLocalVar("uopb", ":122").String(),
 		"uopc":     typevars.MakeLocalVar("uopc", ":134").String(),
 		"uopd":     typevars.MakeLocalVar("uopd", ":149").String(),
+		"make":     typevars.MakeVar("builtin", "make", ":72").String(),
 	}
 
 	makeLocal := func(name string, dataType gotypes.DataType) cutils.VarTableTest {
@@ -50,12 +51,24 @@ func TestSelfTypePropagation(t *testing.T) {
 			makeLocal("uopb", &gotypes.Identifier{Package: "builtin", Def: "int"}),
 			makeLocal("uopc", &gotypes.Identifier{Package: "builtin", Def: "bool"}),
 			makeLocal("uopd", &gotypes.Identifier{Package: "builtin", Def: "int"}),
+			makeLocal("make", &gotypes.Function{
+				Package: "builtin",
+				Params: []gotypes.DataType{
+					&gotypes.Identifier{Package: "builtin", Def: "Type"},
+					&gotypes.Ellipsis{
+						Def: &gotypes.Identifier{Package: "builtin", Def: "IntegerType"},
+					},
+				},
+				Results: []gotypes.DataType{
+					&gotypes.Identifier{Package: "builtin", Def: "Type"},
+				},
+			}),
 			makeVirtual(1, &gotypes.Pointer{Def: &gotypes.Identifier{Package: "builtin", Def: "string"}}),
 			makeVirtual(2, &gotypes.Identifier{Package: "builtin", Def: "int"}),
-			makeVirtual(3, &gotypes.Identifier{Package: "builtin", Def: "int"}),
-			makeVirtual(4, &gotypes.Identifier{Package: "builtin", Def: "int"}),
-			makeVirtual(5, &gotypes.Identifier{Package: "builtin", Def: "bool"}),
-			makeVirtual(6, &gotypes.Identifier{Package: "builtin", Def: "int"}),
+			makeVirtual(3, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
+			makeVirtual(4, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "-1"}),
+			makeVirtual(5, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "bool", Literal: "true"}),
+			makeVirtual(6, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "1"}),
 		},
 	)
 }

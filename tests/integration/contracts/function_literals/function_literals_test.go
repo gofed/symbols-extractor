@@ -13,9 +13,10 @@ var packageName = "github.com/gofed/symbols-extractor/tests/integration/contract
 
 func TestFunctionLiteralsContracts(t *testing.T) {
 	var vars = map[string]string{
-		"a":   ":45",
-		"ffA": ":33",
-		"ffB": ":70",
+		"a":    ":45",
+		"ffA":  ":33",
+		"ffA2": ":77",
+		"ffB":  ":70",
 	}
 	utils.ParseAndCompareContracts(
 		t,
@@ -42,16 +43,20 @@ func TestFunctionLiteralsContracts(t *testing.T) {
 				X: typevars.MakeVirtualVar(1),
 				Y: typevars.MakeLocalVar("ffA", vars["ffA"]),
 			},
+			&contracts.PropagatesTo{
+				X: typevars.MakeLocalVar("ffA", vars["ffA"]),
+				Y: typevars.MakeLocalVar("ffA", vars["ffA2"]),
+			},
 			&contracts.IsInvocable{
-				F:         typevars.MakeLocalVar("ffA", vars["ffA"]),
+				F:         typevars.MakeLocalVar("ffA", vars["ffA2"]),
 				ArgsCount: 1,
 			},
 			&contracts.IsCompatibleWith{
 				X: typevars.MakeConstant(packageName, &gotypes.Constant{Package: "builtin", Untyped: true, Def: "int", Literal: "2"}),
-				Y: typevars.MakeArgument(typevars.MakeLocalVar("ffA", vars["ffA"]), 0),
+				Y: typevars.MakeArgument(typevars.MakeLocalVar("ffA", vars["ffA2"]), 0),
 			},
 			&contracts.PropagatesTo{
-				X: typevars.MakeReturn(typevars.MakeLocalVar("ffA", vars["ffA"]), 0),
+				X: typevars.MakeReturn(typevars.MakeLocalVar("ffA", vars["ffA2"]), 0),
 				Y: typevars.MakeLocalVar("ffB", vars["ffB"]),
 			},
 		})

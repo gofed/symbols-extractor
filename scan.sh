@@ -11,7 +11,9 @@ for package in $(cat gopackages); do
 	fi	
 	#echo "./extract --package-path=$package --symbol-table-dir symboltables --cgo-symbols-path cgo/cgo.yml 1>/tmp/log.log 2>&1"
 	ok=$(./extract --package-path=$package --symbol-table-dir symboltables --cgo-symbols-path cgo/cgo.yml 1>/dev/null 2>&1 && echo "OK")
-	if [ "$ok" == "OK" ]; then
+	if [ "$?" -eq 255 ]; then
+		echo "* [?] $package"
+	elif [ "$ok" == "OK" ]; then
 		echo "* [X] $package"
 	else
 		echo "* [ ] $package"

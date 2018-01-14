@@ -7,6 +7,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 type var2Contract struct {
@@ -42,6 +43,7 @@ func newContractPayload(ctrs map[string][]contracts.Contract) *contractPayload {
 	}
 }
 
+// addContract adds a contract per a go function (all contracts generated in the function body)
 func (cp *contractPayload) addContract(funcName string, c contracts.Contract) {
 	if _, ok := cp.items[funcName]; !ok {
 		cp.items[funcName] = make([]contracts.Contract, 0)
@@ -53,12 +55,37 @@ func (cp *contractPayload) contracts() map[string][]contracts.Contract {
 	return cp.items
 }
 
+func (cp *contractPayload) sortedContracts() (ctrs []contracts.Contract) {
+	var keys []string
+	for fnc := range cp.items {
+		keys = append(keys, fnc)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		for _, c := range cp.items[key] {
+			ctrs = append(ctrs, c)
+		}
+	}
+	return
+}
+
 func (cp *contractPayload) isEmpty() bool {
 	return len(cp.items) == 0
 }
 
+func (cp *contractPayload) len() int {
+	size := 0
+	for key, d := range cp.items {
+		fmt.Printf("key: %v\n", key)
+		size += len(d)
+	}
+
+	return size
+}
+
 func (cp *contractPayload) dump() {
-	for _, d := range cp.items {
+	for fnc, d := range cp.items {
+		fmt.Printf("function: %v\n", fnc)
 		for _, c := range d {
 			fmt.Printf("  %v\n", contracts.Contract2String(c))
 		}
@@ -77,6 +104,7 @@ type varTableItem struct {
 	dataType    gotypes.DataType
 	symbolTable symbols.SymbolLookable
 	packageName string
+	entry       bool
 }
 
 func (v *varTableItem) DataType() gotypes.DataType {
@@ -118,6 +146,7 @@ func (v *VarTable) GetVariable(name string) (*varTableItem, bool) {
 }
 
 func (v *VarTable) SetField(name, field string, item *varTableItem) {
+	glog.Infof("Setting field %q of %#v", field, item)
 	if _, ok := v.fields[name]; !ok {
 		v.fields[name] = make(map[string]*varTableItem)
 	}

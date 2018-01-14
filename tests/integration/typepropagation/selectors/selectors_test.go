@@ -154,7 +154,7 @@ func TestSelfTypePropagation(t *testing.T) {
 					},
 				},
 			}}),
-			makeVirtual(13, &gotypes.Identifier{Def: "D6", Package: gopkg}),
+			makeVirtual(13, &gotypes.Constant{Package: gopkg, Untyped: false, Def: "D6", Literal: "\"string\""}),
 			makeVirtual(14, &gotypes.Method{
 				Receiver: &gotypes.Pointer{Def: &gotypes.Identifier{Def: "D6", Package: gopkg}},
 				Def: &gotypes.Function{

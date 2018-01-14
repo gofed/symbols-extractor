@@ -70,13 +70,17 @@ type Field struct {
 	X     *Variable
 	Name  string
 	Index int
+	Pos   string
 }
 
 func (f *Field) GetType() Type {
 	return FieldType
 }
 
-type CGO struct{}
+type CGO struct {
+	gotypes.DataType
+	Package string
+}
 
 func (c *CGO) GetType() Type {
 	return CGOType
@@ -87,7 +91,7 @@ func TypeVar2String(tv Interface) string {
 	case *Constant:
 		return fmt.Sprintf("TypeVar.Constant: %#v, Package: %v", d.DataType, d.Package)
 	case *Variable:
-		return fmt.Sprintf("TypeVar.Variable: (%v) %v", d.Package, d.Name)
+		return fmt.Sprintf("TypeVar.Variable: (%v) %v at %v", d.Package, d.Name, d.Pos)
 	case *ListKey:
 		return fmt.Sprintf("TypeVar.ListKey: integer type")
 	case *ListValue:
@@ -106,9 +110,9 @@ func TypeVar2String(tv Interface) string {
 		return fmt.Sprintf("TypeVar.Argument: (%v) at %v", TypeVar2String(d.Function), d.Index)
 	case *Field:
 		if d.Name == "" {
-			return fmt.Sprintf("TypeVar.Field: %#v at index %v", d.X, d.Index)
+			return fmt.Sprintf("TypeVar.Field: %#v at index %v at pos %v", d.X, d.Index, d.Pos)
 		}
-		return fmt.Sprintf("TypeVar.Field: %#v with field %q", d.X, d.Name)
+		return fmt.Sprintf("TypeVar.Field: %#v with field %q at pos %v", d.X, d.Name, d.Pos)
 	case *CGO:
 		return fmt.Sprintf("TypeVar.CGO")
 	default:
@@ -262,10 +266,11 @@ func MakeRangeValue(v *Variable) *RangeValue {
 	}
 }
 
-func MakeField(v *Variable, field string, index int) *Field {
+func MakeField(v *Variable, field string, index int, pos string) *Field {
 	return &Field{
 		X:     v,
 		Name:  field,
 		Index: index,
+		Pos:   pos,
 	}
 }

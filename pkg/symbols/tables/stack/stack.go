@@ -3,6 +3,7 @@ package stack
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
@@ -64,6 +65,24 @@ func (s *Stack) AddVariable(sym *symbols.SymbolDef) error {
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
+func (s *Stack) AddVirtualDataType(sym *symbols.SymbolDef) error {
+	if s.Size == 0 {
+		return fmt.Errorf("Symbol table stack is empty")
+	}
+	glog.Infof("====Adding virtual %#v datatype at level 0\n", sym)
+	if strings.HasPrefix(sym.Name, "virtual#") {
+		return fmt.Errorf("Data type %#v is already virtually prefixed", sym)
+	}
+
+	virtSym := *sym
+	virtSym.Name = fmt.Sprintf("virtual#%v#%v", virtSym.Pos, virtSym.Name)
+
+	if _, err := s.Tables[0].LookupDataType(virtSym.Name); err == nil {
+		return nil
+	}
+	return s.Tables[0].AddDataType(&virtSym)
+}
+
 func (s *Stack) AddDataType(sym *symbols.SymbolDef) error {
 	if s.Size > 0 {
 		glog.Infof("====Adding %#v datatype at level %v\n", sym, s.Size-1)
@@ -86,6 +105,7 @@ func (s *Stack) LookupVariable(name string) (*symbols.SymbolDef, error) {
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupVariable(name)
 		if err == nil {
+			def.Block = i
 			return def, nil
 		}
 	}
@@ -101,6 +121,7 @@ func (s *Stack) LookupMethod(datatype, methodName string) (*symbols.SymbolDef, e
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupMethod(datatype, methodName)
 		if err == nil {
+			def.Block = i
 			return def, nil
 		}
 	}
@@ -124,6 +145,7 @@ func (s *Stack) LookupFunction(name string) (*symbols.SymbolDef, error) {
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupFunction(name)
 		if err == nil {
+			def.Block = i
 			return def, nil
 		}
 	}
@@ -136,6 +158,12 @@ func (s *Stack) LookupDataType(name string) (*symbols.SymbolDef, error) {
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupDataType(name)
 		if err == nil {
+			def.Block = i
+			if i > 0 && !strings.HasPrefix(def.Name, "virtual#") {
+				// Change the name to its equivalent virtual definition
+				// so it can be looked up during contract evaluation
+				def.Name = fmt.Sprintf("virtual#%v#%v", def.Pos, def.Name)
+			}
 			return def, nil
 		}
 	}
@@ -148,6 +176,7 @@ func (s *Stack) LookupVariableLikeSymbol(name string) (*symbols.SymbolDef, symbo
 	for i := s.Size - 1; i >= 0; i-- {
 		def, st, err := s.Tables[i].LookupVariableLikeSymbol(name)
 		if err == nil {
+			def.Block = i
 			return def, st, nil
 		}
 	}
@@ -174,6 +203,12 @@ func (s *Stack) Lookup(name string) (*symbols.SymbolDef, symbols.SymbolType, err
 	for i := s.Size - 1; i >= 0; i-- {
 		def, st, err := s.Tables[i].Lookup(name)
 		if err == nil {
+			def.Block = i
+			// Change the name to its equivalent virtual definition
+			// so it can be looked up during contract evaluation
+			if i > 0 && st == symbols.DataTypeSymbol && !strings.HasPrefix(def.Name, "virtual#") {
+				def.Name = fmt.Sprintf("virtual#%v#%v", def.Pos, def.Name)
+			}
 			return def, st, nil
 		}
 	}
