@@ -23,11 +23,11 @@ func prepareParser(pkgName string) *types.Config {
 		PackageName:           pkgName,
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
-		GlobalSymbolTable:     global.New(""),
+		GlobalSymbolTable:     global.New("", ""),
 	}
 	c.SymbolsAccessor = accessors.NewAccessor(c.GlobalSymbolTable).SetCurrentTable(c.PackageName, c.SymbolTable)
 
-	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable())
+	c.GlobalSymbolTable.Add("builtin", utils.BuiltinSymbolTable(), false)
 
 	c.SymbolTable.Push()
 	c.TypeParser = typeparser.New(c)

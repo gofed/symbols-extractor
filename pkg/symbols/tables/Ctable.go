@@ -58,7 +58,6 @@ type DataType struct {
 }
 
 func processDataType(m map[interface{}]interface{}) gotypes.DataType {
-	//fmt.Printf("m: %#v\n", m)
 	if ident, ok := m["identifier"]; ok {
 		str := ident.(string)
 		l := len(str)
@@ -108,7 +107,6 @@ func processDataType(m map[interface{}]interface{}) gotypes.DataType {
 				Def:  processDataType(fieldExpr),
 			}
 			fields = append(fields, item)
-			fmt.Printf("fieldItem: %#v\n", item)
 		}
 		return &gotypes.Struct{
 			Fields: fields,
@@ -151,7 +149,7 @@ type cgoFile struct {
 func (c *CGOTable) LoadFromFile(file string) error {
 	yamlFile, err := ioutil.ReadFile(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to load file %v: %v", file, err)
 	}
 	var cgo cgoFile
 	err = yaml.Unmarshal(yamlFile, &cgo)
@@ -210,7 +208,6 @@ func (c *CGOTable) LoadFromFile(file string) error {
 		}); err != nil {
 			return fmt.Errorf("AddFunction %q failed: %v", fncDef.Name, err)
 		}
-		fmt.Printf("Fnc %v added\n", fncDef.Name)
 	}
 
 	return nil

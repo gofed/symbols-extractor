@@ -48,27 +48,27 @@ func (p *Parser) parseIdentifier(typedExpr *ast.Ident) (gotypes.DataType, error)
 	// Whenever an identifier is used in the definition,
 	// it is allocated.
 
-	// Check if the identifier is a built-in type
-	if typedExpr.Name != "Type" && p.SymbolsAccessor.IsBuiltin(typedExpr.Name) {
-		p.AllocatedSymbolsTable.AddDataType(
-			//&gotypes.Identifier{Package: "builtin", Def: typedExpr.Name},
-			"builtin",
-			typedExpr.Name,
-			fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
-		)
-		table, err := p.GlobalSymbolTable.Lookup("builtin")
-		if err != nil {
-			return nil, err
-		}
-		if _, err := table.LookupDataType(typedExpr.Name); err != nil {
-			return nil, err
-		}
-		return &gotypes.Identifier{Package: "builtin", Def: typedExpr.Name}, nil
-	}
-
 	// Check if the identifier is available in the symbol table
 	def, defType, err := p.SymbolTable.Lookup(typedExpr.Name)
 	if err != nil {
+		// Check if the identifier is a built-in type
+		if typedExpr.Name != "Type" && p.SymbolsAccessor.IsBuiltin(typedExpr.Name) {
+			p.AllocatedSymbolsTable.AddDataType(
+				//&gotypes.Identifier{Package: "builtin", Def: typedExpr.Name},
+				"builtin",
+				typedExpr.Name,
+				fmt.Sprintf("%v:%v", p.Config.FileName, typedExpr.Pos()),
+			)
+			table, err := p.GlobalSymbolTable.Lookup("builtin")
+			if err != nil {
+				return nil, err
+			}
+			if _, err := table.LookupDataType(typedExpr.Name); err != nil {
+				return nil, err
+			}
+			return &gotypes.Identifier{Package: "builtin", Def: typedExpr.Name}, nil
+		}
+
 		return nil, fmt.Errorf("Unable to find symbol %v in the symbol table", typedExpr.Name)
 	}
 

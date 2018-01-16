@@ -3,7 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/exec"
+	"path"
+	"runtime"
 	"sort"
+	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
@@ -15,12 +20,13 @@ type flags struct {
 	symbolTablePath *string
 	cgoSymbolsPath  *string
 	goVersion       *string
+	stdlib          *bool
 }
 
 func (f *flags) parse() error {
 	flag.Parse()
 
-	if *(f.packagePath) == "" {
+	if !(*f.stdlib) && *(f.packagePath) == "" {
 		return fmt.Errorf("--package-path is not set")
 	}
 
@@ -41,6 +47,47 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 			at.Print()
 		}
 	}
+}
+
+func getStdlibPackages() ([]string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get current WD: %v", err)
+	}
+
+	defer func() {
+		// ignore the error
+		os.Chdir(cwd)
+	}()
+
+	var packages []string
+
+	output, err := exec.Command("go", "env", "GOROOT").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get GOROOT env: %v", err)
+	}
+	goroot := strings.Split(string(output), "\n")[0]
+
+	err = os.Chdir(path.Join(goroot, "src"))
+	if err != nil {
+		return nil, fmt.Errorf("Unable to change dir to %v: %v", path.Join(goroot, "src"), err)
+	}
+
+	for _, pkg := range []string{"", "vendor/"} {
+		output, err = exec.Command("go", "list", fmt.Sprintf("./%v...", pkg)).CombinedOutput()
+		if err != nil {
+			panic(fmt.Errorf("Unable to list packages under %v: %v", path.Join(goroot, "src"), err))
+		}
+
+		for _, line := range strings.Split(string(output), "\n") {
+			if line == "" {
+				continue
+			}
+			packages = append(packages, line)
+		}
+	}
+
+	return packages, nil
 }
 
 // Flow:
@@ -66,6 +113,7 @@ func main() {
 		// TODO(jchaloup): extend it with a hiearchy of cgo symbol files
 		cgoSymbolsPath: flag.String("cgo-symbols-path", "", "Symbol table with CGO symbols (per entire project space)"),
 		goVersion:      flag.String("go-version", "", "Go std library version"),
+		stdlib:         flag.Bool("stdlib", false, "Parse system Go std library"),
 		// TODO(jchaloup): produce a list of allocated symbols
 	}
 
@@ -73,10 +121,38 @@ func main() {
 		glog.Fatal(err)
 	}
 
+	// Otherwise it can eat all the CPU power
+	runtime.GOMAXPROCS(1)
+
+	output, err := exec.Command("go", "version").CombinedOutput()
+	if err != nil {
+		glog.Fatal(fmt.Errorf("Error running `go version`: %v", err))
+	}
+	goversion := strings.Split(string(output), " ")[2][2:]
+
+	// parse the standard library
+	if *f.stdlib {
+		packages, err := getStdlibPackages()
+		if err != nil {
+			glog.Fatal(err)
+		}
+
+		generatedDir := path.Join(*(f.symbolTablePath), "golang", goversion)
+
+		for _, pkg := range packages {
+			fmt.Printf("Parsing %q...\n", pkg)
+			p := parser.New(pkg, generatedDir, *(f.cgoSymbolsPath), goversion)
+			if err := p.Parse(); err != nil {
+				glog.Fatalf("Parse error when parsing (%v): %v", pkg, err)
+			}
+		}
+		return
+	}
+
 	// TODO(jchaloup): Check the version is of the form d.d for now (later extend with alpha/beta/rc...)
 
 	fmt.Printf("Parsing: %v\n", *(f.packagePath))
-	p := parser.New(*(f.packagePath), *(f.symbolTablePath), *(f.cgoSymbolsPath))
+	p := parser.New(*(f.packagePath), *(f.symbolTablePath), *(f.cgoSymbolsPath), goversion)
 	if err := p.Parse(); err != nil {
 		glog.Fatalf("Parse error: %v", err)
 	}
