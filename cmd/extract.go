@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -19,8 +20,11 @@ type flags struct {
 	packagePath     *string
 	symbolTablePath *string
 	cgoSymbolsPath  *string
-	goVersion       *string
 	stdlib          *bool
+	allocated       *bool
+	perfile         *bool
+	allallocated    *bool
+	tojson          *bool
 }
 
 func (f *flags) parse() error {
@@ -44,7 +48,38 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 			if err != nil {
 				glog.Fatalf("AC error: %v", err)
 			}
-			at.Print()
+			at.Print(true)
+		}
+	}
+}
+
+func printPackageAllocTables(allocTable *allocglobal.Table, pkg string, perfile bool, allallocated bool, tojson bool) {
+	if perfile {
+		filesList := allocTable.Files(pkg)
+		sort.Strings(filesList)
+		for _, f := range filesList {
+			fmt.Printf("\tFile: %v\n", f)
+			at, err := allocTable.Lookup(pkg, f)
+			if err != nil {
+				glog.Fatalf("AC error: %v", err)
+			}
+			at.Print(allallocated)
+		}
+	} else {
+		tt, err := allocTable.MergeFiles(pkg)
+		if err != nil {
+			return
+		}
+
+		if tojson {
+			byteSlice, err := json.Marshal(tt)
+			if err != nil {
+				fmt.Printf("Unable to convert print json: %v", err)
+				os.Exit(1)
+			}
+			fmt.Printf("%v\n", string(byteSlice))
+		} else {
+			tt.Print(allallocated)
 		}
 	}
 }
@@ -112,9 +147,11 @@ func main() {
 		symbolTablePath: flag.String("symbol-table-dir", "", "Directory with preprocessed symbol tables"),
 		// TODO(jchaloup): extend it with a hiearchy of cgo symbol files
 		cgoSymbolsPath: flag.String("cgo-symbols-path", "", "Symbol table with CGO symbols (per entire project space)"),
-		goVersion:      flag.String("go-version", "", "Go std library version"),
 		stdlib:         flag.Bool("stdlib", false, "Parse system Go std library"),
-		// TODO(jchaloup): produce a list of allocated symbols
+		allocated:      flag.Bool("allocated", false, "Extract allocation of symbols"),
+		perfile:        flag.Bool("per-file", false, "Display allocated symbols per file"),
+		allallocated:   flag.Bool("all-allocated", false, "Display all allocated symbols"),
+		tojson:         flag.Bool("json", false, "Display allocated symbols in JSON"),
 	}
 
 	if err := f.parse(); err != nil {
@@ -128,6 +165,7 @@ func main() {
 	if err != nil {
 		glog.Fatal(fmt.Errorf("Error running `go version`: %v", err))
 	}
+	// TODO(jchaloup): Check the version is of the form d.d for now (later extend with alpha/beta/rc...)
 	goversion := strings.Split(string(output), " ")[2][2:]
 
 	// parse the standard library
@@ -142,22 +180,20 @@ func main() {
 		for _, pkg := range packages {
 			fmt.Printf("Parsing %q...\n", pkg)
 			p := parser.New(pkg, generatedDir, *(f.cgoSymbolsPath), goversion)
-			if err := p.Parse(); err != nil {
+			if err := p.Parse(false); err != nil {
 				glog.Fatalf("Parse error when parsing (%v): %v", pkg, err)
 			}
 		}
 		return
 	}
 
-	// TODO(jchaloup): Check the version is of the form d.d for now (later extend with alpha/beta/rc...)
-
 	fmt.Printf("Parsing: %v\n", *(f.packagePath))
 	p := parser.New(*(f.packagePath), *(f.symbolTablePath), *(f.cgoSymbolsPath), goversion)
-	if err := p.Parse(); err != nil {
+	if err := p.Parse(*(f.allocated)); err != nil {
 		glog.Fatalf("Parse error: %v", err)
 	}
 
-	PrintAllocTables(p.GlobalAllocTable())
-
-	fmt.Printf("PASSED\n")
+	if *(f.allocated) {
+		printPackageAllocTables(p.GlobalAllocTable(), *(f.packagePath), *(f.perfile), *(f.allallocated), *(f.tojson))
+	}
 }

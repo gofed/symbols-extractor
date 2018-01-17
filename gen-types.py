@@ -306,6 +306,12 @@ func (o *SymbolDef) UnmarshalJSON(b []byte) error {
         }
         o.Def = r
     {% endfor %}
+    case gotypes.NilType:
+		r := &gotypes.Nil{}
+		if err := json.Unmarshal(*objMap["def"], &r); err != nil {
+			return err
+		}
+		o.Def = r
     }
 
 	return nil

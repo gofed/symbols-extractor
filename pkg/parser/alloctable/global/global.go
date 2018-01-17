@@ -58,6 +58,35 @@ func (t *Table) Files(packagePath string) []string {
 	return files
 }
 
+// MergeFiles merges all per-file allocated tables into one
+func (t *Table) MergeFiles(packagePath string) (*alloctable.Table, error) {
+	maTable := alloctable.New(packagePath, "")
+	table, ok := t.tables[packagePath]
+	if !ok {
+		return nil, fmt.Errorf("Unable to find %q package", packagePath)
+	}
+	for _, atable := range table {
+		for pkg, symbolSets := range atable.Symbols {
+			for _, item := range symbolSets.Datatypes {
+				maTable.AddDataType(pkg, item.Name, item.Pos)
+			}
+			for _, item := range symbolSets.Functions {
+				maTable.AddFunction(pkg, item.Name, item.Pos)
+			}
+			for _, item := range symbolSets.Variables {
+				maTable.AddVariable(pkg, item.Name, item.Pos)
+			}
+			for _, item := range symbolSets.Methods {
+				maTable.AddMethod(pkg, item.Parent, item.Name, item.Pos)
+			}
+			for _, item := range symbolSets.Structfields {
+				maTable.AddStructField(pkg, item.Parent, item.Field, item.Pos)
+			}
+		}
+	}
+	return maTable, nil
+}
+
 func (t *Table) Lookup(packagePath, file string) (*alloctable.Table, error) {
 	files, ok := t.tables[packagePath]
 	if !ok {

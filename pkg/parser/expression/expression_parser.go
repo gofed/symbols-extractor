@@ -418,7 +418,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 			glog.V(2).Infof("Variable by identifier found: %v\n", string(byteSlice))
 
 			if def.Block == 0 && st == symbols.VariableSymbol && def.Def.GetType() != gotypes.PackagequalifierType {
-				ep.AllocatedSymbolsTable.AddVariable(def.Package, def.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, ident.Pos()))
+				ep.AllocatedSymbolsTable.AddVariable(def.Package, def.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, ident.Pos()))
 			}
 			// The data type of the variable is not accounted as it is not implicitely used
 			// The variable itself carries the data type and as long as the variable does not
@@ -1394,9 +1394,26 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 
 	// qid.id?
 	if qid, ok := xDefAttr.DataTypeList[0].(*gotypes.Packagequalifier); ok {
-		ep.AllocatedSymbolsTable.AddVariable(qid.Path, expr.Sel.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, expr.Pos()))
+		table, err := ep.GlobalSymbolTable.Lookup(qid.Path)
+		if err != nil {
+			return nil, err
+		}
+		_, symbolType, symbolErr := table.Lookup(expr.Sel.Name)
+		if symbolErr != nil {
+			return nil, symbolErr
+		}
+		switch symbolType {
+		case symbols.FunctionSymbol:
+			ep.AllocatedSymbolsTable.AddFunction(qid.Path, expr.Sel.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+		case symbols.VariableSymbol:
+			ep.AllocatedSymbolsTable.AddVariable(qid.Path, expr.Sel.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+		default:
+			fmt.Printf("symbolType: %v\n", symbolType)
+			panic("/O/")
+		}
+
 		return types.ExprAttributeFromDataType(fieldAttribute.DataType).AddTypeVar(
-			typevars.MakeVar(qid.Path, expr.Sel.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, expr.Pos())),
+			typevars.MakeVar(qid.Path, expr.Sel.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos())),
 		), nil
 	}
 

@@ -8,10 +8,11 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
+	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
-	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	symbolsglobal "github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 )
 
@@ -27,29 +28,31 @@ type Runner struct {
 	globalSymbolTable      *global.Table
 	allocatedSymbolsTable  map[string]*alloctable.Table
 	globalAllocSymbolTable *allocglobal.Table
+	contractTable          *contracttable.Table
 	packageName            string
 
 	symbolAccessor *accessors.Accessor
 }
 
-func New(config *types.Config, globalAllocSymbolTable *allocglobal.Table) *Runner {
+func New(packageName string, globalSymbolTable *symbolsglobal.Table, globalAllocSymbolTable *allocglobal.Table, contractTable *contracttable.Table) *Runner {
 	r := &Runner{
 		v2c:                    newVar2Contract(),
 		entryTypevars:          make(map[string]*typevars.Variable, 0),
 		varTable:               newVarTable(),
 		waitingContracts:       newContractPayload(nil),
-		globalSymbolTable:      config.GlobalSymbolTable,
-		symbolAccessor:         accessors.NewAccessor(config.GlobalSymbolTable),
+		globalSymbolTable:      globalSymbolTable,
+		symbolAccessor:         accessors.NewAccessor(globalSymbolTable),
 		globalAllocSymbolTable: globalAllocSymbolTable,
-		packageName:            config.PackageName,
+		contractTable:          contractTable,
+		packageName:            packageName,
 	}
 
-	st, err := config.GlobalSymbolTable.Lookup(config.PackageName)
+	st, err := r.globalSymbolTable.Lookup(r.packageName)
 	if err != nil {
 		panic(err)
 	}
 
-	r.symbolAccessor.SetCurrentTable(config.PackageName, st)
+	r.symbolAccessor.SetCurrentTable(r.packageName, st)
 
 	storeVar := func(v *typevars.Variable, c contracts.Contract) {
 		// Allocate table of variables for data type propagation
@@ -67,7 +70,7 @@ func New(config *types.Config, globalAllocSymbolTable *allocglobal.Table) *Runne
 		return ok
 	}
 
-	for funcName, cs := range config.ContractTable.List() {
+	for funcName, cs := range r.contractTable.List() {
 		for _, c := range cs {
 			r.waitingContracts.addContract(funcName, c)
 			switch d := c.(type) {
@@ -161,7 +164,7 @@ func New(config *types.Config, globalAllocSymbolTable *allocglobal.Table) *Runne
 
 	// Find all global variables that are on RHS of the PropagatesTo contract
 	// and remove them from the entry variables
-	for _, cs := range config.ContractTable.List() {
+	for _, cs := range r.contractTable.List() {
 		for _, c := range cs {
 			if d, ok := c.(*contracts.PropagatesTo); ok {
 				if v, ok := d.Y.(*typevars.Variable); ok {

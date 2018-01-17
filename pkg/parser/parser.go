@@ -539,7 +539,7 @@ func (pp *ProjectParser) packageProcessed(pkg string) bool {
 	return true
 }
 
-func (pp *ProjectParser) Parse() error {
+func (pp *ProjectParser) Parse(allocation bool) error {
 	// set C pseudo-package
 	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
 	pp.cgoSymbolTable = tables.NewCGOTable()
@@ -557,6 +557,18 @@ func (pp *ProjectParser) Parse() error {
 	// check if the requested package is already provided
 	if pp.packageProcessed(pp.packagePath) {
 		fmt.Printf("Package %q already processed\n", pp.packagePath)
+		// Collect dynamically allocated symbols (if requested)
+		if allocation {
+			contractTable, err := pp.globalContractsTable.Lookup(pp.packagePath)
+			if err != nil {
+				return err
+			}
+
+			r := runner.New(pp.packagePath, pp.globalSymbolTable, pp.globalAllocSymbolTable, contractTable)
+			if err := r.Run(); err != nil {
+				panic(err)
+			}
+		}
 		return nil
 	}
 
@@ -707,7 +719,7 @@ PACKAGE_STACK:
 
 		// Evaluate contracts to collect remaining allocated symbols (so called dynamicly allocated symbols).
 		// The symbols are not stored as they depend on a specific dependency package commit
-		r := runner.New(p.Config, pp.globalAllocSymbolTable)
+		r := runner.New(p.Config.PackageName, pp.globalSymbolTable, pp.globalAllocSymbolTable, p.Config.ContractTable)
 		if err := r.Run(); err != nil {
 			panic(err)
 		}

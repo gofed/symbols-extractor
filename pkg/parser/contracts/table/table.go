@@ -188,7 +188,7 @@ func (pc *PackageContracts) UnmarshalJSON(b []byte) error {
 		}
 	}
 
-	pc = &pContracts
+	*pc = pContracts
 
 	return nil
 }
