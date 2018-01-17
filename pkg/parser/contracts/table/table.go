@@ -3,21 +3,21 @@ package table
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
-	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
 	"github.com/golang/glog"
 )
 
+type PackageContracts map[string][]contracts.Contract
+
 type Table struct {
-	Contracts              map[string][]contracts.Contract
-	PackageName            string
+	Contracts              PackageContracts `json:"contracts"`
+	PackageName            string           `json:"packagename"`
 	virtualVariableCounter int
 	prefix                 string
+	symbolTableDir         string
+	goVersion              string
 }
 
 func (t *Table) AddContract(contract contracts.Contract) {
@@ -49,28 +49,156 @@ func (t *Table) List() map[string][]contracts.Contract {
 	return t.Contracts
 }
 
-func (t *Table) Save(contracttabledir string) error {
-	file := path.Join(contracttabledir, fmt.Sprintf("%v-contracts.json", strings.Replace(t.PackageName, "/", ".", -1)))
-	if _, err := os.Stat(file); err == nil {
-		// already stored
-		return nil
-	}
+func (pc *PackageContracts) UnmarshalJSON(b []byte) error {
+	var objMap map[string]*json.RawMessage
 
-	byteSlice, err := json.Marshal(t)
-	if err != nil {
-		return fmt.Errorf("Unable to save %q contract table: %v", t.PackageName, err)
-	}
-
-	if err := ioutil.WriteFile(file, byteSlice, 0644); err != nil {
+	if err := json.Unmarshal(b, &objMap); err != nil {
 		return err
 	}
+
+	pContracts := make(PackageContracts)
+
+	for fncName, item := range objMap {
+		pContracts[fncName] = make([]contracts.Contract, 0)
+		var m []map[string]interface{}
+		if err := json.Unmarshal(*item, &m); err != nil {
+			return err
+		}
+		var a []*json.RawMessage
+		if err := json.Unmarshal(*item, &a); err != nil {
+			return err
+		}
+
+		for i, cItem := range m {
+			switch contracts.Type(cItem["type"].(string)) {
+			case contracts.PropagatesToType:
+				r := &contracts.PropagatesTo{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+			case contracts.BinaryOpType:
+				r := &contracts.BinaryOp{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.HasFieldType:
+				r := &contracts.HasField{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.UnaryOpType:
+				r := &contracts.UnaryOp{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.TypecastsToType:
+				r := &contracts.TypecastsTo{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsCompatibleWithType:
+				r := &contracts.IsCompatibleWith{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsInvocableType:
+				r := &contracts.IsInvocable{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsReferenceableType:
+				r := &contracts.IsReferenceable{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.ReferenceOfType:
+				r := &contracts.ReferenceOf{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsDereferenceableType:
+				r := &contracts.IsDereferenceable{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.DereferenceOfType:
+				r := &contracts.DereferenceOf{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsIndexableType:
+				r := &contracts.IsIndexable{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsSendableToType:
+				r := &contracts.IsSendableTo{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsReceiveableFromType:
+				r := &contracts.IsReceiveableFrom{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsIncDecableType:
+				r := &contracts.IsIncDecable{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			case contracts.IsRangeableType:
+				r := &contracts.IsRangeable{}
+				if err := json.Unmarshal(*a[i], &r); err != nil {
+					return err
+				}
+				pContracts[fncName] = append(pContracts[fncName], r)
+
+			default:
+				panic(fmt.Errorf("Unrecognized contract %v", cItem["type"].(string)))
+			}
+		}
+	}
+
+	pc = &pContracts
+
 	return nil
 }
 
-func New(packageName string) *Table {
+func New(packageName, symbolTableDir, goVersion string) *Table {
 	return &Table{
 		Contracts:              make(map[string][]contracts.Contract, 0),
 		PackageName:            packageName,
 		virtualVariableCounter: 0,
+		symbolTableDir:         symbolTableDir,
+		goVersion:              goVersion,
 	}
 }

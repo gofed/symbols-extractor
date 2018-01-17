@@ -90,7 +90,7 @@ func (t *Table) LookupPackage(pkg string) (PackageTable, error) {
 }
 
 // Store allocation for a given package
-func (t *Table) Store(pkg string) error {
+func (t *Table) Save(pkg string) error {
 	table, ok := t.tables[pkg]
 	if !ok {
 		return fmt.Errorf("Allocated table for %q does not exist", pkg)
@@ -145,4 +145,8 @@ func (t *Table) loadFromFile(pkg string) (PackageTable, error) {
 	}
 
 	return table, nil
+}
+
+func (t *Table) Drop(pkg string) {
+	delete(t.tables, pkg)
 }
