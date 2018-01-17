@@ -362,7 +362,7 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 
 	// called over constants only, only constants has literals to operate with
 
-	glog.Infof("Performing %v operation", exprOp)
+	glog.V(2).Infof("Performing %v operation", exprOp)
 	switch exprOp {
 	case token.REM, token.AND, token.OR, token.AND_NOT, token.XOR:
 		if exprOp == token.REM {
@@ -1166,8 +1166,8 @@ func (c *Config) BinaryExpr(exprOp token.Token, xDataType, yDataType gotypes.Dat
 		return nil, yE
 	}
 
-	glog.Infof("xType: %#v\n", xType)
-	glog.Infof("yType: %#v\n", yType)
+	glog.V(2).Infof("xType: %#v\n", xType)
+	glog.V(2).Infof("yType: %#v\n", yType)
 
 	// https://golang.org/ref/spec#Arithmetic_operators
 	// Integer ops
@@ -1330,18 +1330,18 @@ func (c *Config) UnaryExpr(exprOp token.Token, xDataType gotypes.DataType) (goty
 func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accessors.FieldAttribute, error) {
 	// X.Sel a.k.a Prefix.Item
 
-	glog.Infof("SelectorExpr: %#v, %v", xDataType, item)
+	glog.V(2).Infof("SelectorExpr: %#v, %v", xDataType, item)
 
 	jsonMarshal := func(msg string, i interface{}) {
 		byteSlice, _ := json.Marshal(i)
-		glog.Infof("%v: %v\n", msg, string(byteSlice))
+		glog.V(2).Infof("%v: %v\n", msg, string(byteSlice))
 	}
 
 	// The struct and an interface are the only data type from which a field/method is retriveable
 	switch xType := xDataType.(type) {
 	// If the X expression is a qualified id, the selector is a symbol from a package pointed by the id
 	case *gotypes.Packagequalifier:
-		glog.Infof("Trying to retrieve a symbol %#v from package %v\n", item, xType.Path)
+		glog.V(2).Infof("Trying to retrieve a symbol %#v from package %v\n", item, xType.Path)
 		_, packageIdent, err := c.symbolsAccessor.RetrieveQid(xType, &ast.Ident{Name: item})
 		if err != nil {
 			return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", xType, err)
@@ -1426,7 +1426,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 			)
 		default:
 			// check data types with receivers
-			glog.Infof("Retrieving method %q of a non-struct non-interface data type %#v", item, ident)
+			glog.V(2).Infof("Retrieving method %q of a non-struct non-interface data type %#v", item, ident)
 			def, err := c.symbolsAccessor.LookupMethod(ident, item)
 			if err != nil {
 				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v: %v", defSymbol, err)
@@ -1478,7 +1478,7 @@ func (c *Config) IndexExpr(xDataType, idxDataType gotypes.DataType) (gotypes.Dat
 	} else {
 		indexExpr = xDataType
 	}
-	glog.Infof("IndexExprDef: %#v", indexExpr)
+	glog.V(2).Infof("IndexExprDef: %#v", indexExpr)
 	// In case we have
 	// type A []int
 	// type B A
@@ -1613,18 +1613,18 @@ func (c *Config) RangeExpr(xDataType gotypes.DataType) (gotypes.DataType, gotype
 }
 
 func (c *Config) TypecastExpr(xDataType, tDataType gotypes.DataType) (gotypes.DataType, error) {
-	glog.Infof("TypecastExpr, xDataType: %#v, tDataType: %#v", xDataType, tDataType)
+	glog.V(2).Infof("TypecastExpr, xDataType: %#v, tDataType: %#v", xDataType, tDataType)
 
 	if constant, ok := xDataType.(*gotypes.Constant); ok {
 		// if the tDataType is interface => no constant
-		glog.Infof("Checking if IsDataTypeInterface(%#v)", tDataType)
+		glog.V(2).Infof("Checking if IsDataTypeInterface(%#v)", tDataType)
 		isI, err := c.symbolsAccessor.IsDataTypeInterface(tDataType)
-		glog.Infof("Checking if IsDataTypeInterface(%#v) is %v, err: %v", tDataType, isI, err)
+		glog.V(2).Infof("Checking if IsDataTypeInterface(%#v) is %v, err: %v", tDataType, isI, err)
 		if err != nil {
 			return nil, err
 		}
 
-		glog.Infof("Checking if IsDataTypeInterface(%#v) is %v", tDataType, isI)
+		glog.V(2).Infof("Checking if IsDataTypeInterface(%#v) is %v", tDataType, isI)
 
 		if isI {
 			// no more a constant
@@ -1707,7 +1707,7 @@ func (c *Config) TypecastExpr(xDataType, tDataType gotypes.DataType) (gotypes.Da
 }
 
 func (c *Config) BuiltinFunctionInvocation(name string, arguments []gotypes.DataType) ([]gotypes.DataType, error) {
-	glog.Infof("Processing builtin %v function", name)
+	glog.V(2).Infof("Processing builtin %v function", name)
 	switch name {
 	case "imag", "real":
 		if len(arguments) != 1 {

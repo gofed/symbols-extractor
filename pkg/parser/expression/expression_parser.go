@@ -46,7 +46,7 @@ type Parser struct {
 
 // parseBasicLit consumes *ast.BasicLit and produces Builtin
 func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error) {
-	glog.Infof("Processing BasicLit: %#v\n", lit)
+	glog.V(2).Infof("Processing BasicLit: %#v\n", lit)
 	// TODO(jchaloup): store the literal as well so one can argue about []int{1, 2.0} and []int{1, 2.2}
 	var builtin *gotypes.Constant
 	switch lit.Kind {
@@ -78,7 +78,7 @@ func (ep *Parser) parseBasicLit(lit *ast.BasicLit) (*types.ExprAttribute, error)
 
 // to parse *gotypes.Array, *gotypes.Slice, *gotypes.Map
 func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.CompositeLit, litType gotypes.DataType) (typevars.Interface, error) {
-	glog.Infof("Processing parseKeyValueLikeExpr")
+	glog.V(2).Infof("Processing parseKeyValueLikeExpr")
 	var valueTypeVar typevars.Interface
 	var keyTypeVar typevars.Interface
 	var valueType gotypes.DataType
@@ -217,7 +217,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 
 // *gotypes.Struct
 func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, lit *ast.CompositeLit, structDef *gotypes.Struct, structSymbol *symbols.SymbolDef) (typevars.Interface, error) {
-	glog.Infof("Processing parseCompositeLitStructElements")
+	glog.V(2).Infof("Processing parseCompositeLitStructElements")
 	structOutputTypeVar := ep.Config.ContractTable.NewVirtualVar()
 
 	fieldCounter := 0
@@ -290,7 +290,7 @@ func (ep *Parser) parseCompositeLitStructElements(litDataType gotypes.DataType, 
 
 // parseCompositeLit consumes ast.CompositeLit and produces data type of the root composite literal
 func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataType) (*types.ExprAttribute, error) {
-	glog.Infof("Processing CompositeLit: %#v\t\ttypeDef: %#v\n", lit, typeDef)
+	glog.V(2).Infof("Processing CompositeLit: %#v\t\ttypeDef: %#v\n", lit, typeDef)
 	// https://golang.org/ref/spec#Composite_literals
 	// The LiteralType's underlying type must be a struct, array, slice, or map
 	//  type (the grammar enforces this constraint except when the type is given as a TypeName)
@@ -337,12 +337,12 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 		origLitTypedef = def
 	}
 
-	glog.Infof("litTypedef: %#v", litTypedef)
+	glog.V(2).Infof("litTypedef: %#v", litTypedef)
 	nonIdentLitTypeDef, err := ep.SymbolsAccessor.FindFirstNonidDataType(litTypedef)
 	if err != nil {
 		return nil, err
 	}
-	glog.Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
+	glog.V(2).Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
 
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
 	var typeVar typevars.Interface
@@ -355,7 +355,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 			return nil, err
 		}
 	case *gotypes.Array, *gotypes.Slice, *gotypes.Map:
-		glog.Infof("parseCompositeLitArrayLikeElements: %#v\n", lit)
+		glog.V(2).Infof("parseCompositeLitArrayLikeElements: %#v\n", lit)
 		var err error
 		// if origLitTypedef != nil {
 		// 	switch origLitTypedef.(type) {
@@ -402,7 +402,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 //   identifiers of other packages are handled differently (TODO(jchaloup): describe where and how)
 // - the identifier can not be a method (though, it can be a value of a local/global variable)
 func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error) {
-	glog.Infof("Processing variable-like identifier: %#v\n", ident)
+	glog.V(2).Infof("Processing variable-like identifier: %#v\n", ident)
 
 	// Does the local symbol exists at all?
 	var postponedErr error
@@ -415,7 +415,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 		// If it is a variable, return its definition
 		if def, st, err := ep.SymbolTable.LookupVariableLikeSymbol(ident.Name); err == nil {
 			byteSlice, _ := json.Marshal(def)
-			glog.Infof("Variable by identifier found: %v\n", string(byteSlice))
+			glog.V(2).Infof("Variable by identifier found: %v\n", string(byteSlice))
 
 			if def.Block == 0 && st == symbols.VariableSymbol && def.Def.GetType() != gotypes.PackagequalifierType {
 				ep.AllocatedSymbolsTable.AddVariable(def.Package, def.Name, fmt.Sprintf("%v.%v", ep.Config.FileName, ident.Pos()))
@@ -486,7 +486,7 @@ func (ep *Parser) parseIdentifier(ident *ast.Ident) (*types.ExprAttribute, error
 // - token.XOR, token.OR, token.SUB, token.NOT, token.ADD are understood as
 //   their unary equivalents (^OP, |OP, -OP, ~OP, +OP)
 func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing UnaryExpr: %#v\n", expr)
+	glog.V(2).Infof("Processing UnaryExpr: %#v\n", expr)
 	attr, err := ep.Parse(expr.X)
 	if err != nil {
 		return nil, err
@@ -542,7 +542,7 @@ func (ep *Parser) parseUnaryExpr(expr *ast.UnaryExpr) (*types.ExprAttribute, err
 // - result data type is always another identifier, not data type definition itself
 //   i.e. MyInt + int = MyInt, not MyInt definition
 func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing Binaryexpr: %#v\n", expr)
+	glog.V(2).Infof("Processing Binaryexpr: %#v\n", expr)
 	if !isBinaryOperator(expr.Op) {
 		return nil, fmt.Errorf("Binary operator %#v not recognized", expr.Op)
 	}
@@ -566,12 +566,12 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 
 	{
 		byteSlice, _ := json.Marshal(xAttr.DataTypeList[0])
-		glog.Infof("xx: %v\n", string(byteSlice))
+		glog.V(2).Infof("xx: %v\n", string(byteSlice))
 	}
 
 	{
 		byteSlice, _ := json.Marshal(yAttr.DataTypeList[0])
-		glog.Infof("yy: %v\n", string(byteSlice))
+		glog.V(2).Infof("yy: %v\n", string(byteSlice))
 	}
 
 	if len(xAttr.DataTypeList) != 1 {
@@ -604,7 +604,7 @@ func (ep *Parser) parseBinaryExpr(expr *ast.BinaryExpr) (*types.ExprAttribute, e
 // Errors:
 // - if the expression is non-pointer data type
 func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing StarExpr: %#v\n", expr)
+	glog.V(2).Infof("Processing StarExpr: %#v\n", expr)
 	attr, err := ep.Parse(expr.X)
 	if err != nil {
 		return nil, err
@@ -644,7 +644,7 @@ func (ep *Parser) parseParenExpr(expr ast.Expr) (e ast.Expr) {
 }
 
 func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
-	glog.Infof("Detecting isDataType for %#v at %v", expr, expr.Pos())
+	glog.V(2).Infof("Detecting isDataType for %#v at %v", expr, expr.Pos())
 	switch exprType := expr.(type) {
 	case *ast.Ident:
 		// user defined type
@@ -660,9 +660,9 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 
 		// not a user defined type
 		if table, err := ep.GlobalSymbolTable.Lookup("builtin"); err == nil {
-			glog.Infof("isDataType Builtin seaching for %q", exprType.Name)
+			glog.V(2).Infof("isDataType Builtin seaching for %q", exprType.Name)
 			if _, err := table.LookupDataType(exprType.Name); err == nil {
-				glog.Info("isDataType Builtin found")
+				glog.V(2).Info("isDataType Builtin found")
 				return true, nil
 			}
 			return false, nil
@@ -731,7 +731,7 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 }
 
 func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []string, error) {
-	glog.Infof("getFunctionDef of %#v", def)
+	glog.V(2).Infof("getFunctionDef of %#v", def)
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
 		// local definition
@@ -791,8 +791,8 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []
 // Errors:
 // - number of arguments is different from a number of parameters (including variable length of parameters)
 func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing CallExpr: %#v\n", expr)
-	defer glog.Infof("Leaving CallExpr: %#v\n", expr)
+	glog.V(2).Infof("Processing CallExpr: %#v\n", expr)
+	defer glog.V(2).Infof("Leaving CallExpr: %#v\n", expr)
 
 	expr.Fun = ep.parseParenExpr(expr.Fun)
 
@@ -863,7 +863,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		return nil, err
 	}
 	if isType {
-		glog.Infof("isDataType of %#v is true", expr.Fun)
+		glog.V(2).Infof("isDataType of %#v is true", expr.Fun)
 		def, err := ep.TypeParser.Parse(expr.Fun)
 		if err != nil {
 			return nil, err
@@ -883,7 +883,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 			return nil, fmt.Errorf("Unable to type-cast: %v", err)
 		}
 
-		glog.Infof("Casted to %#v\n", castedDef)
+		glog.V(2).Infof("Casted to %#v\n", castedDef)
 
 		newVar := ep.Config.ContractTable.NewVirtualVar()
 
@@ -922,7 +922,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 		return types.ExprAttributeFromDataType(castedDef).AddTypeVar(newVar), nil
 	}
-	glog.Infof("isDataType of %#v is false", expr.Fun)
+	glog.V(2).Infof("isDataType of %#v is false", expr.Fun)
 
 	// function
 	attr, err := ep.ExprParser.Parse(expr.Fun)
@@ -953,14 +953,14 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				arglen := len(expr.Args)
 				switch arglen {
 				case 1:
-					glog.Infof("Processing make arguments for make(type) type: %#v", expr.Args)
+					glog.V(2).Infof("Processing make arguments for make(type) type: %#v", expr.Args)
 				case 2:
-					glog.Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
+					glog.V(2).Infof("Processing make arguments for make(type, size) type: %#v", expr.Args)
 					if err := processArgs(f, []ast.Expr{expr.Args[1]}, nil); err != nil {
 						return nil, err
 					}
 				case 3:
-					glog.Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
+					glog.V(2).Infof("Processing make arguments for make(type, size, size) type: %#v", expr.Args)
 					if err := processArgs(f, []ast.Expr{expr.Args[1], expr.Args[2]}, nil); err != nil {
 						return nil, err
 					}
@@ -1236,7 +1236,7 @@ func (ep *Parser) parseChanType(expr *ast.ChanType) (*types.ExprAttribute, error
 // Example:
 // - a := func(...) (...) {...}
 func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) {
-	glog.Infof("Processing FuncLit: %#v\n", expr)
+	glog.V(2).Infof("Processing FuncLit: %#v\n", expr)
 	if err := ep.StmtParser.ParseFuncBody(&ast.FuncDecl{
 		Type: expr.Type,
 		Body: expr.Body,
@@ -1261,7 +1261,7 @@ func (ep *Parser) parseFuncLit(expr *ast.FuncLit) (*types.ExprAttribute, error) 
 // Example:
 // -  (struct{int a})(variable)	// type casting to a struct type
 func (ep *Parser) parseStructType(expr *ast.StructType) (*types.ExprAttribute, error) {
-	glog.Infof("Processing StructType: %#v\n", expr)
+	glog.V(2).Infof("Processing StructType: %#v\n", expr)
 	def, err := ep.TypeParser.Parse(expr)
 	return types.ExprAttributeFromDataType(def), err
 }
@@ -1364,7 +1364,7 @@ func (ep *Parser) checkAngGetDataTypeMethod(expr *ast.SelectorExpr) (bool, *type
 // - if the prefix is pointer to identifier of a data type, data type of a method pointed by the selector item is returned
 // - if the prefix is an interface data type, data type of a method pointed by the selector item is returned
 func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing SelectorExpr: %#v at %v\n", expr, expr.Pos())
+	glog.V(2).Infof("Processing SelectorExpr: %#v at %v\n", expr, expr.Pos())
 	// Check for data type method cases
 	// (*Receiver).method: use method of a data type as a value to store to a variable
 	// (Receiver).method: the same, just the receiver is a data type itself
@@ -1385,7 +1385,7 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 	byteSlice, _ := json.Marshal(xDefAttr.DataTypeList[0])
-	glog.Infof("\n\nSelectorExpr.X:\n\t%#v\n\tTypeVar: %#v\n\tfield:%#v\n\t%v at %v\n", xDefAttr.DataTypeList[0], xDefAttr.TypeVarList[0], expr.Sel, string(byteSlice), expr.Pos())
+	glog.V(2).Infof("\n\nSelectorExpr.X:\n\t%#v\n\tTypeVar: %#v\n\tfield:%#v\n\t%v at %v\n", xDefAttr.DataTypeList[0], xDefAttr.TypeVarList[0], expr.Sel, string(byteSlice), expr.Pos())
 
 	fieldAttribute, err := propagation.New(ep.Config.SymbolsAccessor).SelectorExpr(xDefAttr.DataTypeList[0], expr.Sel.Name)
 	if err != nil {
@@ -1434,7 +1434,7 @@ func (ep *Parser) typevar2variable(xTypeVar typevars.Interface) *typevars.Variab
 // - if the expression as a string, uint8 data type is returned
 // - if the expression as an ellipsis, data type of the ellipsis value is returned
 func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing IndexExpr: %#v\n", expr)
+	glog.V(2).Infof("Processing IndexExpr: %#v\n", expr)
 	// X[Index]
 	// The Index can be a simple literal or another compound expression
 	indexAttr, indexErr := ep.Parse(expr.Index)
@@ -1489,7 +1489,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 
 // parseTypeAssertExpr consumes ast.TypeAssertExpr and produces asserted data type
 func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttribute, error) {
-	glog.Infof("Processing TypeAssertExpr: %#v\n", expr)
+	glog.V(2).Infof("Processing TypeAssertExpr: %#v\n", expr)
 	// X.(Type)
 	attr, xErr := ep.Parse(expr.X)
 	if xErr != nil {
@@ -1525,7 +1525,7 @@ func (ep *Parser) parseTypeAssertExpr(expr *ast.TypeAssertExpr) (*types.ExprAttr
 }
 
 func (ep *Parser) parseEllipsis(expr *ast.Ellipsis) (*types.ExprAttribute, error) {
-	glog.Infof("Processing Ellipsis: %#v\n", expr)
+	glog.V(2).Infof("Processing Ellipsis: %#v\n", expr)
 	if expr.Elt == nil {
 		return types.ExprAttributeFromDataType(&gotypes.Ellipsis{}), nil
 	}

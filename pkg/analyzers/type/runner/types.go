@@ -146,7 +146,7 @@ func (v *VarTable) GetVariable(name string) (*varTableItem, bool) {
 }
 
 func (v *VarTable) SetField(name, field string, item *varTableItem) {
-	glog.Infof("Setting field %q of %#v", field, item)
+	glog.V(2).Infof("Setting field %q of %#v", field, item)
 	if _, ok := v.fields[name]; !ok {
 		v.fields[name] = make(map[string]*varTableItem)
 	}
