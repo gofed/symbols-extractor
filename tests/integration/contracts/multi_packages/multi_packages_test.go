@@ -39,7 +39,7 @@ func TestMultiPackageContracts(t *testing.T) {
 	}
 
 	var genContracts []contracts.Contract
-	cs := config.ContractTable.Contracts()
+	cs := config.ContractTable.List()
 	var keys []string
 	for fncName := range cs {
 		keys = append(keys, fncName)

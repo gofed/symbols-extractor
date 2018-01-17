@@ -41,7 +41,7 @@ func storePackage(config *types.Config) {
 		panic(err)
 	}
 
-	config.GlobalSymbolTable.Add(config.PackageName, table)
+	config.GlobalSymbolTable.Add(config.PackageName, table, false)
 }
 
 func ParsePackage(t *testing.T, config *types.Config, fileParser *fileparser.FileParser, packageName, filename, pkg string) error {
@@ -72,7 +72,7 @@ func ParsePackage(t *testing.T, config *types.Config, fileParser *fileparser.Fil
 		panic(err)
 	}
 	fmt.Printf("Global storing %v\n", pkg)
-	config.GlobalSymbolTable.Add(pkg, table)
+	config.GlobalSymbolTable.Add(pkg, table, false)
 
 	// reset symbol table stack
 	config.SymbolTable.Pop()
@@ -92,7 +92,7 @@ func ParseAndCompareContracts(t *testing.T, gopkg, filename string, tests []cont
 		return
 	}
 	var genContracts []contracts.Contract
-	cs := config.ContractTable.Contracts()
+	cs := config.ContractTable.List()
 	var keys []string
 	for fncName := range cs {
 		keys = append(keys, fncName)

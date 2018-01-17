@@ -50,20 +50,20 @@ func parseBuiltin(config *parsertypes.Config) error {
 		panic(err)
 	}
 	fmt.Printf("Global storing builtin\n")
-	config.GlobalSymbolTable.Add("builtin", table)
+	config.GlobalSymbolTable.Add("builtin", table, false)
 
 	return nil
 }
 
 func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error) {
-	gtable := global.New("")
+	gtable := global.New("", "")
 
 	config := &parsertypes.Config{
 		PackageName:           "builtin",
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 		GlobalSymbolTable:     gtable,
-		ContractTable:         contracttable.New(),
+		ContractTable:         contracttable.New("builtin"),
 	}
 
 	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
@@ -83,7 +83,7 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New(),
 		GlobalSymbolTable:     gtable,
-		ContractTable:         contracttable.New(),
+		ContractTable:         contracttable.New(gopkg),
 	}
 
 	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)

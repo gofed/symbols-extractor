@@ -67,7 +67,7 @@ func New(config *types.Config, globalAllocSymbolTable *allocglobal.Table) *Runne
 		return ok
 	}
 
-	for funcName, cs := range config.ContractTable.Contracts() {
+	for funcName, cs := range config.ContractTable.List() {
 		for _, c := range cs {
 			r.waitingContracts.addContract(funcName, c)
 			switch d := c.(type) {
@@ -161,7 +161,7 @@ func New(config *types.Config, globalAllocSymbolTable *allocglobal.Table) *Runne
 
 	// Find all global variables that are on RHS of the PropagatesTo contract
 	// and remove them from the entry variables
-	for _, cs := range config.ContractTable.Contracts() {
+	for _, cs := range config.ContractTable.List() {
 		for _, c := range cs {
 			if d, ok := c.(*contracts.PropagatesTo); ok {
 				if v, ok := d.Y.(*typevars.Variable); ok {
@@ -754,12 +754,12 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 				return nil
 			}
 			// The index must be an Integer type
-			indexItem, err := typevar2varTableItem(d.Key)
+			_, err := typevar2varTableItem(d.Key)
 			if err != nil {
 				return err
 			}
 			// TODO(jchaloup): check the index is compatible with Integer type
-			fmt.Printf("Checking index type %#v compatibility with Integer type not yet implemented", indexItem)
+			// fmt.Printf("Checking index type %#v compatibility with Integer type not yet implemented", indexItem)
 			return nil
 		}
 		switch d := dt.(type) {
@@ -846,19 +846,19 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		if channel.GetType() != gotypes.ChannelType {
 			return fmt.Errorf("Expected channel, got %#v instead", channel)
 		}
-		xItem, xErr := typevar2varTableItem(d.X)
+		_, xErr := typevar2varTableItem(d.X)
 		if xErr != nil {
 			return xErr
 		}
 		// TODO(chaloup): check the xItem (value) is compatible with yItem.Value
-		fmt.Printf("Checking item %#v compatibility with channel", xItem)
+		// fmt.Printf("Checking item %#v compatibility with channel", xItem)
 	case *contracts.IsIncDecable:
-		xItem, xErr := typevar2varTableItem(d.X)
+		_, xErr := typevar2varTableItem(d.X)
 		if xErr != nil {
 			return xErr
 		}
 		// TODO(jchaloup): Check the
-		fmt.Printf("About to check %#v can be inc/decremented\n", xItem)
+		// fmt.Printf("About to check %#v can be inc/decremented\n", xItem)
 	case *contracts.IsRangeable:
 		item, xErr := typevar2varTableItem(d.X)
 		if xErr != nil {
@@ -905,7 +905,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			return xErr
 		}
 		// TODO(jchaloup): check the X can be type-casted to Type
-		fmt.Printf("TODO: need to check %#v is compatible with %#v\n", item, d.Type)
+		// fmt.Printf("TODO: need to check %#v is compatible with %#v\n", item, d.Type)
 
 		// d.Type must be always a constant
 		tc, ok := d.Type.(*typevars.Constant)
@@ -986,10 +986,10 @@ func (r *Runner) Run() error {
 
 	ready, unready := r.splitContracts(newContractPayload(r.waitingContracts.contracts()))
 	for !ready.isEmpty() {
-		fmt.Printf("Ready:\n")
-		ready.dump()
-		fmt.Printf("Unready:\n")
-		unready.dump()
+		// fmt.Printf("Ready:\n")
+		// ready.dump()
+		// fmt.Printf("Unready:\n")
+		// unready.dump()
 		for _, cs := range ready.contracts() {
 			for _, c := range cs {
 				//for _, c := range ready.sortedContracts() {
@@ -1001,10 +1001,10 @@ func (r *Runner) Run() error {
 
 		ready, unready = r.splitContracts(unready)
 	}
-	fmt.Printf("Ready:\n")
-	ready.dump()
-	fmt.Printf("Unready:\n")
-	unready.dump()
+	// fmt.Printf("Ready:\n")
+	// ready.dump()
+	// fmt.Printf("Unready:\n")
+	// unready.dump()
 	if !unready.isEmpty() {
 		unready.dump()
 		return fmt.Errorf("There are still some unprocessed contract: %v", unready.len())

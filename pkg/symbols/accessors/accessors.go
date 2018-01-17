@@ -254,9 +254,6 @@ func (a *Accessor) RetrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ide
 		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
 	}
 	dataTypeDef, piErr := qidst.LookupDataType(item.String())
-	if qid.Path == "C" {
-		fmt.Printf("dataTypeDef, piErr: %#v, %v\n", dataTypeDef, piErr)
-	}
 	if piErr != nil {
 		return nil, nil, fmt.Errorf("Unable to locate symbol %q in %q's symbol table: %v", item.String(), qid.Path, piErr)
 	}
@@ -586,9 +583,6 @@ func (a *Accessor) TypeToSimpleBuiltin(typeDef gotypes.DataType) (*gotypes.Ident
 		}
 	}
 	// pointer to C?
-	if pointer, ok := builtin.(*gotypes.Pointer); ok {
-		fmt.Printf("pointer: %#v\n", pointer.Def)
-	}
 	if a.IsPointerType(builtin) {
 		return &gotypes.Identifier{
 			Package: "<builtin>",

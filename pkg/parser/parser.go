@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -123,16 +124,19 @@ type ProjectParser struct {
 	globalAllocSymbolTable *allocglobal.Table
 	// package stack
 	packageStack []*PackageContext
+
+	goVersion string
 }
 
-func New(packagePath string, symbolTableDir string, cgoSymbolsPath string) *ProjectParser {
+func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string) *ProjectParser {
 	return &ProjectParser{
 		packagePath:            packagePath,
 		symbolTableDirectory:   symbolTableDir,
 		cgoSymbolsPath:         cgoSymbolsPath,
 		packageStack:           make([]*PackageContext, 0),
-		globalSymbolTable:      global.New(symbolTableDir),
+		globalSymbolTable:      global.New(symbolTableDir, goVersion),
 		globalAllocSymbolTable: allocglobal.New(),
+		goVersion:              goVersion,
 	}
 }
 
@@ -142,6 +146,9 @@ func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) 
 		// 'C' is a pseudo-package
 		// See https://golang.org/cmd/cgo/
 		if q.Path == "C" {
+			if pp.cgoSymbolsPath == "" {
+				glog.Fatalf("Unable to load C symbol table. cgoSymbolsPath not set.")
+			}
 			pp.cgoSymbolTable.Flush()
 			if err := pp.cgoSymbolTable.LoadFromFile(pp.cgoSymbolsPath); err != nil {
 				panic(err)
@@ -191,13 +198,13 @@ func skipGoFile(filename string) bool {
 		return true
 	}
 
-	fmt.Printf("\t\t\t%v\n", parts[l-1])
 	return false
 }
 
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
 
 	vendor := false
+	var vendorpath string
 	{
 		cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", packagePath)
 		output, err := cmd.CombinedOutput()
@@ -207,13 +214,28 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 				return nil, "", nil
 			}
 			// check vendor as well
-			cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", path.Join("vendor", packagePath))
+			vendorpath = path.Join("vendor", packagePath)
+			cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", vendorpath)
 			output, err = cmd.CombinedOutput()
 			if err != nil {
 				if strings.Contains(string(output), "no buildable Go source files in") {
 					return nil, "", nil
 				}
-				return nil, "", fmt.Errorf("go list -f {{.GoFiles}} [vendor/]%v failed: %v", packagePath, err)
+				// check vendor under the parent directory
+				parts := strings.Split(pp.packagePath, string(os.PathSeparator))
+				if len(parts) > 1 {
+					vendorpath = path.Join(parts[0], "vendor", packagePath)
+					cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", vendorpath)
+					output, err = cmd.CombinedOutput()
+					if err != nil {
+						if strings.Contains(string(output), "no buildable Go source files in") {
+							return nil, "", nil
+						}
+						return nil, "", fmt.Errorf("go list -f {{.GoFiles}} %v failed: %v", path.Join(parts[0], "vendor", packagePath), err)
+					}
+				} else {
+					return nil, "", fmt.Errorf("go list -f {{.GoFiles}} [vendor/]%v failed: %v", packagePath, err)
+				}
 			}
 			vendor = true
 		}
@@ -233,10 +255,10 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 			}
 		} else {
 			// check vendor as well
-			cmd := exec.Command("go", "list", "-f", "{{.CgoFiles}}", path.Join("vendor", packagePath))
+			cmd := exec.Command("go", "list", "-f", "{{.CgoFiles}}", vendorpath)
 			output, err = cmd.CombinedOutput()
 			if err != nil {
-				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", path.Join("vendor", packagePath), err)
+				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", vendorpath, err)
 			}
 			lines := strings.Split(string(output), "\n")
 			if lines[0] != "[]" {
@@ -247,7 +269,7 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 	{
 		ppath := packagePath
 		if vendor {
-			ppath = path.Join("vendor", packagePath)
+			ppath = vendorpath
 		}
 		cmd := exec.Command("go", "list", "-f", "{{.Dir}}", ppath)
 		output, err := cmd.CombinedOutput()
@@ -286,7 +308,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 		PackageName:       packagePath,
 		SymbolTable:       c.SymbolTable,
 		GlobalSymbolTable: pp.globalSymbolTable,
-		ContractTable:     contracttable.New(),
+		ContractTable:     contracttable.New(packagePath),
 		SymbolsAccessor:   accessors.NewAccessor(pp.globalSymbolTable).SetCurrentTable(packagePath, c.SymbolTable),
 	}
 
@@ -432,7 +454,7 @@ func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error 
 				Functions:         fileContext.Functions,
 				FunctionDeclsOnly: true,
 			}
-			fmt.Printf("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			glog.Infof("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
@@ -441,7 +463,7 @@ func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error 
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			glog.Infof("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			if payload.Functions != nil {
 				for _, name := range payload.Functions {
 					glog.Warningf("Function declaration of %q not yet processed", name.Name)
@@ -469,7 +491,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			payload := &fileparser.Payload{
 				Functions: fileContext.Functions,
 			}
-			fmt.Printf("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			glog.Infof("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
@@ -478,7 +500,7 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			fmt.Printf("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			glog.Infof("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			if payload.Functions != nil {
 				for _, name := range payload.Functions {
 					glog.Errorf("Function %q not processed", name.Name)
@@ -494,18 +516,19 @@ func (pp *ProjectParser) Parse() error {
 	// set C pseudo-package
 	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
 	pp.cgoSymbolTable = tables.NewCGOTable()
-	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable); err != nil {
+	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable, false); err != nil {
 		return fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
 	}
 
 	// process builtin package first
-	if !pp.globalSymbolTable.Exists("builtin") {
+	if _, err := pp.globalSymbolTable.Lookup("builtin"); err != nil {
 		if err := pp.processPackage("builtin"); err != nil {
 			return err
 		}
 	}
 	// check if the requested package is already provided
-	if pp.globalSymbolTable.Exists(pp.packagePath) {
+	if _, err := pp.globalSymbolTable.Lookup(pp.packagePath); err == nil {
+		fmt.Printf("Package %q already processed\n", pp.packagePath)
 		return nil
 	}
 
@@ -622,16 +645,17 @@ PACKAGE_STACK:
 			return err
 		}
 
-		// Put the package ST into the global one
-		byteSlice, _ := json.Marshal(p.SymbolTable)
-		fmt.Printf("\nSymbol table: %v\n\n", string(byteSlice))
+		// // Put the package ST into the global one
+		// byteSlice, _ := json.Marshal(p.SymbolTable)
+		// fmt.Printf("\nSymbol table: %v\n\n", string(byteSlice))
 
 		table, err := p.SymbolTable.Table(0)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("Global storing %q\n", p.PackagePath)
-		if err := pp.globalSymbolTable.Add(p.PackagePath, table); err != nil {
+		glog.Infof("Global storing %q\n", p.PackagePath)
+		fmt.Printf("Package %q processed\n", p.PackagePath)
+		if err := pp.globalSymbolTable.Add(p.PackagePath, table, true); err != nil {
 			panic(err)
 		}
 

@@ -122,20 +122,15 @@ func (ast *Table) AddFunction(pkg, name, pos string) {
 		items = ast.Symbols[pkg]
 	}
 
-	fmt.Printf("KOP\n")
 	k := toKey(name, pos)
 	if _, ok := items.Functions[k]; ok {
 		return
 	}
 
-	fmt.Printf("KOP2\n")
-
 	items.Functions[k] = Function{
 		Name: name,
 		Pos:  pos,
 	}
-
-	fmt.Printf("KOP3: %#v\n", items.Functions[k])
 }
 
 func (ast *Table) AddStructField(pkg, parent, field string, pos string) {

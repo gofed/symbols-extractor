@@ -48,9 +48,6 @@ func (m *MultiArith) parseLiteral(literal string) (*decimal.Decimal, *decimal.De
 			return nil, nil, false, fmt.Errorf("Unable to create complex part of a complex number: %v", err)
 		}
 
-		fmt.Printf("Real: %v\n", real.String())
-		fmt.Printf("Imag: %v\n", imag.String())
-
 		return &real, &imag, true, nil
 	}
 

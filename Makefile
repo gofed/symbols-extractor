@@ -153,7 +153,7 @@ gen:
 	./gentypes.sh
 
 scan:
-	./scan.sh
+	./extract --stdlib --symbol-table-dir generated --cgo-symbols-path cgo/cgo.yml --logtostderr 2>/dev/null
 
 clean:
-	$(RM) $(RM_FLAGS) $(TRASH)
+	rm -rf extract symboltables generated
