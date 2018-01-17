@@ -31,11 +31,11 @@ func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 	}
 
 	file := path.Join(packagePath, "api.json")
-	glog.Infof("Global symbol table %q loading", file)
+	glog.V(2).Infof("Global symbol table %q loading", file)
 
 	raw, err := ioutil.ReadFile(file)
 	if err != nil {
-		glog.Infof("Global symbol table %q loading failed: %v", file, err)
+		glog.V(2).Infof("Global symbol table %q loading failed: %v", file, err)
 		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
 	}
 
@@ -48,7 +48,7 @@ func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 
 func (t *Table) Lookup(pkg string) (symbols.SymbolTable, error) {
 	if table, ok := t.tables[pkg]; ok {
-		glog.Infof("Global symbol table %q found", pkg)
+		glog.V(2).Infof("Global symbol table %q found", pkg)
 		return table, nil
 	}
 
@@ -59,7 +59,7 @@ func (t *Table) Lookup(pkg string) (symbols.SymbolTable, error) {
 	}
 
 	t.tables[pkg] = table
-	glog.Infof("Global symbol table %q loaded", pkg)
+	glog.V(2).Infof("Global symbol table %q loaded", pkg)
 
 	return table, nil
 }
@@ -154,7 +154,7 @@ func (t *Table) Load(symboltabledir string) error {
 	}
 	for _, f := range files {
 		file := path.Join(symboltabledir, f.Name())
-		glog.Infof("Loading %q", file)
+		glog.V(2).Infof("Loading %q", file)
 		raw, err := ioutil.ReadFile(file)
 		if err != nil {
 			return err

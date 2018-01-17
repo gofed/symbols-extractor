@@ -25,7 +25,7 @@ func (t *Table) AddContract(contract contracts.Contract) {
 		t.Contracts[t.prefix] = make([]contracts.Contract, 0)
 	}
 	t.Contracts[t.prefix] = append(t.Contracts[t.prefix], contract)
-	glog.Infof("Adding contract: %v\n", contracts.Contract2String(contract))
+	glog.V(2).Infof("Adding contract: %v\n", contracts.Contract2String(contract))
 }
 
 func (t *Table) SetPrefix(prefix string) {

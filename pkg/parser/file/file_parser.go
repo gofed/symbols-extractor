@@ -161,7 +161,7 @@ func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
 	}
 
 	err := fp.SymbolTable.AddImport(&symbols.SymbolDef{Name: q.Name, Def: q})
-	glog.Infof("Packagequalifier added: %#v\n", &symbols.SymbolDef{Name: q.Name, Def: q})
+	glog.V(2).Infof("Packagequalifier added: %#v\n", &symbols.SymbolDef{Name: q.Name, Def: q})
 	return err
 }
 
@@ -199,7 +199,7 @@ func (fp *FileParser) parseTypeSpecs(specs []*ast.TypeSpec) ([]*ast.TypeSpec, er
 		// Which can result in re-allocation. It should be enough two-level allocated symbol table.
 		typeDef, err := fp.TypeParser.Parse(spec.Type)
 		if err != nil {
-			glog.Warningf("File parse TypeParser error: %v\n", err)
+			glog.V(2).Infof("File parse TypeParser error: %v\n", err)
 			postponed = append(postponed, spec)
 			continue
 		}
@@ -226,7 +226,7 @@ func (fp *FileParser) parseConstValueSpecs(specs []types.ConstSpec, reprocessing
 			fp.Config.ContractTable.SetPrefix(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Spec.Names[0].Pos()))
 			defs, err := fp.StmtParser.ParseConstValueSpec(spec)
 			if err != nil {
-				glog.Warningf("File parse ValueSpec %#v error: %v\n", spec, err)
+				glog.V(2).Infof("File parse ValueSpec %#v error: %v\n", spec, err)
 				postponed = append(postponed, spec)
 				fp.Config.ContractTable.DropPrefixContracts(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Spec.Names[0].Pos()))
 				continue
@@ -264,7 +264,7 @@ func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool)
 			fp.Config.ContractTable.SetPrefix(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Names[0].Pos()))
 			defs, err := fp.StmtParser.ParseValueSpec(spec)
 			if err != nil {
-				glog.Warningf("File parse ValueSpec %q error: %v\n", spec.Names[0].Name, err)
+				glog.V(2).Infof("File parse ValueSpec %q error: %v\n", spec.Names[0].Name, err)
 				postponed = append(postponed, spec)
 				fp.Config.ContractTable.DropPrefixContracts(fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Names[0].Pos()))
 				continue
@@ -294,13 +294,13 @@ func (fp *FileParser) parseValueSpecs(specs []*ast.ValueSpec, reprocessing bool)
 }
 
 func (fp *FileParser) parseFuncDeclaration(spec *ast.FuncDecl) (bool, error) {
-	glog.Infof("Parsing function %q declaration", spec.Name.Name)
+	glog.V(2).Infof("Parsing function %q declaration", spec.Name.Name)
 	// process function definitions as the last
 	funcDef, err := fp.StmtParser.ParseFuncDecl(spec)
 	if err != nil {
 		// if the function declaration is not fully processed (e.g. missing data type)
 		// skip it and postponed its processing
-		glog.Infof("Postponing function %q declaration parseFuncDecls processing due to: %v", spec.Name.Name, err)
+		glog.V(2).Infof("Postponing function %q declaration parseFuncDecls processing due to: %v", spec.Name.Name, err)
 		return true, nil
 	}
 
@@ -320,14 +320,14 @@ func (fp *FileParser) parseFuncDeclaration(spec *ast.FuncDecl) (bool, error) {
 		}
 
 		def, err := fp.SymbolTable.LookupMethod(receiverDataType, spec.Name.Name)
-		glog.Infof("Looking I up for %q.%q\terr: %v\tDef: %#v\tRecv: %#v\n", receiverDataType, spec.Name.Name, err, def, spec.Recv.List)
+		glog.V(2).Infof("Looking I up for %q.%q\terr: %v\tDef: %#v\tRecv: %#v\n", receiverDataType, spec.Name.Name, err, def, spec.Recv.List)
 		// method declaration already exist
 		if err == nil {
 			return false, nil
 		}
 	} else {
 		def, err := fp.SymbolTable.LookupFunction(spec.Name.Name)
-		glog.Infof("Looking II up for %q\terr: %v\tDef: %#v\tRecv: %#v\n", spec.Name.Name, err, def, spec.Recv)
+		glog.V(2).Infof("Looking II up for %q\terr: %v\tDef: %#v\tRecv: %#v\n", spec.Name.Name, err, def, spec.Recv)
 		// function declaration already exist
 		if err == nil {
 			return false, nil
@@ -340,7 +340,7 @@ func (fp *FileParser) parseFuncDeclaration(spec *ast.FuncDecl) (bool, error) {
 		Pos:     fmt.Sprintf("%v:%v", fp.Config.FileName, spec.Pos()),
 		Def:     funcDef,
 	}); err != nil {
-		glog.Info("Error during parsing of function %q declaration: %v", spec.Name.Name, err)
+		glog.V(2).Infof("Error during parsing of function %q declaration: %v", spec.Name.Name, err)
 		return false, err
 	}
 	return false, nil
@@ -379,7 +379,7 @@ func (fp *FileParser) parseFuncs(specs []*ast.FuncDecl) ([]*ast.FuncDecl, error)
 		fp.Config.ContractTable.SetPrefix(spec.Name.Name)
 		if err := fp.StmtParser.ParseFuncBody(spec); err != nil {
 			fp.Config.ContractTable.DropPrefixContracts(spec.Name.Name)
-			glog.Warningf("File %q/%q parse %q Funcs error: %v\n", fp.Config.PackageName, fp.Config.FileName, spec.Name.Name, err)
+			glog.V(2).Infof("File %q/%q parse %q Funcs error: %v\n", fp.Config.PackageName, fp.Config.FileName, spec.Name.Name, err)
 			postponed = append(postponed, spec)
 			continue
 		}
@@ -437,22 +437,22 @@ func (fp *FileParser) Parse(p *Payload) error {
 
 	// Data definitions as second
 	{
-		glog.Infof("\n\nBefore parseTypeSpecs: %v\n\tNames: %v\n", len(p.DataTypes), strings.Join(printDataTypeNames(p.DataTypes), ","))
+		glog.V(2).Infof("\n\nBefore parseTypeSpecs: %v\n\tNames: %v\n", len(p.DataTypes), strings.Join(printDataTypeNames(p.DataTypes), ","))
 		postponed, err := fp.parseTypeSpecs(p.DataTypes)
 		if err != nil {
 			return err
 		}
 		p.DataTypes = postponed
-		glog.Infof("\n\nAfter parseTypeSpecs: %v", len(p.DataTypes))
+		glog.V(2).Infof("\n\nAfter parseTypeSpecs: %v", len(p.DataTypes))
 	}
 
 	// Function/Method declarations
 	{
-		glog.Infof("\n\nBefore parseFuncDecls: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
+		glog.V(2).Infof("\n\nBefore parseFuncDecls: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 		if err := fp.parseFuncDecls(p.Functions); err != nil {
 			return err
 		}
-		glog.Infof("\n\nAfter parseFuncDecls: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
+		glog.V(2).Infof("\n\nAfter parseFuncDecls: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 	}
 
 	// Constants
@@ -461,7 +461,7 @@ func (fp *FileParser) Parse(p *Payload) error {
 		for _, spec := range p.Constants {
 			cNames = append(cNames, printVarNames([]*ast.ValueSpec{spec.Spec})...)
 		}
-		glog.Infof("\n\nBefore const parseValueSpecs: %v\tNames: %v\n", len(p.Constants), strings.Join(cNames, ","))
+		glog.V(2).Infof("\n\nBefore const parseValueSpecs: %v\tNames: %v\n", len(p.Constants), strings.Join(cNames, ","))
 		fp.Config.IsConst = true
 		postponed, err := fp.parseConstValueSpecs(p.Constants, p.Reprocessing)
 		if err != nil {
@@ -472,31 +472,31 @@ func (fp *FileParser) Parse(p *Payload) error {
 		for _, spec := range p.Constants {
 			cNames = append(cNames, printVarNames([]*ast.ValueSpec{spec.Spec})...)
 		}
-		glog.Infof("\n\nAfter const parseValueSpecs: %v\tNames: %v\n", len(p.Constants), strings.Join(cNames, ","))
+		glog.V(2).Infof("\n\nAfter const parseValueSpecs: %v\tNames: %v\n", len(p.Constants), strings.Join(cNames, ","))
 	}
 
 	// Vars
 	{
-		glog.Infof("\n\nBefore parseValueSpecs: %v\tNames: %v\n", len(p.Variables), strings.Join(printVarNames(p.Variables), ","))
+		glog.V(2).Infof("\n\nBefore parseValueSpecs: %v\tNames: %v\n", len(p.Variables), strings.Join(printVarNames(p.Variables), ","))
 		fp.Config.IsConst = false
 		postponed, err := fp.parseValueSpecs(p.Variables, p.Reprocessing)
 		if err != nil {
 			return err
 		}
 		p.Variables = postponed
-		glog.Infof("\n\nAfter parseValueSpecs: %v\tNames: %v\n", len(p.Variables), strings.Join(printVarNames(p.Variables), ","))
+		glog.V(2).Infof("\n\nAfter parseValueSpecs: %v\tNames: %v\n", len(p.Variables), strings.Join(printVarNames(p.Variables), ","))
 	}
 
 	// // Funcs
 	if !p.FunctionDeclsOnly {
-		glog.Infof("\n\nBefore parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
+		glog.V(2).Infof("\n\nBefore parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 		fp.Config.IsConst = false
 		postponed, err := fp.parseFuncs(p.Functions)
 		if err != nil {
 			return err
 		}
 		p.Functions = postponed
-		glog.Infof("\n\nAfter parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
+		glog.V(2).Infof("\n\nAfter parseFuncs: %v\tNames: %v\n", len(p.Functions), strings.Join(printFuncNames(p.Functions), ","))
 	}
 
 	// fmt.Printf("AllocST for %q\n", fp.PackageName)

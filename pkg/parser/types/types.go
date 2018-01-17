@@ -29,7 +29,7 @@ type ExprAttribute struct {
 
 func (e *ExprAttribute) AddTypeVar(typevar typevars.Interface) *ExprAttribute {
 	e.TypeVarList = append(e.TypeVarList, typevar)
-	glog.Infof("Adding TypeVar: %v\n", typevars.TypeVar2String(typevar))
+	glog.V(2).Infof("Adding TypeVar: %v\n", typevars.TypeVar2String(typevar))
 	return e
 }
 
