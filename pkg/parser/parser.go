@@ -14,6 +14,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
+	contractglobal "github.com/gofed/symbols-extractor/pkg/parser/contracts/global"
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	exprparser "github.com/gofed/symbols-extractor/pkg/parser/expression"
 	fileparser "github.com/gofed/symbols-extractor/pkg/parser/file"
@@ -122,6 +123,7 @@ type ProjectParser struct {
 	cgoSymbolTable    *tables.CGOTable
 	// For each package and its file store its alloc symbol table
 	globalAllocSymbolTable *allocglobal.Table
+	globalContractsTable   *contractglobal.Table
 	// package stack
 	packageStack []*PackageContext
 
@@ -136,6 +138,7 @@ func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string) *Project
 		packageStack:           make([]*PackageContext, 0),
 		globalSymbolTable:      global.New(symbolTableDir, goVersion),
 		globalAllocSymbolTable: allocglobal.New(symbolTableDir, goVersion),
+		globalContractsTable:   contractglobal.New(symbolTableDir, goVersion),
 		goVersion:              goVersion,
 	}
 }
@@ -307,7 +310,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 		PackageName:       packagePath,
 		SymbolTable:       c.SymbolTable,
 		GlobalSymbolTable: pp.globalSymbolTable,
-		ContractTable:     contracttable.New(packagePath),
+		ContractTable:     contracttable.New(packagePath, pp.symbolTableDirectory, pp.goVersion),
 		SymbolsAccessor:   accessors.NewAccessor(pp.globalSymbolTable).SetCurrentTable(packagePath, c.SymbolTable),
 	}
 
@@ -522,6 +525,11 @@ func (pp *ProjectParser) packageProcessed(pkg string) bool {
 		return false
 	}
 
+	// Contracts available
+	if _, err := pp.globalContractsTable.Lookup(pkg); err != nil {
+		return false
+	}
+
 	return true
 }
 
@@ -576,9 +584,11 @@ PACKAGE_STACK:
 			pp.packageStack = pp.packageStack[1:]
 			continue
 		}
-		// the symbol table can already exist in the global ST in case the processing
-		// was triggered due to missing allocated symbols or contracts
+		// a package may be processed again in case at least one of
+		// api.json, allocated.json or contracts.json is missing
 		pp.globalSymbolTable.Drop(p.PackagePath)
+		pp.globalAllocSymbolTable.Drop(p.PackagePath)
+		pp.globalContractsTable.Drop(p.PackagePath)
 
 		// Process the files
 		fLen := len(p.Files)
@@ -678,13 +688,19 @@ PACKAGE_STACK:
 		for i := 0; i < fLen; i++ {
 			fc := p.Files[i]
 			pp.globalAllocSymbolTable.Add(p.PackagePath, fc.Filename, fc.AllocatedSymbolsTable)
+			pp.globalContractsTable.Add(p.PackagePath, p.Config.ContractTable)
 		}
 
-		if err := pp.globalAllocSymbolTable.Store(p.PackagePath); err != nil {
+		if err := pp.globalAllocSymbolTable.Save(p.PackagePath); err != nil {
 			panic(err)
 		}
 
-		// evaluate contracts to collect remaining allocated symbols
+		if err := pp.globalContractsTable.Save(p.PackagePath); err != nil {
+			panic(err)
+		}
+
+		// Evaluate contracts to collect remaining allocated symbols (so called dynamicly allocated symbols).
+		// The symbols are not stored as they depend on a specific dependency package commit
 		r := runner.New(p.Config, pp.globalAllocSymbolTable)
 		if err := r.Run(); err != nil {
 			panic(err)

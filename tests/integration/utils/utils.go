@@ -63,7 +63,7 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     gtable,
-		ContractTable:         contracttable.New("builtin"),
+		ContractTable:         contracttable.New("builtin", "", ""),
 	}
 
 	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
@@ -83,7 +83,7 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 		SymbolTable:           stack.New(),
 		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     gtable,
-		ContractTable:         contracttable.New(gopkg),
+		ContractTable:         contracttable.New(gopkg, "", ""),
 	}
 
 	config.SymbolsAccessor = accessors.NewAccessor(config.GlobalSymbolTable).SetCurrentTable(config.PackageName, config.SymbolTable)
