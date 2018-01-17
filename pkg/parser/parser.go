@@ -135,7 +135,7 @@ func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string) *Project
 		cgoSymbolsPath:         cgoSymbolsPath,
 		packageStack:           make([]*PackageContext, 0),
 		globalSymbolTable:      global.New(symbolTableDir, goVersion),
-		globalAllocSymbolTable: allocglobal.New(),
+		globalAllocSymbolTable: allocglobal.New(symbolTableDir, goVersion),
 		goVersion:              goVersion,
 	}
 }
@@ -298,10 +298,9 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 	for _, file := range files {
 		fc := &FileContext{
 			Filename:              file,
-			AllocatedSymbolsTable: alloctable.New(),
+			AllocatedSymbolsTable: alloctable.New(packagePath, file),
 		}
 		c.Files = append(c.Files, fc)
-		pp.globalAllocSymbolTable.Add(packagePath, file, fc.AllocatedSymbolsTable)
 	}
 
 	config := &types.Config{
@@ -512,6 +511,20 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 	return nil
 }
 
+func (pp *ProjectParser) packageProcessed(pkg string) bool {
+	// API available?
+	if _, err := pp.globalSymbolTable.Lookup(pkg); err != nil {
+		return false
+	}
+
+	// Static allocations available?
+	if _, err := pp.globalAllocSymbolTable.LookupPackage(pkg); err != nil {
+		return false
+	}
+
+	return true
+}
+
 func (pp *ProjectParser) Parse() error {
 	// set C pseudo-package
 	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
@@ -521,13 +534,14 @@ func (pp *ProjectParser) Parse() error {
 	}
 
 	// process builtin package first
-	if _, err := pp.globalSymbolTable.Lookup("builtin"); err != nil {
+	if !pp.packageProcessed("builtin") {
 		if err := pp.processPackage("builtin"); err != nil {
 			return err
 		}
 	}
+
 	// check if the requested package is already provided
-	if _, err := pp.globalSymbolTable.Lookup(pp.packagePath); err == nil {
+	if pp.packageProcessed(pp.packagePath) {
 		fmt.Printf("Package %q already processed\n", pp.packagePath)
 		return nil
 	}
@@ -556,12 +570,16 @@ PACKAGE_STACK:
 		}
 
 		glog.V(2).Infof("\n\n\nPS processing %#v\n", p.PackageDir)
-		if _, err := pp.globalSymbolTable.Lookup(p.PackagePath); err == nil {
+		if pp.packageProcessed(p.PackagePath) {
 			glog.V(2).Infof("\n\n\nPS %#v already processed\n", p.PackageDir)
 			// Pop the package from the package stack
 			pp.packageStack = pp.packageStack[1:]
 			continue
 		}
+		// the symbol table can already exist in the global ST in case the processing
+		// was triggered due to missing allocated symbols or contracts
+		pp.globalSymbolTable.Drop(p.PackagePath)
+
 		// Process the files
 		fLen := len(p.Files)
 		for i := p.FileIndex; i < fLen; i++ {
@@ -645,10 +663,7 @@ PACKAGE_STACK:
 			return err
 		}
 
-		// // Put the package ST into the global one
-		// byteSlice, _ := json.Marshal(p.SymbolTable)
-		// fmt.Printf("\nSymbol table: %v\n\n", string(byteSlice))
-
+		// Put the package ST into the global one
 		table, err := p.SymbolTable.Table(0)
 		if err != nil {
 			panic(err)
@@ -656,6 +671,16 @@ PACKAGE_STACK:
 		glog.V(2).Infof("Global storing %q\n", p.PackagePath)
 		fmt.Printf("Package %q processed\n", p.PackagePath)
 		if err := pp.globalSymbolTable.Add(p.PackagePath, table, true); err != nil {
+			panic(err)
+		}
+
+		// Store the allocated symbols
+		for i := 0; i < fLen; i++ {
+			fc := p.Files[i]
+			pp.globalAllocSymbolTable.Add(p.PackagePath, fc.Filename, fc.AllocatedSymbolsTable)
+		}
+
+		if err := pp.globalAllocSymbolTable.Store(p.PackagePath); err != nil {
 			panic(err)
 		}
 

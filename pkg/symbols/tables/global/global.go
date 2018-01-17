@@ -86,6 +86,10 @@ func (t *Table) Add(pkg string, table symbols.SymbolTable, store bool) error {
 	return nil
 }
 
+func (t *Table) Drop(pkg string) {
+	delete(t.tables, pkg)
+}
+
 func (t *Table) Packages() []string {
 	var keys []string
 	for key, _ := range t.tables {
@@ -167,7 +171,6 @@ func (t *Table) Load(symboltabledir string) error {
 			return nil
 		}
 		t.tables[name] = &table
-		fmt.Printf("Symbol table %q loaded\n", name)
 	}
 
 	return nil
