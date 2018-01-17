@@ -515,6 +515,12 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 }
 
 func (pp *ProjectParser) packageProcessed(pkg string) bool {
+	// TODO(jchaloup):
+	// We should process only the API by default for the stdlib.
+	// The allocated and the contracts are not important.
+	// Plus, the contracts can grow up to tens of MB so they should be
+	// optional as well and rather extracted only when needed.
+
 	// API available?
 	if _, err := pp.globalSymbolTable.Lookup(pkg); err != nil {
 		return false
