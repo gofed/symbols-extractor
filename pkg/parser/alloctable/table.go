@@ -52,9 +52,11 @@ type Table struct {
 	locked  bool
 }
 
-func New() *Table {
+func New(pkg, file string) *Table {
 	return &Table{
 		Symbols: make(map[string]*Package),
+		Package: pkg,
+		File:    file,
 	}
 }
 

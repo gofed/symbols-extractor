@@ -22,7 +22,7 @@ func prepareParser(pkgName string) *types.Config {
 	c := &types.Config{
 		PackageName:           pkgName,
 		SymbolTable:           stack.New(),
-		AllocatedSymbolsTable: alloctable.New(),
+		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     global.New("", ""),
 	}
 	c.SymbolsAccessor = accessors.NewAccessor(c.GlobalSymbolTable).SetCurrentTable(c.PackageName, c.SymbolTable)

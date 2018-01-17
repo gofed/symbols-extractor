@@ -61,7 +61,7 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 	config := &parsertypes.Config{
 		PackageName:           "builtin",
 		SymbolTable:           stack.New(),
-		AllocatedSymbolsTable: alloctable.New(),
+		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New("builtin"),
 	}
@@ -81,7 +81,7 @@ func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error)
 	config = &parsertypes.Config{
 		PackageName:           gopkg,
 		SymbolTable:           stack.New(),
-		AllocatedSymbolsTable: alloctable.New(),
+		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New(gopkg),
 	}

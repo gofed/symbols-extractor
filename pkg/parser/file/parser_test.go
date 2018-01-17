@@ -64,7 +64,7 @@ func TestDataTypes(t *testing.T) {
 	config := &parsertypes.Config{
 		PackageName:           "builtin",
 		SymbolTable:           stack.New(),
-		AllocatedSymbolsTable: alloctable.New(),
+		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New("builtin"),
 	}
@@ -83,7 +83,7 @@ func TestDataTypes(t *testing.T) {
 	config = &parsertypes.Config{
 		PackageName:           gopkg,
 		SymbolTable:           stack.New(),
-		AllocatedSymbolsTable: alloctable.New(),
+		AllocatedSymbolsTable: alloctable.New("", ""),
 		GlobalSymbolTable:     gtable,
 		ContractTable:         contracttable.New(gopkg),
 	}
