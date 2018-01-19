@@ -59,7 +59,7 @@ func (t *Table) Files(packagePath string) []string {
 }
 
 // MergeFiles merges all per-file allocated tables into one
-func (t *Table) MergeFiles(packagePath string) (*alloctable.Table, error) {
+func (t *Table) MergeFiles(packagePath string) (PackageTable, error) {
 	maTable := alloctable.New(packagePath, "")
 	table, ok := t.tables[packagePath]
 	if !ok {
@@ -84,7 +84,9 @@ func (t *Table) MergeFiles(packagePath string) (*alloctable.Table, error) {
 			}
 		}
 	}
-	return maTable, nil
+	return PackageTable{
+		"": maTable,
+	}, nil
 }
 
 func (t *Table) Lookup(packagePath, file string) (*alloctable.Table, error) {
@@ -99,6 +101,23 @@ func (t *Table) Lookup(packagePath, file string) (*alloctable.Table, error) {
 	return table, nil
 }
 
+func (t *Table) Exists(pkg string) bool {
+	_, ok := t.tables[pkg]
+	if ok {
+		return true
+	}
+
+	// check if the symbol table is available locally
+	if _, err := os.Stat(path.Join(t.symbolTableDir, "golang", t.goVersion, pkg, "allocated.json")); err == nil {
+		return true
+	}
+
+	if _, err := os.Stat(path.Join(t.symbolTableDir, pkg, "allocated.json")); err == nil {
+		return true
+	}
+
+	return false
+}
 func (t *Table) LookupPackage(pkg string) (PackageTable, error) {
 	// the table must have at least one file processed
 	if table, ok := t.tables[pkg]; ok && len(table) > 0 {

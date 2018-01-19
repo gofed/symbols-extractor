@@ -96,6 +96,24 @@ func (t *Table) Load(pkg string) (*contracttable.Table, error) {
 	return &cTable, nil
 }
 
+func (t *Table) Exists(pkg string) bool {
+	_, ok := t.tables[pkg]
+	if ok {
+		return true
+	}
+
+	// check if the symbol table is available locally
+	if _, err := os.Stat(path.Join(t.symbolTableDir, "golang", t.goVersion, pkg, "contracts.json")); err == nil {
+		return true
+	}
+
+	if _, err := os.Stat(path.Join(t.symbolTableDir, pkg, "contracts.json")); err == nil {
+		return true
+	}
+
+	return false
+}
+
 func (t *Table) Lookup(pkg string) (*contracttable.Table, error) {
 	// the table must have at least one file processed
 	if table, ok := t.tables[pkg]; ok {

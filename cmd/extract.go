@@ -53,35 +53,50 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 	}
 }
 
-func printPackageAllocTables(allocTable *allocglobal.Table, pkg string, perfile bool, allallocated bool, tojson bool) {
+func printPackageAllocTables(allocTable *allocglobal.Table, pkg string, perfile bool, allallocated bool, tojson bool) error {
+	if _, err := allocTable.LookupPackage(pkg); err != nil {
+		return err
+	}
 	if perfile {
-		filesList := allocTable.Files(pkg)
-		sort.Strings(filesList)
-		for _, f := range filesList {
-			fmt.Printf("\tFile: %v\n", f)
-			at, err := allocTable.Lookup(pkg, f)
+		if tojson {
+			tt, err := allocTable.LookupPackage(pkg)
 			if err != nil {
-				glog.Fatalf("AC error: %v", err)
+				return err
 			}
-			at.Print(allallocated)
+			byteSlice, err := json.Marshal(tt)
+			if err != nil {
+				return fmt.Errorf("Unable to convert print json: %v", err)
+			}
+			fmt.Printf("%v\n", string(byteSlice))
+		} else {
+			filesList := allocTable.Files(pkg)
+			sort.Strings(filesList)
+			for _, f := range filesList {
+				fmt.Printf("\tFile: %v\n", f)
+				at, err := allocTable.Lookup(pkg, f)
+				if err != nil {
+					return err
+				}
+				at.Print(allallocated)
+			}
 		}
 	} else {
 		tt, err := allocTable.MergeFiles(pkg)
 		if err != nil {
-			return
+			return err
 		}
 
 		if tojson {
 			byteSlice, err := json.Marshal(tt)
 			if err != nil {
-				fmt.Printf("Unable to convert print json: %v", err)
-				os.Exit(1)
+				return fmt.Errorf("Unable to convert print json: %v", err)
 			}
 			fmt.Printf("%v\n", string(byteSlice))
 		} else {
-			tt.Print(allallocated)
+			tt[""].Print(allallocated)
 		}
 	}
+	return nil
 }
 
 func getStdlibPackages() ([]string, error) {
@@ -194,6 +209,9 @@ func main() {
 	}
 
 	if *(f.allocated) {
-		printPackageAllocTables(p.GlobalAllocTable(), *(f.packagePath), *(f.perfile), *(f.allallocated), *(f.tojson))
+		if err := printPackageAllocTables(p.GlobalAllocTable(), *(f.packagePath), *(f.perfile), *(f.allallocated), *(f.tojson)); err != nil {
+			fmt.Print(err)
+			os.Exit(1)
+		}
 	}
 }
