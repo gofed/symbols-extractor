@@ -112,7 +112,7 @@ goenv:
 
 build:
 	$(RMLOG)
-	$(GO_BUILD) $(GO_BUILD_FLAGS) -o extract $(PROJECT_ROOT)/cmd $(WLOG)
+	$(GO_BUILD) $(GO_BUILD_FLAGS) -o extract $(PROJECT_ROOT)/cmd/extract $(WLOG)
 
 test:
 	@ $(RMLOG)

@@ -13,11 +13,14 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
+	"github.com/gofed/symbols-extractor/pkg/snapshots"
+	"github.com/gofed/symbols-extractor/pkg/snapshots/glide"
 	"github.com/golang/glog"
 )
 
 type flags struct {
 	packagePath     *string
+	packagePrefix   *string
 	symbolTablePath *string
 	cgoSymbolsPath  *string
 	stdlib          *bool
@@ -25,6 +28,7 @@ type flags struct {
 	perfile         *bool
 	allallocated    *bool
 	tojson          *bool
+	glidefile       *string
 }
 
 func (f *flags) parse() error {
@@ -159,6 +163,7 @@ func main() {
 
 	f := &flags{
 		packagePath:     flag.String("package-path", "", "Package entry point"),
+		packagePrefix:   flag.String("package-prefix", "", "Package import path prefix in a PACKAGE:COMMIT form"),
 		symbolTablePath: flag.String("symbol-table-dir", "", "Directory with preprocessed symbol tables"),
 		// TODO(jchaloup): extend it with a hiearchy of cgo symbol files
 		cgoSymbolsPath: flag.String("cgo-symbols-path", "", "Symbol table with CGO symbols (per entire project space)"),
@@ -167,6 +172,7 @@ func main() {
 		perfile:        flag.Bool("per-file", false, "Display allocated symbols per file"),
 		allallocated:   flag.Bool("all-allocated", false, "Display all allocated symbols"),
 		tojson:         flag.Bool("json", false, "Display allocated symbols in JSON"),
+		glidefile:      flag.String("glidefile", "", "Glide.lock with dependencies"),
 	}
 
 	if err := f.parse(); err != nil {
@@ -194,7 +200,7 @@ func main() {
 
 		for _, pkg := range packages {
 			fmt.Printf("Parsing %q...\n", pkg)
-			p := parser.New(pkg, generatedDir, *(f.cgoSymbolsPath), goversion)
+			p := parser.New(pkg, generatedDir, *(f.cgoSymbolsPath), goversion, nil)
 			if err := p.Parse(false); err != nil {
 				glog.Fatalf("Parse error when parsing (%v): %v", pkg, err)
 			}
@@ -202,14 +208,30 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Parsing: %v\n", *(f.packagePath))
-	p := parser.New(*(f.packagePath), *(f.symbolTablePath), *(f.cgoSymbolsPath), goversion)
+	var snapshot snapshots.Snapshot
+	if *f.glidefile != "" {
+		sn, err := glide.GlideFromFile(*f.glidefile)
+		if err != nil {
+			panic(err)
+		}
+		if *f.packagePrefix != "" {
+			parts := strings.Split(*f.packagePrefix, ":")
+			if len(parts) != 2 {
+				panic(fmt.Errorf("Expected --package-prefix in a PACKAGE:COMMIT form"))
+			}
+			sn.MainPackageCommit(parts[0], parts[1])
+		}
+		snapshot = sn
+
+	}
+
+	p := parser.New(*f.packagePath, *(f.symbolTablePath), *(f.cgoSymbolsPath), goversion, snapshot)
 	if err := p.Parse(*(f.allocated)); err != nil {
 		glog.Fatalf("Parse error: %v", err)
 	}
 
 	if *(f.allocated) {
-		if err := printPackageAllocTables(p.GlobalAllocTable(), *(f.packagePath), *(f.perfile), *(f.allallocated), *(f.tojson)); err != nil {
+		if err := printPackageAllocTables(p.GlobalAllocTable(), *f.packagePath, *(f.perfile), *(f.allallocated), *(f.tojson)); err != nil {
 			fmt.Print(err)
 			os.Exit(1)
 		}

@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
+	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/golang/glog"
 )
 
@@ -18,14 +19,32 @@ type Table struct {
 	tables         map[string]PackageTable
 	symbolTableDir string
 	goVersion      string
+	glide          snapshots.Snapshot
 }
 
-func New(symbolTableDir, goVersion string) *Table {
+func New(symbolTableDir, goVersion string, snapshot snapshots.Snapshot) *Table {
 	return &Table{
 		tables:         make(map[string]PackageTable, 0),
 		symbolTableDir: symbolTableDir,
 		goVersion:      goVersion,
+		glide:          snapshot,
 	}
+}
+
+func (t *Table) getPackagePath(pkg string) string {
+	packagePath := path.Join(t.symbolTableDir, "golang", t.goVersion, pkg)
+	if _, err := os.Stat(packagePath); err == nil {
+		return packagePath
+	}
+
+	packagePath = path.Join(t.symbolTableDir, pkg)
+	if t.glide != nil {
+		if commit, err := t.glide.Commit(pkg); err == nil {
+			return path.Join(packagePath, commit)
+		}
+	}
+
+	return packagePath
 }
 
 func (t *Table) Add(packagePath, file string, table *alloctable.Table) {
@@ -92,7 +111,11 @@ func (t *Table) MergeFiles(packagePath string) (PackageTable, error) {
 func (t *Table) Lookup(packagePath, file string) (*alloctable.Table, error) {
 	files, ok := t.tables[packagePath]
 	if !ok {
-		return nil, fmt.Errorf("Unable to find package-level allocated symbol table for package %q", packagePath)
+		table, err := t.LookupPackage(packagePath)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to find package-level allocated symbol table for package %q", packagePath)
+		}
+		files = table
 	}
 	table, exists := files[file]
 	if !exists {
@@ -107,12 +130,7 @@ func (t *Table) Exists(pkg string) bool {
 		return true
 	}
 
-	// check if the symbol table is available locally
-	if _, err := os.Stat(path.Join(t.symbolTableDir, "golang", t.goVersion, pkg, "allocated.json")); err == nil {
-		return true
-	}
-
-	if _, err := os.Stat(path.Join(t.symbolTableDir, pkg, "allocated.json")); err == nil {
+	if _, err := os.Stat(path.Join(t.getPackagePath(pkg), "allocated.json")); err == nil {
 		return true
 	}
 
@@ -144,7 +162,7 @@ func (t *Table) Save(pkg string) error {
 		return fmt.Errorf("Allocated table for %q does not exist", pkg)
 	}
 
-	packagePath := path.Join(t.symbolTableDir, pkg)
+	packagePath := t.getPackagePath(pkg)
 	pErr := os.MkdirAll(packagePath, 0777)
 	if pErr != nil {
 		return fmt.Errorf("Unable to create package path %v: %v", packagePath, pErr)
@@ -167,16 +185,28 @@ func (t *Table) Save(pkg string) error {
 	return nil
 }
 
+func (t *PackageTable) Load(file string) error {
+	raw, err := ioutil.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("Unable to load symbol table from %q: %v", file, err)
+	}
+
+	var table PackageTable
+	if err := json.Unmarshal(raw, &table); err != nil {
+		return fmt.Errorf("Unable to load symbol table from %q: %v", file, err)
+	}
+
+	*t = table
+	return nil
+}
+
 func (t *Table) loadFromFile(pkg string) (PackageTable, error) {
 	if t.symbolTableDir == "" {
 		return nil, fmt.Errorf("Unable to load %q, symbol table dir not set", pkg)
 	}
 
 	// check if the symbol table is available locally
-	packagePath := path.Join(t.symbolTableDir, "golang", t.goVersion, pkg)
-	if _, err := os.Stat(packagePath); os.IsNotExist(err) {
-		packagePath = path.Join(t.symbolTableDir, pkg)
-	}
+	packagePath := t.getPackagePath(pkg)
 
 	file := path.Join(packagePath, "allocated.json")
 	glog.V(2).Infof("Global symbol table %q loading", file)

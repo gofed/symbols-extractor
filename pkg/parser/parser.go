@@ -21,6 +21,7 @@ import (
 	stmtparser "github.com/gofed/symbols-extractor/pkg/parser/statement"
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
+	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
@@ -130,15 +131,15 @@ type ProjectParser struct {
 	goVersion string
 }
 
-func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string) *ProjectParser {
+func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string, snapshot snapshots.Snapshot) *ProjectParser {
 	return &ProjectParser{
 		packagePath:            packagePath,
 		symbolTableDirectory:   symbolTableDir,
 		cgoSymbolsPath:         cgoSymbolsPath,
 		packageStack:           make([]*PackageContext, 0),
-		globalSymbolTable:      global.New(symbolTableDir, goVersion),
-		globalAllocSymbolTable: allocglobal.New(symbolTableDir, goVersion),
-		globalContractsTable:   contractglobal.New(symbolTableDir, goVersion),
+		globalSymbolTable:      global.New(symbolTableDir, goVersion, snapshot),
+		globalAllocSymbolTable: allocglobal.New(symbolTableDir, goVersion, snapshot),
+		globalContractsTable:   contractglobal.New(symbolTableDir, goVersion, snapshot),
 		goVersion:              goVersion,
 	}
 }
@@ -556,7 +557,7 @@ func (pp *ProjectParser) Parse(allocation bool) error {
 
 	// check if the requested package is already provided
 	if pp.packageProcessed(pp.packagePath) {
-		fmt.Printf("Package %q already processed\n", pp.packagePath)
+		fmt.Fprintf(os.Stderr, "Package %q already processed\n", pp.packagePath)
 		// Collect dynamically allocated symbols (if requested)
 		if allocation {
 			contractTable, err := pp.globalContractsTable.Lookup(pp.packagePath)
@@ -697,7 +698,7 @@ PACKAGE_STACK:
 			panic(err)
 		}
 		glog.V(2).Infof("Global storing %q\n", p.PackagePath)
-		fmt.Printf("Package %q processed\n", p.PackagePath)
+		fmt.Fprintf(os.Stderr, "Package %q processed\n", p.PackagePath)
 		if err := pp.globalSymbolTable.Add(p.PackagePath, table, true); err != nil {
 			panic(err)
 		}
