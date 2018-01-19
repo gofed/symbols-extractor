@@ -522,17 +522,17 @@ func (pp *ProjectParser) packageProcessed(pkg string) bool {
 	// optional as well and rather extracted only when needed.
 
 	// API available?
-	if _, err := pp.globalSymbolTable.Lookup(pkg); err != nil {
+	if !pp.globalSymbolTable.Exists(pkg) {
 		return false
 	}
 
 	// Static allocations available?
-	if _, err := pp.globalAllocSymbolTable.LookupPackage(pkg); err != nil {
+	if !pp.globalAllocSymbolTable.Exists(pkg) {
 		return false
 	}
 
 	// Contracts available
-	if _, err := pp.globalContractsTable.Lookup(pkg); err != nil {
+	if !pp.globalContractsTable.Exists(pkg) {
 		return false
 	}
 

@@ -69,7 +69,20 @@ func (t *Table) Lookup(pkg string) (symbols.SymbolTable, error) {
 
 func (t *Table) Exists(pkg string) bool {
 	_, ok := t.tables[pkg]
-	return ok
+	if ok {
+		return true
+	}
+
+	// check if the symbol table is available locally
+	if _, err := os.Stat(path.Join(t.symbolTableDir, "golang", t.goVersion, pkg, "api.json")); err == nil {
+		return true
+	}
+
+	if _, err := os.Stat(path.Join(t.symbolTableDir, pkg, "api.json")); err == nil {
+		return true
+	}
+
+	return false
 }
 
 func (t *Table) Add(pkg string, table symbols.SymbolTable, store bool) error {
