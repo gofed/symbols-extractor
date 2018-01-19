@@ -2,6 +2,7 @@ package alloctable
 
 import (
 	"fmt"
+	"go/ast"
 	"sort"
 	"strings"
 )
@@ -69,19 +70,19 @@ func newPackage() *Package {
 	}
 }
 
-func (ast *Table) Lock() {
-	ast.locked = true
+func (allSt *Table) Lock() {
+	allSt.locked = true
 }
 
-func (ast *Table) Unlock() {
-	ast.locked = false
+func (allSt *Table) Unlock() {
+	allSt.locked = false
 }
 
-func (ast *Table) AddDataType(pkg, name, pos string) {
-	items, exists := ast.Symbols[pkg]
+func (allSt *Table) AddDataType(pkg, name, pos string) {
+	items, exists := allSt.Symbols[pkg]
 	if !exists {
-		ast.Symbols[pkg] = newPackage()
-		items = ast.Symbols[pkg]
+		allSt.Symbols[pkg] = newPackage()
+		items = allSt.Symbols[pkg]
 	}
 
 	k := toKey(name, pos)
@@ -95,11 +96,11 @@ func (ast *Table) AddDataType(pkg, name, pos string) {
 	}
 }
 
-func (ast *Table) AddVariable(pkg, name, pos string) {
-	items, exists := ast.Symbols[pkg]
+func (allSt *Table) AddVariable(pkg, name, pos string) {
+	items, exists := allSt.Symbols[pkg]
 	if !exists {
-		ast.Symbols[pkg] = newPackage()
-		items = ast.Symbols[pkg]
+		allSt.Symbols[pkg] = newPackage()
+		items = allSt.Symbols[pkg]
 	}
 
 	k := toKey(name, pos)
@@ -117,11 +118,11 @@ func toKey(name, pos string) string {
 	return fmt.Sprintf("%v:%v", name, pos)
 }
 
-func (ast *Table) AddFunction(pkg, name, pos string) {
-	items, exists := ast.Symbols[pkg]
+func (allSt *Table) AddFunction(pkg, name, pos string) {
+	items, exists := allSt.Symbols[pkg]
 	if !exists {
-		ast.Symbols[pkg] = newPackage()
-		items = ast.Symbols[pkg]
+		allSt.Symbols[pkg] = newPackage()
+		items = allSt.Symbols[pkg]
 	}
 
 	k := toKey(name, pos)
@@ -135,11 +136,11 @@ func (ast *Table) AddFunction(pkg, name, pos string) {
 	}
 }
 
-func (ast *Table) AddStructField(pkg, parent, field string, pos string) {
-	items, exists := ast.Symbols[pkg]
+func (allSt *Table) AddStructField(pkg, parent, field string, pos string) {
+	items, exists := allSt.Symbols[pkg]
 	if !exists {
-		ast.Symbols[pkg] = newPackage()
-		items = ast.Symbols[pkg]
+		allSt.Symbols[pkg] = newPackage()
+		items = allSt.Symbols[pkg]
 	}
 
 	k := toKey(field, pos)
@@ -154,11 +155,11 @@ func (ast *Table) AddStructField(pkg, parent, field string, pos string) {
 	}
 }
 
-func (ast *Table) AddMethod(pkg, parent, name, pos string) {
-	items, exists := ast.Symbols[pkg]
+func (allSt *Table) AddMethod(pkg, parent, name, pos string) {
+	items, exists := allSt.Symbols[pkg]
 	if !exists {
-		ast.Symbols[pkg] = newPackage()
-		items = ast.Symbols[pkg]
+		allSt.Symbols[pkg] = newPackage()
+		items = allSt.Symbols[pkg]
 	}
 	items.Methods = append(items.Methods, Method{
 		Parent: parent,
@@ -167,24 +168,27 @@ func (ast *Table) AddMethod(pkg, parent, name, pos string) {
 	})
 }
 
-func (ast *Table) AddDataTypeField(origin, dataType, field, pos string) {
+func (allSt *Table) AddDataTypeField(origin, dataType, field, pos string) {
 
-	ast.AddSymbol(origin, fmt.Sprintf("%v.%v", dataType, field), pos)
+	allSt.AddSymbol(origin, fmt.Sprintf("%v.%v", dataType, field), pos)
 }
 
-func (ast *Table) AddSymbol(origin, id, pos string) {
+func (allSt *Table) AddSymbol(origin, id, pos string) {
 
 }
 
-func (ast *Table) Print() {
+func (allSt *Table) Print(all bool) {
 	fmt.Printf("======================================================================================================\n")
 	symPos := make(map[string][]string)
 	maxKeyLen := 0
 	var keys []string
-	for key := range ast.Symbols {
+	for pkg := range allSt.Symbols {
 		// agregate positions by data type
-		for _, dt := range ast.Symbols[key].Datatypes {
-			qidid := fmt.Sprintf("D: %v.%v", key, dt.Name)
+		for _, dt := range allSt.Symbols[pkg].Datatypes {
+			if !all && !ast.IsExported(dt.Name) {
+				continue
+			}
+			qidid := fmt.Sprintf("D: %v.%v", pkg, dt.Name)
 			if len(qidid) > maxKeyLen {
 				maxKeyLen = len(qidid)
 			}
@@ -194,8 +198,11 @@ func (ast *Table) Print() {
 			}
 			symPos[qidid] = append(symPos[qidid], dt.Pos)
 		}
-		for _, dt := range ast.Symbols[key].Functions {
-			qidid := fmt.Sprintf("F: %v.%v", key, dt.Name)
+		for _, dt := range allSt.Symbols[pkg].Functions {
+			if !all && !ast.IsExported(dt.Name) {
+				continue
+			}
+			qidid := fmt.Sprintf("F: %v.%v", pkg, dt.Name)
 			if len(qidid) > maxKeyLen {
 				maxKeyLen = len(qidid)
 			}
@@ -205,8 +212,11 @@ func (ast *Table) Print() {
 			}
 			symPos[qidid] = append(symPos[qidid], dt.Pos)
 		}
-		for _, dt := range ast.Symbols[key].Methods {
-			qidid := fmt.Sprintf("M: %v.%v.%v", key, dt.Parent, dt.Name)
+		for _, dt := range allSt.Symbols[pkg].Methods {
+			if !all && !ast.IsExported(dt.Name) {
+				continue
+			}
+			qidid := fmt.Sprintf("M: %v.%v.%v", pkg, dt.Parent, dt.Name)
 			if len(qidid) > maxKeyLen {
 				maxKeyLen = len(qidid)
 			}
@@ -216,8 +226,11 @@ func (ast *Table) Print() {
 			}
 			symPos[qidid] = append(symPos[qidid], dt.Pos)
 		}
-		for _, dt := range ast.Symbols[key].Variables {
-			qidid := fmt.Sprintf("V: %v.%v", key, dt.Name)
+		for _, dt := range allSt.Symbols[pkg].Variables {
+			if !all && !ast.IsExported(dt.Name) {
+				continue
+			}
+			qidid := fmt.Sprintf("V: %v.%v", pkg, dt.Name)
 			if len(qidid) > maxKeyLen {
 				maxKeyLen = len(qidid)
 			}
@@ -227,8 +240,11 @@ func (ast *Table) Print() {
 			}
 			symPos[qidid] = append(symPos[qidid], dt.Pos)
 		}
-		for _, dt := range ast.Symbols[key].Structfields {
-			qidid := fmt.Sprintf("S: %v.%v.%v", key, dt.Parent, dt.Field)
+		for _, dt := range allSt.Symbols[pkg].Structfields {
+			if !all && !ast.IsExported(dt.Field) {
+				continue
+			}
+			qidid := fmt.Sprintf("S: %v.%v.%v", pkg, dt.Parent, dt.Field)
 			if len(qidid) > maxKeyLen {
 				maxKeyLen = len(qidid)
 			}

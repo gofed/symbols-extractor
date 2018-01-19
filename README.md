@@ -36,11 +36,15 @@ To extract artefacts from a project (assuming the standard Go library is process
 
 ```bash
 ./extract \
-    --project=github.com/coreos/etcd:7a8c192c8f24cbc77e505cabc5153108f59f789c
+    --project=github.com/coreos/etcd:7a8c192c8f24cbc77e505cabc5153108f59f789c \
+    --project-from-dir=<PATH> \
     --stdlib=1.9.1
 ```
 
 If the `--stdlib` option is not set, the latest available processed version is used.
+Both `--project` and `--project-from-dir` options are required.
+
+Currently, all projects (and its dependencies) must be processed before the API check is performed.
 
 #### API Compatibility detection
 

@@ -17,6 +17,7 @@ type Table struct {
 	symbolTableDir string
 	goVersion      string
 	tables         map[string]symbols.SymbolTable
+	fromFile       map[string]struct{}
 }
 
 func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
@@ -43,6 +44,8 @@ func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 	if err := json.Unmarshal(raw, &table); err != nil {
 		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
 	}
+
+	t.fromFile[pkg] = struct{}{}
 	return &table, nil
 }
 
@@ -103,10 +106,16 @@ func New(symbolTableDir, goVersion string) *Table {
 		symbolTableDir: symbolTableDir,
 		goVersion:      goVersion,
 		tables:         make(map[string]symbols.SymbolTable, 0),
+		fromFile:       make(map[string]struct{}, 0),
 	}
 }
 
 func (t *Table) store(pkg string, table *tables.Table) error {
+	// Don't save tables that ware loaded from a file
+	if _, ok := t.fromFile[pkg]; ok {
+		return nil
+	}
+
 	packagePath := path.Join(t.symbolTableDir, pkg)
 	pErr := os.MkdirAll(packagePath, 0777)
 	if pErr != nil {

@@ -42,10 +42,6 @@ func (c *Constant) GetType() Type {
 }
 
 func (o *Constant) MarshalJSON() (b []byte, e error) {
-
-	if o.DataType == nil {
-		panic(o)
-	}
 	type Copy Constant
 	return json.Marshal(&struct {
 		Type string `json:"type"`
@@ -180,6 +176,12 @@ func UnmarshalDataType(rawMessage *json.RawMessage) (gotypes.DataType, error) {
 		return r, nil
 	case gotypes.StructType:
 		r := &gotypes.Struct{}
+		if err := json.Unmarshal(*rawMessage, &r); err != nil {
+			return nil, err
+		}
+		return r, nil
+	case gotypes.NilType:
+		r := &gotypes.Nil{}
 		if err := json.Unmarshal(*rawMessage, &r); err != nil {
 			return nil, err
 		}

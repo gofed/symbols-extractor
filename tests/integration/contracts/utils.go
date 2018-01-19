@@ -179,7 +179,7 @@ func ParseAndCompareVarTable(t *testing.T, gopkg, filename string, expected []Va
 		return
 	}
 
-	r := runner.New(config, allocglobal.New("", ""))
+	r := runner.New(config.PackageName, config.GlobalSymbolTable, allocglobal.New("", ""), config.ContractTable)
 	if err := r.Run(); err != nil {
 		t.Fatal(err)
 	}
