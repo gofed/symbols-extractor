@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/golang/glog"
@@ -16,8 +16,25 @@ import (
 type Table struct {
 	symbolTableDir string
 	goVersion      string
+	glide          snapshots.Snapshot
 	tables         map[string]symbols.SymbolTable
 	fromFile       map[string]struct{}
+}
+
+func (t *Table) getPackagePath(pkg string) string {
+	packagePath := path.Join(t.symbolTableDir, "golang", t.goVersion, pkg)
+	if _, err := os.Stat(packagePath); err == nil {
+		return packagePath
+	}
+
+	packagePath = path.Join(t.symbolTableDir, pkg)
+	if t.glide != nil {
+		if commit, err := t.glide.Commit(pkg); err == nil {
+			return path.Join(packagePath, commit)
+		}
+	}
+
+	return packagePath
 }
 
 func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
@@ -25,13 +42,7 @@ func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 		return nil, fmt.Errorf("Unable to load %q, symbol table dir not set", pkg)
 	}
 
-	// check if the symbol table is available locally
-	packagePath := path.Join(t.symbolTableDir, "golang", t.goVersion, pkg)
-	if _, err := os.Stat(packagePath); os.IsNotExist(err) {
-		packagePath = path.Join(t.symbolTableDir, pkg)
-	}
-
-	file := path.Join(packagePath, "api.json")
+	file := path.Join(t.getPackagePath(pkg), "api.json")
 	glog.V(2).Infof("Global symbol table %q loading", file)
 
 	raw, err := ioutil.ReadFile(file)
@@ -74,11 +85,7 @@ func (t *Table) Exists(pkg string) bool {
 	}
 
 	// check if the symbol table is available locally
-	if _, err := os.Stat(path.Join(t.symbolTableDir, "golang", t.goVersion, pkg, "api.json")); err == nil {
-		return true
-	}
-
-	if _, err := os.Stat(path.Join(t.symbolTableDir, pkg, "api.json")); err == nil {
+	if _, err := os.Stat(path.Join(t.getPackagePath(pkg), "api.json")); err == nil {
 		return true
 	}
 
@@ -114,10 +121,11 @@ func (t *Table) Packages() []string {
 	return keys
 }
 
-func New(symbolTableDir, goVersion string) *Table {
+func New(symbolTableDir, goVersion string, snapshot snapshots.Snapshot) *Table {
 	return &Table{
 		symbolTableDir: symbolTableDir,
 		goVersion:      goVersion,
+		glide:          snapshot,
 		tables:         make(map[string]symbols.SymbolTable, 0),
 		fromFile:       make(map[string]struct{}, 0),
 	}
@@ -129,7 +137,8 @@ func (t *Table) store(pkg string, table *tables.Table) error {
 		return nil
 	}
 
-	packagePath := path.Join(t.symbolTableDir, pkg)
+	packagePath := t.getPackagePath(pkg)
+
 	pErr := os.MkdirAll(packagePath, 0777)
 	if pErr != nil {
 		return fmt.Errorf("Unable to create package path %v: %v", packagePath, pErr)
@@ -168,32 +177,5 @@ func (t *Table) Save(symboltabledir string) error {
 			return err
 		}
 	}
-	return nil
-}
-
-func (t *Table) Load(symboltabledir string) error {
-	t.tables = make(map[string]symbols.SymbolTable, 0)
-
-	files, err := ioutil.ReadDir(symboltabledir)
-	if err != nil {
-		return err
-	}
-	for _, f := range files {
-		file := path.Join(symboltabledir, f.Name())
-		glog.V(2).Infof("Loading %q", file)
-		raw, err := ioutil.ReadFile(file)
-		if err != nil {
-			return err
-		}
-
-		parts := strings.Split(f.Name(), ".")
-		name := strings.Join(parts[:len(parts)-1], "/")
-		var table tables.Table
-		if err := json.Unmarshal(raw, &table); err != nil {
-			return nil
-		}
-		t.tables[name] = &table
-	}
-
 	return nil
 }

@@ -56,7 +56,7 @@ func parseBuiltin(config *parsertypes.Config) error {
 }
 
 func InitFileParser(gopkg string) (*fileparser.FileParser, *types.Config, error) {
-	gtable := global.New("", "")
+	gtable := global.New("", "", nil)
 
 	config := &parsertypes.Config{
 		PackageName:           "builtin",

@@ -59,7 +59,7 @@ func TestDataTypes(t *testing.T) {
 		t.Fatalf("AST Parse error: %v", err)
 	}
 
-	gtable := global.New("", "")
+	gtable := global.New("", "", nil)
 
 	config := &parsertypes.Config{
 		PackageName:           "builtin",

@@ -8,6 +8,7 @@ import (
 	"path"
 
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
+	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/golang/glog"
 )
 
@@ -17,14 +18,32 @@ type Table struct {
 	tables         PackageTable
 	symbolTableDir string
 	goVersion      string
+	glide          snapshots.Snapshot
 }
 
-func New(symbolTableDir, goVersion string) *Table {
+func New(symbolTableDir, goVersion string, snapshot snapshots.Snapshot) *Table {
 	return &Table{
 		tables:         make(PackageTable),
 		symbolTableDir: symbolTableDir,
 		goVersion:      goVersion,
+		glide:          snapshot,
 	}
+}
+
+func (t *Table) getPackagePath(pkg string) string {
+	packagePath := path.Join(t.symbolTableDir, "golang", t.goVersion, pkg)
+	if _, err := os.Stat(packagePath); err == nil {
+		return packagePath
+	}
+
+	packagePath = path.Join(t.symbolTableDir, pkg)
+	if t.glide != nil {
+		if commit, err := t.glide.Commit(pkg); err == nil {
+			return path.Join(packagePath, commit)
+		}
+	}
+
+	return packagePath
 }
 
 func (t *Table) Add(packagePath string, table *contracttable.Table) {
@@ -45,7 +64,8 @@ func (t *Table) Save(pkg string) error {
 		return fmt.Errorf("Allocated table for %q does not exist", pkg)
 	}
 
-	packagePath := path.Join(t.symbolTableDir, pkg)
+	packagePath := t.getPackagePath(pkg)
+
 	pErr := os.MkdirAll(packagePath, 0777)
 	if pErr != nil {
 		return fmt.Errorf("Unable to create package path %v: %v", packagePath, pErr)
@@ -73,13 +93,7 @@ func (t *Table) Load(pkg string) (*contracttable.Table, error) {
 		return nil, fmt.Errorf("Unable to load %q, symbol table dir not set", pkg)
 	}
 
-	// check if the symbol table is available locally
-	packagePath := path.Join(t.symbolTableDir, "golang", t.goVersion, pkg)
-	if _, err := os.Stat(packagePath); os.IsNotExist(err) {
-		packagePath = path.Join(t.symbolTableDir, pkg)
-	}
-
-	file := path.Join(packagePath, "contracts.json")
+	file := path.Join(t.getPackagePath(pkg), "contracts.json")
 	glog.V(2).Infof("Global contract table %q loading", file)
 
 	raw, err := ioutil.ReadFile(file)
@@ -102,12 +116,7 @@ func (t *Table) Exists(pkg string) bool {
 		return true
 	}
 
-	// check if the symbol table is available locally
-	if _, err := os.Stat(path.Join(t.symbolTableDir, "golang", t.goVersion, pkg, "contracts.json")); err == nil {
-		return true
-	}
-
-	if _, err := os.Stat(path.Join(t.symbolTableDir, pkg, "contracts.json")); err == nil {
+	if _, err := os.Stat(path.Join(t.getPackagePath(pkg), "contracts.json")); err == nil {
 		return true
 	}
 
