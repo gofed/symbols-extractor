@@ -44,13 +44,16 @@ type CGOTable struct {
 }
 
 func NewCGOTable() *CGOTable {
-	return &CGOTable{
+	c := &CGOTable{
 		Table: NewTable(),
 	}
+	c.PackageQID = "C"
+	return c
 }
 
 func (c *CGOTable) Flush() {
 	c.Table = NewTable()
+	c.PackageQID = "C"
 }
 
 type DataType struct {

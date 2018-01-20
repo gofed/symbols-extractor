@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"path"
 	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/types"
 	"github.com/gofed/symbols-extractor/pkg/symbols"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
@@ -34,14 +34,25 @@ func NewParser(config *types.Config) *FileParser {
 	}
 }
 
-func MakePackagequalifier(spec *ast.ImportSpec) *gotypes.Packagequalifier {
+func (fp *FileParser) MakePackagequalifier(spec *ast.ImportSpec) *gotypes.Packagequalifier {
 	q := &gotypes.Packagequalifier{
 		Path: strings.Replace(spec.Path.Value, "\"", "", -1),
 	}
 
 	if spec.Name == nil {
 		// TODO(jchaloup): get the q.Name from the spec.Path's package symbol table
-		q.Name = path.Base(q.Path)
+		st, err := fp.Config.GlobalSymbolTable.Lookup(q.Path)
+		if err != nil {
+			panic(err)
+		}
+		switch d := st.(type) {
+		case *tables.Table:
+			q.Name = d.PackageQID
+		case *tables.CGOTable:
+			q.Name = d.PackageQID
+		default:
+			panic(st)
+		}
 	} else {
 		q.Name = spec.Name.Name
 	}
@@ -153,7 +164,7 @@ func MakePayload(f *ast.File) (*Payload, error) {
 }
 
 func (fp *FileParser) parseImportSpec(spec *ast.ImportSpec) error {
-	q := MakePackagequalifier(spec)
+	q := fp.MakePackagequalifier(spec)
 
 	// TODO(jchaloup): store non-qualified imports as well
 	if q.Name == "." {

@@ -1409,6 +1409,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 		if defSymbol.Def == nil {
 			return nil, fmt.Errorf("Trying to retrieve a field/method from a data type %#v that is not yet fully processed", ident)
 		}
+
 		switch defSymbol.Def.(type) {
 		case *gotypes.Struct:
 			return c.symbolsAccessor.RetrieveDataTypeField(
@@ -1429,7 +1430,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 			glog.V(2).Infof("Retrieving method %q of a non-struct non-interface data type %#v", item, ident)
 			def, err := c.symbolsAccessor.LookupMethod(ident, item)
 			if err != nil {
-				return nil, fmt.Errorf("Trying to retrieve a field/method from non-struct/non-interface data type: %#v: %v", defSymbol, err)
+				return nil, fmt.Errorf("Trying to retrieve a field/method %q from non-struct/non-interface data type: %#v: %v", item, defSymbol, err)
 			}
 			return &accessors.FieldAttribute{
 				DataType: def.Def,
@@ -1637,7 +1638,11 @@ func (c *Config) TypecastExpr(xDataType, tDataType gotypes.DataType) (gotypes.Da
 		}
 
 		if ident.Package == "<builtin>" && ident.Def == "pointer" {
-			if constant.Package == "builtin" && constant.Def == "string" {
+			cIdent, err := c.symbolsAccessor.TypeToSimpleBuiltin(&gotypes.Identifier{Package: constant.Package, Def: constant.Def})
+			if err != nil {
+				return nil, err
+			}
+			if cIdent.Package == "builtin" && cIdent.Def == "string" {
 				// []byte(str)
 				nonIdent, err := c.symbolsAccessor.FindFirstNonidDataType(tDataType)
 				if err != nil {

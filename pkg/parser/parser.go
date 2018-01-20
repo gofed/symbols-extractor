@@ -83,6 +83,7 @@ type FileContext struct {
 type PackageContext struct {
 	// fully qualified package name
 	PackagePath string
+	PackageQID  string
 
 	// files attached to a package
 	PackageDir string
@@ -146,10 +147,10 @@ func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string, snapshot
 
 func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) (missingImports []*gotypes.Packagequalifier) {
 	for _, spec := range imports {
-		q := fileparser.MakePackagequalifier(spec)
+		qPath := strings.Replace(spec.Path.Value, "\"", "", -1)
 		// 'C' is a pseudo-package
 		// See https://golang.org/cmd/cgo/
-		if q.Path == "C" {
+		if qPath == "C" {
 			if pp.cgoSymbolsPath == "" {
 				glog.Fatalf("Unable to load C symbol table. cgoSymbolsPath not set.")
 			}
@@ -160,10 +161,10 @@ func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) 
 			continue
 		}
 		// Check if the imported package is already processed
-		_, err := pp.globalSymbolTable.Lookup(q.Path)
+		_, err := pp.globalSymbolTable.Lookup(qPath)
 		if err != nil {
-			missingImports = append(missingImports, q)
-			glog.V(2).Infof("Package %q not yet processed\n", q.Path)
+			missingImports = append(missingImports, &gotypes.Packagequalifier{Path: qPath})
+			glog.V(2).Infof("Package %q not yet processed\n", qPath)
 		}
 		// TODO(jchaloup): Check if the package is already in the package queue
 		//                 If it is it is an error (import cycles are not permitted)
@@ -207,74 +208,69 @@ func skipGoFile(filename string) bool {
 
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
 
-	vendor := false
-	var vendorpath string
-	{
-		cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", packagePath)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			glog.V(2).Infof("go list -f {{.GoFiles}} %q failed due to %q with stdout %q. Trying vendor...", packagePath, err, output)
-			if strings.Contains(string(output), "no buildable Go source files in") {
-				return nil, "", nil
+	listGoFiles := func(packagePath string, cgo bool) ([]string, error) {
+
+		collectFiles := func(output string) []string {
+			line := strings.Split(string(output), "\n")[0]
+			line = line[1 : len(line)-1]
+			if line == "" {
+				return nil
 			}
-			// check vendor as well
-			vendorpath = path.Join("vendor", packagePath)
-			cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", vendorpath)
-			output, err = cmd.CombinedOutput()
-			if err != nil {
-				if strings.Contains(string(output), "no buildable Go source files in") {
-					return nil, "", nil
-				}
-				// check vendor under the parent directory
-				parts := strings.Split(pp.packagePath, string(os.PathSeparator))
-				if len(parts) > 1 {
-					vendorpath = path.Join(parts[0], "vendor", packagePath)
-					cmd := exec.Command("go", "list", "-f", "{{.GoFiles}}", vendorpath)
-					output, err = cmd.CombinedOutput()
-					if err != nil {
-						if strings.Contains(string(output), "no buildable Go source files in") {
-							return nil, "", nil
-						}
-						return nil, "", fmt.Errorf("go list -f {{.GoFiles}} %v failed: %v", path.Join(parts[0], "vendor", packagePath), err)
-					}
-				} else {
-					return nil, "", fmt.Errorf("go list -f {{.GoFiles}} [vendor/]%v failed: %v", packagePath, err)
-				}
-			}
-			vendor = true
+			return strings.Split(line, " ")
 		}
-		lines := strings.Split(string(output), "\n")
-		files = strings.Split(lines[0][1:len(lines[0])-1], " ")
-		// cgo files enabled?
-		// TODO(jchaloup): make a flag for cgo-enabled (true by default)
-		if !vendor {
-			cmd := exec.Command("go", "list", "-f", "{{.CgoFiles}}", packagePath)
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", packagePath, err)
-			}
-			lines := strings.Split(string(output), "\n")
-			if lines[0] != "[]" {
-				files = append(files, strings.Split(lines[0][1:len(lines[0])-1], " ")...)
-			}
-		} else {
-			// check vendor as well
-			cmd := exec.Command("go", "list", "-f", "{{.CgoFiles}}", vendorpath)
-			output, err = cmd.CombinedOutput()
-			if err != nil {
-				return nil, "", fmt.Errorf("go list -f {{.CgoFiles}} %v failed: %v", vendorpath, err)
-			}
-			lines := strings.Split(string(output), "\n")
-			if lines[0] != "[]" {
-				files = append(files, strings.Split(lines[0][1:len(lines[0])-1], " ")...)
-			}
+		// check GOPATH/packagePath
+		filter := "{{.GoFiles}}"
+		if cgo {
+			filter = "{{.CgoFiles}}"
 		}
+		cmd := exec.Command("go", "list", "-f", filter, packagePath)
+		output, e := cmd.CombinedOutput()
+		if e == nil {
+			return collectFiles(string(output)), nil
+		}
+
+		if strings.Contains(string(output), "no buildable Go source files in") {
+			return nil, nil
+		}
+
+		return nil, e
 	}
-	{
-		ppath := packagePath
-		if vendor {
-			ppath = vendorpath
+
+	files, ppath, e := func() ([]string, string, error) {
+		var searched []string
+		// First searched the vendor directories
+		pathParts := strings.Split(pp.packagePath, string(os.PathSeparator))
+		for i := len(pathParts) - 1; i >= 0; i-- {
+			vendorpath := path.Join(path.Join(pathParts[:i]...), "vendor", packagePath)
+			if l, e := listGoFiles(vendorpath, false); e == nil {
+				return l, vendorpath, e
+			}
+			searched = append(searched, vendorpath)
 		}
+
+		if l, e := listGoFiles(packagePath, false); e == nil {
+			return l, packagePath, e
+		}
+		searched = append(searched, packagePath)
+
+		return nil, "", fmt.Errorf("Unable to find %q in any of:\n\t\t%v\n", packagePath, strings.Join(searched, "\n\t\t"))
+	}()
+
+	if e != nil {
+		return nil, "", e
+	}
+
+	// cgo files enabled?
+	cgoFiles, e := listGoFiles(ppath, true)
+	if e != nil {
+		return nil, "", e
+	}
+
+	if len(cgoFiles) > 0 {
+		files = append(files, cgoFiles...)
+	}
+
+	{
 		cmd := exec.Command("go", "list", "-f", "{{.Dir}}", ppath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -544,6 +540,7 @@ func (pp *ProjectParser) Parse(allocation bool) error {
 	// set C pseudo-package
 	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
 	pp.cgoSymbolTable = tables.NewCGOTable()
+	pp.cgoSymbolTable.PackageQID = "C"
 	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable, false); err != nil {
 		return fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
 	}
@@ -620,6 +617,15 @@ PACKAGE_STACK:
 					return err
 				}
 				fileContext.FileAST = f
+				// register the package name
+				pkgQID := f.Name.Name
+				if pkgQID != "main" {
+					if p.PackageQID == "" {
+						p.PackageQID = pkgQID
+					} else if p.PackageQID != pkgQID {
+						return fmt.Errorf("Package %v has at least two different per-file names: %q and %q", p.PackagePath, pkgQID, p.PackageQID)
+					}
+				}
 			}
 			// processed imported packages
 			if !fileContext.ImportsProcessed {
@@ -699,6 +705,14 @@ PACKAGE_STACK:
 		}
 		glog.V(2).Infof("Global storing %q\n", p.PackagePath)
 		fmt.Fprintf(os.Stderr, "Package %q processed\n", p.PackagePath)
+		// TODO(jchaloup): this is hacky, the Add of the globalSymbolTable should
+		// eat tables.Table instead of the generic SymbolTable
+
+		if p.PackageQID == "" {
+			p.PackageQID = path.Base(p.PackagePath)
+		}
+		table.PackageQID = p.PackageQID
+
 		if err := pp.globalSymbolTable.Add(p.PackagePath, table, true); err != nil {
 			panic(err)
 		}

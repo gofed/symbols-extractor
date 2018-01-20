@@ -15,6 +15,7 @@ import (
 	typeparser "github.com/gofed/symbols-extractor/pkg/parser/type"
 	parsertypes "github.com/gofed/symbols-extractor/pkg/parser/types"
 	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 )
@@ -99,6 +100,13 @@ func TestDataTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to make a payload due to: %v", err)
 	}
+	httpTable := tables.NewTable()
+	httpTable.PackageQID = "http"
+	config.GlobalSymbolTable.Add("net/http", httpTable, false)
+	testingTable := tables.NewTable()
+	testingTable.PackageQID = "testing"
+	config.GlobalSymbolTable.Add("testing", testingTable, false)
+
 	if err := NewParser(config).Parse(payload); err != nil {
 		t.Errorf("Unable to parse file %v: %v", gofile, err)
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	symbolsglobal "github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/golang/glog"
 )
 
 type Runner struct {
@@ -343,7 +344,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		r.varTable.SetVariable(i.(*typevars.Variable).String(), item)
 	}
 
-	// glog.V(2).Infof("Checking %v...", contracts.Contract2String(c))
+	glog.V(2).Infof("Checking %v...", contracts.Contract2String(c))
 
 	typevar2varTableItem := func(i typevars.Interface) (*varTableItem, error) {
 		//glog.V(2).Infof("typevar2varTableItem, i=%#v", i)
@@ -792,16 +793,27 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		if xErr != nil {
 			return xErr
 		}
-		if item.dataType.GetType() != gotypes.PointerType {
-			return fmt.Errorf("Expected pointer, got %#v instead", item.dataType)
+		// in case it is an identifier
+		nonIdent, err := r.symbolAccessor.FindFirstNonidDataType(item.dataType)
+		if err != nil {
+			return err
+		}
+
+		if nonIdent.GetType() != gotypes.PointerType {
+			return fmt.Errorf("Expected pointer, got %#v instead", nonIdent)
 		}
 	case *contracts.DereferenceOf:
 		item, xErr := typevar2varTableItem(d.X)
 		if xErr != nil {
 			return xErr
 		}
+		// in case it is an identifier
+		nonIdent, err := r.symbolAccessor.FindFirstNonidDataType(item.dataType)
+		if err != nil {
+			return err
+		}
 		setVar(d.Y, &varTableItem{
-			dataType:    item.dataType.(*gotypes.Pointer).Def,
+			dataType:    nonIdent.(*gotypes.Pointer).Def,
 			packageName: item.packageName,
 			symbolTable: item.symbolTable,
 		})
