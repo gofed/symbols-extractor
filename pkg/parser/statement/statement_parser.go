@@ -241,16 +241,19 @@ func (sp *Parser) ParseConstValueSpec(constSpec types.ConstSpec) ([]*symbols.Sym
 			}
 
 			if bIdent.Package == "builtin" && sp.Config.SymbolsAccessor.IsIntegral(bIdent.Def) {
-				ma := propagation.NewMultiArith()
-				ma.AddXFromString(
-					valueExprAttr.DataTypeList[0].(*gotypes.Constant).Literal,
-				)
-				lit, err := ma.XToLiteral(bIdent.Def)
+				literal := valueExprAttr.DataTypeList[0].(*gotypes.Constant).Literal
+				if literal != "*" {
+					ma := propagation.NewMultiArith()
+					ma.AddXFromString(
+						valueExprAttr.DataTypeList[0].(*gotypes.Constant).Literal,
+					)
+					lit, err := ma.XToLiteral(bIdent.Def)
 
-				if err != nil {
-					return nil, err
+					if err != nil {
+						return nil, err
+					}
+					valueExprAttr.DataTypeList[0].(*gotypes.Constant).Literal = lit
 				}
-				valueExprAttr.DataTypeList[0].(*gotypes.Constant).Literal = lit
 			}
 
 			// The statement
@@ -952,18 +955,29 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			if len(xDefAttr.DataTypeList) != 1 {
 				return fmt.Errorf("Index expression is not a single expression: %#v", xDefAttr.DataTypeList)
 			}
-			channel, ok := xDefAttr.DataTypeList[0].(*gotypes.Channel)
-			if !ok {
-				return fmt.Errorf("Expected <- to a channel, got %#v instead", xDefAttr.DataTypeList)
+			// in case it is an identifier
+			nonIdent, err := sp.SymbolsAccessor.FindFirstNonidDataType(xDefAttr.DataTypeList[0])
+			if err != nil {
+				return err
 			}
-			if channel.Dir == "2" {
+
+			channel, ok := nonIdent.(*gotypes.Channel)
+			if !ok {
+				return fmt.Errorf("Expected <- to a channel, got %#v instead", nonIdent)
+			}
+			if channel.Dir == "1" {
 				return fmt.Errorf("Expected a channel %#v to be at least receiveable", channel)
 			}
 			rhsIndexer = func(i int) (gotypes.DataType, typevars.Interface, error) {
 				glog.V(2).Infof("Calling <-channel Rhs index function")
 				if i == 0 {
-					// TODO(jchaloup): generate SendTo contract
-					return channel.Value, xDefAttr.TypeVarList[0], nil
+					y := sp.Config.ContractTable.NewVirtualVar()
+					sp.Config.ContractTable.AddContract(&contracts.IsReceiveableFrom{
+						X: xDefAttr.TypeVarList[0],
+						Y: y,
+					})
+
+					return channel.Value, y, nil
 				}
 				if i == 1 {
 					return &gotypes.Identifier{Package: "builtin", Def: "bool"}, typevars.MakeConstant(sp.Config.PackageName, &gotypes.Identifier{Package: "builtin", Def: "bool"}), nil

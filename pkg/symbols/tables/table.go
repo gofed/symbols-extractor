@@ -19,17 +19,18 @@ import (
 type Table struct {
 	symbols map[string]map[string]*symbols.SymbolDef
 	// for methods of data types
-	methods map[string]map[string]*symbols.SymbolDef
-	Symbols map[string][]*symbols.SymbolDef `json:"symbols"`
+	methods    map[string]map[string]*symbols.SymbolDef
+	Symbols    map[string][]*symbols.SymbolDef `json:"symbols"`
+	PackageQID string                          `json:"qid"`
 }
 
-func (t *Table) MarshalJSON() (b []byte, e error) {
-	return json.Marshal(map[string][]*symbols.SymbolDef{
-		symbols.VariableSymbol: t.Symbols[symbols.VariableSymbol],
-		symbols.DataTypeSymbol: t.Symbols[symbols.DataTypeSymbol],
-		symbols.FunctionSymbol: t.Symbols[symbols.FunctionSymbol],
-	})
-}
+// func (t *Table) MarshalJSON() (b []byte, e error) {
+// 	return json.Marshal(map[string][]*symbols.SymbolDef{
+// 		symbols.VariableSymbol: t.Symbols[symbols.VariableSymbol],
+// 		symbols.DataTypeSymbol: t.Symbols[symbols.DataTypeSymbol],
+// 		symbols.FunctionSymbol: t.Symbols[symbols.FunctionSymbol],
+// 	})
+// }
 
 func (t *Table) UnmarshalJSON(b []byte) error {
 	var objMap map[string]*json.RawMessage
@@ -52,10 +53,20 @@ func (t *Table) UnmarshalJSON(b []byte) error {
 
 	t.methods = make(map[string]map[string]*symbols.SymbolDef)
 
+	if err := json.Unmarshal(*objMap["qid"], &t.PackageQID); err != nil {
+		return err
+	}
+
+	var symbolsObjMap map[string]*json.RawMessage
+
+	if err := json.Unmarshal(*objMap["symbols"], &symbolsObjMap); err != nil {
+		return err
+	}
+
 	for _, symbolType := range symbols.SymbolTypes {
-		if objMap[symbolType] != nil {
+		if symbolsObjMap[symbolType] != nil {
 			var m []*symbols.SymbolDef
-			if err := json.Unmarshal(*objMap[symbolType], &m); err != nil {
+			if err := json.Unmarshal(*symbolsObjMap[symbolType], &m); err != nil {
 				return err
 			}
 

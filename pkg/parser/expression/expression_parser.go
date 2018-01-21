@@ -82,6 +82,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	var valueTypeVar typevars.Interface
 	var keyTypeVar typevars.Interface
 	var valueType gotypes.DataType
+	var keyType gotypes.DataType
 
 	outputTypeVar := ep.Config.ContractTable.NewVirtualVar()
 
@@ -97,6 +98,7 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	case *gotypes.Map:
 		valueType = elmExpr.Valuetype
 		valueTypeVar = typevars.MakeMapValue(outputTypeVar)
+		keyType = elmExpr.Keytype
 		keyTypeVar = typevars.MakeMapKey(outputTypeVar)
 	default:
 		return nil, fmt.Errorf("Unknown CL type for KV elements: %#v", litType)
@@ -105,21 +107,46 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
 		X:   outputTypeVar,
 		Key: keyTypeVar,
-		Pos: fmt.Sprintf("(3)%v:%v", ep.Config.FileName, lit.Pos()),
+		Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, lit.Pos()),
 	})
 
 	for _, litElement := range lit.Elts {
 		var valueExpr ast.Expr
 		if kvExpr, ok := litElement.(*ast.KeyValueExpr); ok {
-			attr, err := ep.Parse(kvExpr.Key)
-			if err != nil {
-				return nil, err
+			if clExpr, ok := kvExpr.Key.(*ast.CompositeLit); ok {
+				if keyType == nil {
+					panic(fmt.Errorf("keyType is nil, %v is not a map", litType))
+				}
+				var typeDef gotypes.DataType
+				// If the CL type of the KV element is omitted, it needs to be reconstructed from the CL type itself
+				if clExpr.Type == nil {
+					if pointer, ok := keyType.(*gotypes.Pointer); ok {
+						typeDef = pointer.Def
+						// TODO(jchaloup): should check if the pointer.X is not a pointer and fail if it is
+					} else {
+						typeDef = keyType
+					}
+				}
+				attr, err := ep.parseCompositeLit(clExpr, typeDef)
+				if err != nil {
+					return nil, err
+				}
+				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:            keyTypeVar,
+					Y:            attr.TypeVarList[0],
+					ExpectedType: attr.DataTypeList[0],
+				})
+			} else {
+				attr, err := ep.Parse(kvExpr.Key)
+				if err != nil {
+					return nil, err
+				}
+				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+					X:            keyTypeVar,
+					Y:            attr.TypeVarList[0],
+					ExpectedType: attr.DataTypeList[0],
+				})
 			}
-			ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-				X:            keyTypeVar,
-				Y:            attr.TypeVarList[0],
-				ExpectedType: attr.DataTypeList[0],
-			})
 			valueExpr = kvExpr.Value
 		} else {
 			valueExpr = litElement
@@ -614,9 +641,15 @@ func (ep *Parser) parseStarExpr(expr *ast.StarExpr) (*types.ExprAttribute, error
 		return nil, fmt.Errorf("X of %#v does not return one value", expr)
 	}
 
-	val, ok := attr.DataTypeList[0].(*gotypes.Pointer)
+	// in case it is an identifier
+	nonIdent, err := ep.SymbolsAccessor.FindFirstNonidDataType(attr.DataTypeList[0])
+	if err != nil {
+		return nil, err
+	}
+
+	val, ok := nonIdent.(*gotypes.Pointer)
 	if !ok {
-		return nil, fmt.Errorf("Accessing a value of non-pointer type: %#v", attr.DataTypeList[0])
+		return nil, fmt.Errorf("Accessing a value of non-pointer type: %#v", nonIdent)
 	}
 	ep.Config.ContractTable.AddContract(&contracts.IsDereferenceable{
 		X: attr.TypeVarList[0],
@@ -1199,7 +1232,7 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, err
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
 		X:       exprDefAttr.TypeVarList[0],
 		IsSlice: true,
-		Pos:     fmt.Sprintf("(1)%v:%v", ep.Config.FileName, expr.Pos()),
+		Pos:     fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
 	return exprDefAttr, nil
@@ -1477,7 +1510,7 @@ func (ep *Parser) parseIndexExpr(expr *ast.IndexExpr) (*types.ExprAttribute, err
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
 		X:   yVarType,
 		Key: indexAttr.TypeVarList[0],
-		Pos: fmt.Sprintf("(2)%v:%v", ep.Config.FileName, expr.Pos()),
+		Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
 	// Get definition of the X from the symbol Table (it must be a variable of a data type)

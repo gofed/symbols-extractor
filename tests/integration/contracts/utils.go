@@ -71,6 +71,7 @@ func ParsePackage(t *testing.T, config *types.Config, fileParser *fileparser.Fil
 	if err != nil {
 		panic(err)
 	}
+	table.PackageQID = pkg
 	fmt.Printf("Global storing %v\n", pkg)
 	config.GlobalSymbolTable.Add(pkg, table, false)
 
