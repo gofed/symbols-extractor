@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
@@ -212,6 +213,26 @@ func (t *PackageTable) Load(file string) error {
 
 	*t = table
 	return nil
+}
+
+func (t *PackageTable) FilterOut(prefix string) bool {
+	emptyTable := true
+	for file, tab := range *t {
+		empty := true
+		for pkg := range tab.Symbols {
+			if !strings.HasPrefix(pkg, prefix) {
+				delete(tab.Symbols, pkg)
+				continue
+			}
+			empty = false
+		}
+		if empty {
+			delete(*t, file)
+			continue
+		}
+		emptyTable = false
+	}
+	return emptyTable
 }
 
 func (t *Table) loadFromFile(pkg string) (PackageTable, error) {

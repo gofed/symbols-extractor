@@ -694,8 +694,22 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 		if !ep.SymbolTable.Exists(exprType.Name) {
 			postponedErr = fmt.Errorf("isDataType: symbol %q is unknown", exprType.Name)
 		} else {
-			if _, err := ep.SymbolTable.LookupDataType(exprType.Name); err == nil {
-				return true, nil
+			// is it a local variable? Cause this case can happen
+			// type newCacheFunc func() cache
+			//
+			// func newStripedCache(stripeCount int, keyFunc keyFunc, newCacheFunc newCacheFunc) cache {
+			//         caches := []cache{}
+			//         for i := 0; i < stripeCount; i++ {
+			//                 caches = append(caches, newCacheFunc())
+			//         }
+			// ...
+			// }
+
+			if _, st, err := ep.SymbolTable.Lookup(exprType.Name); err == nil {
+				if st == symbols.DataTypeSymbol {
+					return true, nil
+				}
+				return false, nil
 			}
 		}
 
@@ -772,7 +786,7 @@ func (ep *Parser) isDataType(expr ast.Expr) (bool, error) {
 }
 
 func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []string, error) {
-	glog.V(2).Infof("getFunctionDef of %#v", def)
+	glog.V(2).Infof("getFunctionDef of %#v: typeDef.Package", def)
 	switch typeDef := def.(type) {
 	case *gotypes.Identifier:
 		// local definition
@@ -782,6 +796,9 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []
 
 		if typeDef.Package == "" || typeDef.Package == ep.PackageName {
 			def, defType, err = ep.SymbolTable.Lookup(typeDef.Def)
+			if ident, ok := def.Def.(*gotypes.Identifier); ok && ident.Def == typeDef.Def {
+				def, defType, err = ep.SymbolTable.LookupFromBlock(typeDef.Def, def.Block-1)
+			}
 		} else {
 			table, tErr := ep.GlobalSymbolTable.Lookup(typeDef.Package)
 			if tErr != nil {
@@ -799,6 +816,7 @@ func (ep *Parser) getFunctionDef(def gotypes.DataType) (*types.ExprAttribute, []
 			return types.ExprAttributeFromDataType(def.Def), nil, nil
 		}
 		if defType.IsDataType() {
+			// is the data type actually a function?
 			return ep.getFunctionDef(def.Def)
 		}
 		if !defType.IsVariable() {

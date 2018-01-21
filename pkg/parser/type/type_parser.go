@@ -360,6 +360,11 @@ func (p *Parser) parseFunction(typedExpr *ast.FuncType) (*gotypes.Function, erro
 	return functionType, nil
 }
 
+func (p *Parser) parseParen(typedExpr *ast.ParenExpr) (gotypes.DataType, error) {
+	glog.V(2).Infof("Processing ParentExpr: %#v\n", typedExpr)
+	return p.Parse(typedExpr.X)
+}
+
 func (p *Parser) Parse(expr ast.Expr) (gotypes.DataType, error) {
 	switch typedExpr := expr.(type) {
 	case *ast.Ident:
@@ -382,6 +387,8 @@ func (p *Parser) Parse(expr ast.Expr) (gotypes.DataType, error) {
 		return p.parseInterface(typedExpr)
 	case *ast.FuncType:
 		return p.parseFunction(typedExpr)
+	case *ast.ParenExpr:
+		return p.parseParen(typedExpr)
 	}
 	return nil, fmt.Errorf("ast.Expr (%#v) not recognized when parsing a type definition", expr)
 }

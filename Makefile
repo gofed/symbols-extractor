@@ -113,6 +113,7 @@ goenv:
 build:
 	$(RMLOG)
 	$(GO_BUILD) $(GO_BUILD_FLAGS) -o extract $(PROJECT_ROOT)/cmd/extract $(WLOG)
+	$(GO_BUILD) $(GO_BUILD_FLAGS) -o checkapi $(PROJECT_ROOT)/cmd/checkapi $(WLOG)
 
 test:
 	@ $(RMLOG)
@@ -156,4 +157,4 @@ scan:
 	./extract --stdlib --symbol-table-dir generated --cgo-symbols-path cgo/cgo.yml
 
 clean:
-	rm -rf extract symboltables generated
+	rm -rf extract checkapi generated

@@ -220,6 +220,28 @@ func (s *Stack) Lookup(name string) (*symbols.SymbolDef, symbols.SymbolType, err
 	return nil, symbols.SymbolType(""), fmt.Errorf("Symbol %v not found", name)
 }
 
+// Lookup looks for the first occurrence of a symbol with the given name
+// starting from a block idx
+func (s *Stack) LookupFromBlock(name string, idx int) (*symbols.SymbolDef, symbols.SymbolType, error) {
+	if idx < 0 || idx >= s.Size {
+		return nil, symbols.SymbolType(""), fmt.Errorf("Block id %v out of range <0; %v>", idx, s.Size-1)
+	}
+	// The top most item on the stack is the right most item in the simpleSlice
+	for i := idx; i >= 0; i-- {
+		def, st, err := s.Tables[i].Lookup(name)
+		if err == nil {
+			def.Block = i
+			// Change the name to its equivalent virtual definition
+			// so it can be looked up during contract evaluation
+			if i > 0 && st == symbols.DataTypeSymbol && !strings.HasPrefix(def.Name, "virtual#") {
+				def.Name = fmt.Sprintf("virtual#%v#%v", def.Pos, def.Name)
+			}
+			return def, st, nil
+		}
+	}
+	return nil, symbols.SymbolType(""), fmt.Errorf("Symbol %v not found", name)
+}
+
 func (s *Stack) Reset() error {
 	s.Tables = s.Tables[:1]
 	s.Size = 1
