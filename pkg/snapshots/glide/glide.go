@@ -3,14 +3,16 @@ package glide
 import (
 	"fmt"
 	"io/ioutil"
+	"path"
 	"strings"
 
 	yaml "gopkg.in/yaml.v2"
 )
 
 type GlideImport struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name        string   `json:"name"`
+	Version     string   `json:"version"`
+	Subpackages []string `json:"subpackages"`
 }
 
 type Glide struct {
@@ -39,6 +41,9 @@ func GlideFromFile(file string) (*Glide, error) {
 	glide.importsList = make(map[string]string)
 	for _, item := range glide.Imports {
 		glide.importsList[item.Name] = item.Version
+		for _, subpkg := range item.Subpackages {
+			glide.importsList[path.Join(item.Name, subpkg)] = item.Version
+		}
 	}
 
 	return &glide, nil
@@ -57,4 +62,6 @@ func (g *Glide) Commit(pkg string) (string, error) {
 func (g *Glide) MainPackageCommit(pkg string, commit string) {
 	g.mainPkg = pkg
 	g.mainPkgCommit = commit
+
+	g.importsList[pkg] = commit
 }

@@ -1470,6 +1470,32 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 	}
 }
 
+func (c *Config) MakKeyExpr(xDataType gotypes.DataType) (gotypes.DataType, error) {
+	// One can not do &(&(a))
+	var indexExpr gotypes.DataType
+	pointer, ok := xDataType.(*gotypes.Pointer)
+	if ok {
+		indexExpr = pointer.Def
+	} else {
+		indexExpr = xDataType
+	}
+	glog.V(2).Infof("IndexExprDef: %#v", indexExpr)
+
+	nonIdentDef, err := c.symbolsAccessor.FindFirstNonidDataType(indexExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	indexExpr = nonIdentDef
+
+	mapDef, ok := indexExpr.(*gotypes.Map)
+	if !ok {
+		return nil, fmt.Errorf("MakKeyExpr expected map, got %#v instead", indexExpr)
+	}
+	return mapDef.Keytype, nil
+
+}
+
 func (c *Config) IndexExpr(xDataType, idxDataType gotypes.DataType) (gotypes.DataType, string, error) {
 	// One can not do &(&(a))
 	var indexExpr gotypes.DataType
@@ -1656,10 +1682,11 @@ func (c *Config) TypecastExpr(xDataType, tDataType gotypes.DataType) (gotypes.Da
 				if !ok {
 					return nil, fmt.Errorf("Expected []byte, got slice of %#v instead", slice.Elmtype)
 				}
-				if ident.Package != "builtin" || ident.Def != "byte" {
-					return nil, fmt.Errorf("Expected []byte, got slice of %v.%v instead", ident.Package, ident.Def)
+				if ident.Package == "builtin" && (ident.Def == "byte" || ident.Def == "rune") {
+					return tDataType, nil
 				}
-				return tDataType, nil
+
+				return nil, fmt.Errorf("Expected []byte, got slice of %v.%v instead", ident.Package, ident.Def)
 			}
 			// only if the constant type is uintptr
 			if constant.Package != "builtin" || constant.Def != "uintptr" {

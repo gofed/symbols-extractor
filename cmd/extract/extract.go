@@ -15,6 +15,9 @@ import (
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/gofed/symbols-extractor/pkg/snapshots/glide"
+	"github.com/gofed/symbols-extractor/pkg/snapshots/godeps"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
+	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/golang/glog"
 )
 
@@ -23,12 +26,15 @@ type flags struct {
 	packagePrefix   *string
 	symbolTablePath *string
 	cgoSymbolsPath  *string
-	stdlib          *bool
-	allocated       *bool
-	perfile         *bool
-	allallocated    *bool
-	tojson          *bool
-	glidefile       *string
+
+	stdlib        *bool
+	allocated     *bool
+	recursiveFrom *string
+	perfile       *bool
+	allallocated  *bool
+	tojson        *bool
+	glidefile     *string
+	godepsfile    *string
 }
 
 func (f *flags) parse() error {
@@ -57,48 +63,77 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 	}
 }
 
-func printPackageAllocTables(allocTable *allocglobal.Table, pkg string, perfile bool, allallocated bool, tojson bool) error {
-	if _, err := allocTable.LookupPackage(pkg); err != nil {
-		return err
-	}
-	if perfile {
-		if tojson {
+func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.Table, f *flags) error {
+
+	pkg := *f.packagePath
+	perfile := *f.perfile
+	allallocated := *f.allallocated
+	tojson := *f.tojson
+
+	packageAllocTables := make(map[string]allocglobal.PackageTable)
+
+	// collect all packages with a given prefix
+	if *f.recursiveFrom != "" {
+		processed := make(map[string]struct{})
+		toProcess := []string{pkg}
+		for len(toProcess) > 0 {
+			st, err := globalTable.Lookup(toProcess[0])
+			if err != nil {
+				return err
+			}
+
+			for _, p := range st.(*tables.Table).Imports {
+				if !strings.HasPrefix(p, *f.recursiveFrom) {
+					continue
+				}
+				if _, ok := processed[p]; ok {
+					continue
+				}
+				processed[p] = struct{}{}
+				toProcess = append(toProcess, p)
+			}
+			toProcess = toProcess[1:]
+		}
+
+		for p := range processed {
+			tt, err := allocTable.LookupPackage(p)
+			if err != nil {
+				return err
+			}
+			packageAllocTables[p] = tt
+		}
+	} else {
+		if perfile {
 			tt, err := allocTable.LookupPackage(pkg)
 			if err != nil {
 				return err
 			}
-			byteSlice, err := json.Marshal(tt)
-			if err != nil {
-				return fmt.Errorf("Unable to convert print json: %v", err)
-			}
-			fmt.Printf("%v\n", string(byteSlice))
+			packageAllocTables[pkg] = tt
 		} else {
-			filesList := allocTable.Files(pkg)
-			sort.Strings(filesList)
-			for _, f := range filesList {
-				fmt.Printf("\tFile: %v\n", f)
-				at, err := allocTable.Lookup(pkg, f)
-				if err != nil {
-					return err
-				}
-				at.Print(allallocated)
+			if _, err := allocTable.LookupPackage(pkg); err != nil {
+				return err
 			}
+			tt, err := allocTable.MergeFiles(pkg)
+			if err != nil {
+				return err
+			}
+			packageAllocTables[pkg] = tt
 		}
-	} else {
-		tt, err := allocTable.MergeFiles(pkg)
-		if err != nil {
-			return err
-		}
+	}
 
-		if tojson {
-			byteSlice, err := json.Marshal(tt)
-			if err != nil {
-				return fmt.Errorf("Unable to convert print json: %v", err)
-			}
-			fmt.Printf("%v\n", string(byteSlice))
-		} else {
-			tt[""].Print(allallocated)
+	if tojson {
+		byteSlice, err := json.Marshal(packageAllocTables)
+		if err != nil {
+			return fmt.Errorf("Unable to convert print json: %v", err)
 		}
+		fmt.Printf("%v\n", string(byteSlice))
+		return nil
+	}
+
+	if perfile {
+		allocTable.Print(pkg, allallocated)
+	} else {
+		packageAllocTables[pkg][""].Print(allallocated)
 	}
 	return nil
 }
@@ -169,10 +204,12 @@ func main() {
 		cgoSymbolsPath: flag.String("cgo-symbols-path", "", "Symbol table with CGO symbols (per entire project space)"),
 		stdlib:         flag.Bool("stdlib", false, "Parse system Go std library"),
 		allocated:      flag.Bool("allocated", false, "Extract allocation of symbols"),
+		recursiveFrom:  flag.String("recursive-from", "", "Extract allocation of symbols from all prefixed paths"),
 		perfile:        flag.Bool("per-file", false, "Display allocated symbols per file"),
 		allallocated:   flag.Bool("all-allocated", false, "Display all allocated symbols"),
 		tojson:         flag.Bool("json", false, "Display allocated symbols in JSON"),
 		glidefile:      flag.String("glidefile", "", "Glide.lock with dependencies"),
+		godepsfile:     flag.String("godepsfile", "", "Godeps.json with dependencies"),
 	}
 
 	if err := f.parse(); err != nil {
@@ -222,7 +259,19 @@ func main() {
 			sn.MainPackageCommit(parts[0], parts[1])
 		}
 		snapshot = sn
-
+	} else if *f.godepsfile != "" {
+		sn, err := godeps.FromFile(*f.godepsfile)
+		if err != nil {
+			panic(err)
+		}
+		if *f.packagePrefix != "" {
+			parts := strings.Split(*f.packagePrefix, ":")
+			if len(parts) != 2 {
+				panic(fmt.Errorf("Expected --package-prefix in a PACKAGE:COMMIT form"))
+			}
+			sn.MainPackageCommit(parts[0], parts[1])
+		}
+		snapshot = sn
 	}
 
 	p := parser.New(*f.packagePath, *(f.symbolTablePath), *(f.cgoSymbolsPath), goversion, snapshot)
@@ -231,7 +280,7 @@ func main() {
 	}
 
 	if *(f.allocated) {
-		if err := printPackageAllocTables(p.GlobalAllocTable(), *f.packagePath, *(f.perfile), *(f.allallocated), *(f.tojson)); err != nil {
+		if err := printPackageAllocTables(p.GlobalAllocTable(), p.GlobalSymbolTable(), f); err != nil {
 			fmt.Print(err)
 			os.Exit(1)
 		}

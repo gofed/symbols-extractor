@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
@@ -63,6 +64,19 @@ func (t *Table) Packages() []string {
 		packages = append(packages, key)
 	}
 	return packages
+}
+
+func (t *Table) Print(packagePath string, all bool) {
+	filesList := t.Files(packagePath)
+	sort.Strings(filesList)
+	for _, f := range filesList {
+		fmt.Printf("\tFile: %v\n", f)
+		at, err := t.Lookup(packagePath, f)
+		if err != nil {
+			panic(err)
+		}
+		at.Print(all)
+	}
 }
 
 func (t *Table) Files(packagePath string) []string {

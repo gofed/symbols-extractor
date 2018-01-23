@@ -1319,6 +1319,14 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 	return nil
 }
 
+func skipPars(e ast.Expr) ast.Expr {
+	p, ok := e.(*ast.ParenExpr)
+	if ok {
+		return skipPars(p)
+	}
+	return e
+}
+
 // SelectStmt = "select" "{" { CommClause } "}" .
 // CommClause = CommCase ":" StatementList .
 // CommCase   = "case" ( SendStmt | RecvStmt ) | "default" .
@@ -1424,14 +1432,23 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 								Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, ident.Pos()),
 							})
 						} else {
-							assignAttr, err := sp.ExprParser.Parse(clause.Lhs[0])
-							if err != nil {
+							if err := func() error {
+								nonP := skipPars(clause.Lhs[0])
+								if ident, ok := nonP.(*ast.Ident); ok && ident.Name == "_" {
+									return nil
+								}
+								assignAttr, err := sp.ExprParser.Parse(clause.Lhs[0])
+								if err != nil {
+									return err
+								}
+								sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+									X: y,
+									Y: assignAttr.TypeVarList[0],
+								})
+								return nil
+							}(); err != nil {
 								return err
 							}
-							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-								X: y,
-								Y: assignAttr.TypeVarList[0],
-							})
 						}
 					case 2:
 						// Given a case is an implicit block, there is no need to check if any of to-be-declared variables is already declared
@@ -1481,22 +1498,48 @@ func (sp *Parser) parseSelectStmt(statement *ast.SelectStmt) error {
 								Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, ident2.Pos()),
 							})
 						} else {
-							assignAttr, err := sp.ExprParser.Parse(clause.Lhs[0])
-							if err != nil {
+							// Both vars can be just _
+							// a := make(chan int, 1)
+							// a <- 2
+							// select {
+							// 	case _, ((_)) = <- a:
+							// }
+							if err := func() error {
+								nonP := skipPars(clause.Lhs[0])
+								if ident, ok := nonP.(*ast.Ident); ok && ident.Name == "_" {
+									return nil
+								}
+								assignAttr, err := sp.ExprParser.Parse(clause.Lhs[0])
+								if err != nil {
+									return err
+								}
+								sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+									X: y,
+									Y: assignAttr.TypeVarList[0],
+								})
+								return nil
+							}(); err != nil {
 								return err
 							}
-							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-								X: y,
-								Y: assignAttr.TypeVarList[0],
-							})
-							assignOkAttr, err := sp.ExprParser.Parse(clause.Lhs[1])
-							if err != nil {
+
+							if err := func() error {
+								nonP := skipPars(clause.Lhs[1])
+								if ident, ok := nonP.(*ast.Ident); ok && ident.Name == "_" {
+									return nil
+								}
+								assignOkAttr, err := sp.ExprParser.Parse(clause.Lhs[1])
+								if err != nil {
+									return err
+								}
+								sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+									X: typevars.MakeConstant("builtin", &gotypes.Identifier{Package: "builtin", Def: "bool"}),
+									Y: assignOkAttr.TypeVarList[0],
+								})
+								return nil
+							}(); err != nil {
 								return err
 							}
-							sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-								X: typevars.MakeConstant("builtin", &gotypes.Identifier{Package: "builtin", Def: "bool"}),
-								Y: assignOkAttr.TypeVarList[0],
-							})
+
 						}
 					default:
 						return fmt.Errorf("Expecting at most two expression on the LHS of a clause assigment")
@@ -1804,36 +1847,6 @@ func (sp *Parser) Parse(statement ast.Stmt) error {
 func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 	sp.AllocatedSymbolsTable.Lock()
 	defer sp.AllocatedSymbolsTable.Unlock()
-	if funcDecl.Recv != nil {
-		// Receiver has a single parametr
-		// https://golang.org/ref/spec#Receiver
-		if len(funcDecl.Recv.List) != 1 || len(funcDecl.Recv.List[0].Names) > 2 {
-			if len(funcDecl.Recv.List) != 1 {
-				return fmt.Errorf("Method %q has no receiver", funcDecl.Name.Name)
-			}
-			return fmt.Errorf("Receiver is not a single parameter: %#v, %#v", funcDecl.Recv, funcDecl.Recv.List[0].Names)
-		}
-
-		def, err := sp.parseReceiver(funcDecl.Recv.List[0].Type, true)
-		if err != nil {
-			return fmt.Errorf("sp.parseReceiver: %v", err)
-		}
-		// the receiver can be typed only
-		if funcDecl.Recv.List[0].Names != nil {
-			sDef := &symbols.SymbolDef{
-				Name: (*funcDecl.Recv).List[0].Names[0].Name,
-				Def:  def,
-				Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
-			}
-			sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-				X:            typevars.MakeConstant(sp.Config.PackageName, def),
-				Y:            typevars.VariableFromSymbolDef(sDef),
-				ExpectedType: sDef.Def,
-				Pos:          fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
-			})
-			sp.SymbolTable.AddVariable(sDef)
-		}
-	}
 	// TOOD(jchaloup): check the id of the receiver is not the same
 	// as any of the function params/return ids
 
@@ -1893,6 +1906,37 @@ func (sp *Parser) parseFuncHeadVariables(funcDecl *ast.FuncDecl) error {
 				})
 				sDefs = append(sDefs, sDef)
 			}
+		}
+	}
+
+	if funcDecl.Recv != nil {
+		// Receiver has a single parametr
+		// https://golang.org/ref/spec#Receiver
+		if len(funcDecl.Recv.List) != 1 || len(funcDecl.Recv.List[0].Names) > 2 {
+			if len(funcDecl.Recv.List) != 1 {
+				return fmt.Errorf("Method %q has no receiver", funcDecl.Name.Name)
+			}
+			return fmt.Errorf("Receiver is not a single parameter: %#v, %#v", funcDecl.Recv, funcDecl.Recv.List[0].Names)
+		}
+
+		def, err := sp.parseReceiver(funcDecl.Recv.List[0].Type, true)
+		if err != nil {
+			return fmt.Errorf("sp.parseReceiver: %v", err)
+		}
+		// the receiver can be typed only
+		if funcDecl.Recv.List[0].Names != nil {
+			sDef := &symbols.SymbolDef{
+				Name: (*funcDecl.Recv).List[0].Names[0].Name,
+				Def:  def,
+				Pos:  fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
+			}
+			sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+				X:            typevars.MakeConstant(sp.Config.PackageName, def),
+				Y:            typevars.VariableFromSymbolDef(sDef),
+				ExpectedType: sDef.Def,
+				Pos:          fmt.Sprintf("%v:%v", sp.Config.FileName, (*funcDecl.Recv).List[0].Names[0].Pos()),
+			})
+			sp.SymbolTable.AddVariable(sDef)
 		}
 	}
 

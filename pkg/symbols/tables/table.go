@@ -22,15 +22,8 @@ type Table struct {
 	methods    map[string]map[string]*symbols.SymbolDef
 	Symbols    map[string][]*symbols.SymbolDef `json:"symbols"`
 	PackageQID string                          `json:"qid"`
+	Imports    []string                        `json:"imports"`
 }
-
-// func (t *Table) MarshalJSON() (b []byte, e error) {
-// 	return json.Marshal(map[string][]*symbols.SymbolDef{
-// 		symbols.VariableSymbol: t.Symbols[symbols.VariableSymbol],
-// 		symbols.DataTypeSymbol: t.Symbols[symbols.DataTypeSymbol],
-// 		symbols.FunctionSymbol: t.Symbols[symbols.FunctionSymbol],
-// 	})
-// }
 
 func (t *Table) UnmarshalJSON(b []byte) error {
 	var objMap map[string]*json.RawMessage
@@ -55,6 +48,12 @@ func (t *Table) UnmarshalJSON(b []byte) error {
 
 	if err := json.Unmarshal(*objMap["qid"], &t.PackageQID); err != nil {
 		return err
+	}
+
+	if _, ok := objMap["imports"]; ok && objMap["imports"] != nil {
+		if err := json.Unmarshal(*objMap["imports"], &t.Imports); err != nil {
+			return err
+		}
 	}
 
 	var symbolsObjMap map[string]*json.RawMessage
