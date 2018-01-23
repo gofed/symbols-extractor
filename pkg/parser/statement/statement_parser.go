@@ -842,7 +842,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			return fmt.Errorf("Number of expressions on the left-hand side differs from ones on the right-hand side for: %#v vs. %#v", statement.Lhs, statement.Rhs)
 		}
 		// function call or key reading?
-		switch typeExpr := statement.Rhs[0].(type) {
+		switch typeExpr := skipPars(statement.Rhs[0]).(type) {
 		case *ast.CallExpr:
 			var isCgo bool
 			if sel, isSel := typeExpr.Fun.(*ast.SelectorExpr); isSel {
@@ -996,6 +996,8 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 	// If the token is token.ASSIGN the variable must be in the symbol table.
 	// If it is and has the same type, do not do anything, Error, if the type is different.
 	// If it is not there yet, error.
+	var sDefs []*symbols.SymbolDef
+
 	for i := 0; i < exprsSize; i++ {
 		// If the left-hand side id a selector (e.g. struct.field), we alredy know data type of the id.
 		// So, just store the field's data type into the allocated symbol table
@@ -1047,7 +1049,10 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 					Def:     rhsExpr,
 					Pos:     fmt.Sprintf("%v:%v", sp.Config.FileName, statement.Lhs[i].Pos()),
 				}
-				sp.SymbolTable.AddVariable(sDef)
+				if sp.SymbolTable.CurrentLevel() > 0 {
+					sDef.Package = ""
+				}
+				sDefs = append(sDefs, sDef)
 				sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 					X:            rhsTypeVar,
 					Y:            typevars.VariableFromSymbolDef(sDef),
@@ -1069,7 +1074,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		case *ast.SelectorExpr, *ast.StarExpr:
 			attr, err := sp.ExprParser.Parse(statement.Lhs[i])
 			if err != nil {
-				return nil
+				return err
 			}
 			sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 				X:            rhsTypeVar,
@@ -1080,7 +1085,7 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 			// This goes straight to the indexExpr parsing method
 			attr, err := sp.ExprParser.Parse(lhsExpr)
 			if err != nil {
-				return nil
+				return err
 			}
 			sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 				X:            rhsTypeVar,
@@ -1090,6 +1095,9 @@ func (sp *Parser) parseAssignStmt(statement *ast.AssignStmt) error {
 		default:
 			return fmt.Errorf("Lhs[%v] of an assignment type %#v is not recognized", i, statement.Lhs[i])
 		}
+	}
+	for _, sDef := range sDefs {
+		sp.SymbolTable.AddVariable(sDef)
 	}
 	return nil
 }
@@ -1322,7 +1330,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 func skipPars(e ast.Expr) ast.Expr {
 	p, ok := e.(*ast.ParenExpr)
 	if ok {
-		return skipPars(p)
+		return skipPars(p.X)
 	}
 	return e
 }

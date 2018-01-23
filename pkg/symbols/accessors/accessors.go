@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
@@ -939,9 +940,19 @@ ITEMS_LOOP:
 			}
 			switch fieldType := itemExpr.(type) {
 			case *gotypes.Identifier:
-				if !accessor.methodsOnly && fieldType.Def == accessor.field.String() {
-					fieldItem = &item
-					break ITEMS_LOOP
+				if !accessor.methodsOnly {
+					var fieldName string
+					// localy defined data type?
+					if parts := strings.Split(fieldType.Def, "#"); len(parts) == 3 {
+						fieldName = parts[2]
+					} else {
+						fieldName = fieldType.Def
+					}
+
+					if fieldName == accessor.field.String() {
+						fieldItem = &item
+						break ITEMS_LOOP
+					}
 				}
 				var def *symbols.SymbolDef
 				var err error

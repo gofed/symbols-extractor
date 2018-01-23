@@ -75,8 +75,7 @@ func (cp *contractPayload) isEmpty() bool {
 
 func (cp *contractPayload) len() int {
 	size := 0
-	for key, d := range cp.items {
-		fmt.Printf("key: %v\n", key)
+	for _, d := range cp.items {
 		size += len(d)
 	}
 

@@ -60,6 +60,9 @@ variables:
 - name: PATH_MAX
   type:
     constant: int
+- name: RTLD_LAZY
+  type:
+    constant: int
 # no need to know definition of the data type, just its name
 types:
 - name: struct_sockaddr
@@ -77,6 +80,8 @@ types:
 - name: struct_addrinfo
   type:
     struct:
+    - name: ai_flags
+      identifier: C.int
     - name: ai_socktype
       identifier: C.int
     - name: ai_protocol
@@ -259,3 +264,71 @@ functions:
   result:
   - pointer:
       identifier: C.void
+- name: dlerror
+  result:
+  - pointer:
+      identifier: C.char
+- name: dlopen
+  params:
+  - pointer:
+      identifier: C.char
+  - identifier: C.int
+  result:
+  - pointer:
+      identifier: C.void
+- name: dlclose
+  params:
+  - pointer:
+      identifier: C.void
+  result:
+  - identifier: C.int
+- name: dlsym
+  params:
+  - pointer:
+      identifier: C.void
+  - pointer:
+      identifier: C.char
+  result:
+  - pointer:
+      identifier: C.void
+- name: my_strlen
+  params:
+  - pointer:
+      identifier: C.void
+  - pointer:
+      identifier: C.char
+  result:
+  - identifier: C.int
+- name: my_sd_pid_get_owner_uid
+  params:
+  - pointer:
+      identifier: C.void
+    identifier: C.pid_t
+  - pointer:
+      identifier: C.uid_t
+  result:
+  - identifier: C.int
+- name: my_sd_pid_get_unit
+  params:
+  - pointer:
+      identifier: C.void
+    identifier: C.pid_t
+  - pointer:
+      pointer:
+        identifier: C.unit
+  result:
+  - identifier: C.int
+- name: my_sd_pid_get_slice
+  params:
+  - pointer:
+      identifier: C.void
+    identifier: C.pid_t
+  - pointer:
+      pointer:
+        identifier: C.char
+  result:
+  - identifier: C.int
+- name: am_session_leader
+  result:
+  - identifier: C.int
+

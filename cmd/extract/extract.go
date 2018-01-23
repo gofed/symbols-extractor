@@ -30,6 +30,7 @@ type flags struct {
 	stdlib        *bool
 	allocated     *bool
 	recursiveFrom *string
+	filterPrefix  *string
 	perfile       *bool
 	allallocated  *bool
 	tojson        *bool
@@ -100,7 +101,9 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 			if err != nil {
 				return err
 			}
-			packageAllocTables[p] = tt
+			if !tt.FilterOut("github.com/coreos/etcd") {
+				packageAllocTables[p] = tt
+			}
 		}
 	} else {
 		if perfile {
@@ -205,6 +208,7 @@ func main() {
 		stdlib:         flag.Bool("stdlib", false, "Parse system Go std library"),
 		allocated:      flag.Bool("allocated", false, "Extract allocation of symbols"),
 		recursiveFrom:  flag.String("recursive-from", "", "Extract allocation of symbols from all prefixed paths"),
+		filterPrefix:   flag.String("filter-prefix", "", "Filter out all imported packages from allocated symbols that does not match the prefix"),
 		perfile:        flag.Bool("per-file", false, "Display allocated symbols per file"),
 		allallocated:   flag.Bool("all-allocated", false, "Display all allocated symbols"),
 		tojson:         flag.Bool("json", false, "Display allocated symbols in JSON"),
