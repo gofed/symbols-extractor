@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
@@ -242,12 +243,14 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 		pathParts := strings.Split(pp.packagePath, string(os.PathSeparator))
 		for i := len(pathParts) - 1; i >= 0; i-- {
 			vendorpath := path.Join(path.Join(pathParts[:i]...), "vendor", packagePath)
+			glog.V(1).Infof("Checking %v directory", vendorpath)
 			if l, e := listGoFiles(vendorpath, false); e == nil {
 				return l, vendorpath, e
 			}
 			searched = append(searched, vendorpath)
 		}
 
+		glog.V(1).Infof("Checking %v directory", packagePath)
 		if l, e := listGoFiles(packagePath, false); e == nil {
 			return l, packagePath, e
 		}
@@ -703,6 +706,20 @@ PACKAGE_STACK:
 		if err != nil {
 			panic(err)
 		}
+
+		// sort unique imported packages
+		paths := make(map[string]struct{})
+		for _, p := range table.Imports {
+			paths[p] = struct{}{}
+		}
+
+		table.Imports = nil
+		for p := range paths {
+			table.Imports = append(table.Imports, p)
+		}
+
+		sort.Strings(table.Imports)
+
 		glog.V(2).Infof("Global storing %q\n", p.PackagePath)
 		fmt.Fprintf(os.Stderr, "Package %q processed\n", p.PackagePath)
 		// TODO(jchaloup): this is hacky, the Add of the globalSymbolTable should
@@ -728,14 +745,14 @@ PACKAGE_STACK:
 			panic(err)
 		}
 
-		if err := pp.globalContractsTable.Save(p.PackagePath); err != nil {
-			panic(err)
-		}
-
 		// Evaluate contracts to collect remaining allocated symbols (so called dynamicly allocated symbols).
 		// The symbols are not stored as they depend on a specific dependency package commit
 		r := runner.New(p.Config.PackageName, pp.globalSymbolTable, pp.globalAllocSymbolTable, p.Config.ContractTable)
 		if err := r.Run(); err != nil {
+			panic(err)
+		}
+
+		if err := pp.globalContractsTable.Save(p.PackagePath); err != nil {
 			panic(err)
 		}
 

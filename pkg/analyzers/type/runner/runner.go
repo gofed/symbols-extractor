@@ -438,6 +438,20 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 				packageName: item.packageName,
 				symbolTable: item.symbolTable,
 			}, nil
+		case *typevars.MapKey:
+			item, ok := getVar(td.X)
+			if !ok {
+				return nil, fmt.Errorf("Variable %v does not exist", td.X.String())
+			}
+			yDataType, err := propagation.New(r.symbolAccessor).MakKeyExpr(item.dataType)
+			if err != nil {
+				return nil, err
+			}
+			return &varTableItem{
+				dataType:    yDataType,
+				packageName: item.packageName,
+				symbolTable: item.symbolTable,
+			}, nil
 		case *typevars.RangeKey:
 			item, ok := getVar(td.X)
 			if !ok {
@@ -766,6 +780,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			// fmt.Printf("Checking index type %#v compatibility with Integer type not yet implemented", indexItem)
 			return nil
 		}
+
 		switch d := dt.(type) {
 		case *gotypes.Builtin:
 			if d.Def == "string" {
@@ -777,6 +792,20 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 				// TODO(jchaloup): check the index is compatible with Integer type
 				return nil
 			}
+
+			constantType, err := r.symbolAccessor.FindFirstNonidDataType(&gotypes.Identifier{Package: d.Package, Def: d.Def})
+			if err != nil {
+				return err
+			}
+
+			ident, ok := constantType.(*gotypes.Identifier)
+			if ok {
+				if ident.Package == "builtin" && ident.Def == "string" {
+					// TODO(jchaloup): check the index is compatible with Integer type
+					return nil
+				}
+			}
+			fmt.Printf("constantType not ID: %#v\n", constantType)
 		case *gotypes.Identifier:
 			if d.Package == "builtin" && d.Def == "string" {
 				// TODO(jchaloup): check the index is compatible with Integer type
@@ -786,7 +815,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			panic(fmt.Errorf("Unsupported indexable typevar %#v", dt))
 		}
 		// error
-		fmt.Printf("Unsupported indexable typevar %#v", dt)
+		fmt.Printf("Unsupported indexable typevar %#v\n", dt)
 		panic("|||")
 	case *contracts.IsDereferenceable:
 		item, xErr := typevar2varTableItem(d.X)
@@ -1021,6 +1050,7 @@ func (r *Runner) Run() error {
 	// fmt.Printf("Unready:\n")
 	// unready.dump()
 	if !unready.isEmpty() {
+		fmt.Printf("\n\n")
 		unready.dump()
 		return fmt.Errorf("There are still some unprocessed contract: %v", unready.len())
 	}

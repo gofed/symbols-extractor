@@ -903,10 +903,11 @@ func (a *Accessor) RetrieveDataTypeField(accessor *FieldAccessor) (*FieldAttribu
 			return fieldAccessor, nil
 		}
 
+		if accessor.dataTypeDef.Def.GetType() == gotypes.InterfaceType {
+			return a.RetrieveInterfaceMethod(accessor.symbolTable, accessor.dataTypeDef, accessor.field.String())
+		}
+
 		if !accessor.fieldsOnly {
-			if accessor.dataTypeDef.Def.GetType() == gotypes.InterfaceType {
-				return a.RetrieveInterfaceMethod(accessor.symbolTable, accessor.dataTypeDef, accessor.field.String())
-			}
 			// Check data type methods
 			glog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
 			if method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field.String()); err == nil {

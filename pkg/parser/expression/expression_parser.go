@@ -131,11 +131,19 @@ func (ep *Parser) parseKeyValueLikeExpr(litDataType gotypes.DataType, lit *ast.C
 				if err != nil {
 					return nil, err
 				}
-				ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X:            keyTypeVar,
-					Y:            attr.TypeVarList[0],
-					ExpectedType: attr.DataTypeList[0],
-				})
+				if clExpr.Type == nil {
+					ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+						X:            keyTypeVar,
+						Y:            attr.TypeVarList[0],
+						ExpectedType: attr.DataTypeList[0],
+					})
+				} else {
+					ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X:            keyTypeVar,
+						Y:            attr.TypeVarList[0],
+						ExpectedType: attr.DataTypeList[0],
+					})
+				}
 			} else {
 				attr, err := ep.Parse(kvExpr.Key)
 				if err != nil {
@@ -840,9 +848,10 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					return err
 				}
 				// e.g. f(...) (a, b, c); g(a,b,c) ...; g(f(...))
-				if len(params) == len(attr.DataTypeList) {
-					for i := range attr.DataTypeList {
-						if functionTypeVar != nil {
+				// or in case the function has ellipiss argument, len(attr.DataTypeList) does not matter
+				if len(params) == len(attr.DataTypeList) || (len(params) == 1 && params[0].GetType() == gotypes.EllipsisType) {
+					if functionTypeVar != nil {
+						for i := range attr.DataTypeList {
 							ep.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
 								X:            attr.TypeVarList[i],
 								Y:            typevars.MakeArgument(functionTypeVar, i),
@@ -852,8 +861,9 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 					}
 					return nil
 				}
+
 				if len(attr.DataTypeList) != 1 {
-					return fmt.Errorf("Argument %#v of a call expression does not have one return value", args[0])
+					return fmt.Errorf("(1)Argument %#v of a call expression does not have one return value", args[0])
 				}
 
 				// E.g. func f(a string, b ...int) called as f("aaa"), the 'b' is nil then
@@ -875,7 +885,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 			}
 
 			if attr == nil || len(attr.DataTypeList) != 1 {
-				return fmt.Errorf("Argument %#v of a call expression does not have one return value", arg)
+				return fmt.Errorf("(2)Argument %#v of a call expression does not have one return value", arg)
 			}
 
 			if functionTypeVar != nil {
@@ -908,7 +918,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 		}
 
 		if attr == nil || len(attr.DataTypeList) != 1 {
-			return nil, fmt.Errorf("Argument %#v of a call expression does not have one return value", expr.Args[0])
+			return nil, fmt.Errorf("(3)Argument %#v of a call expression does not have one return value", expr.Args[0])
 		}
 
 		castedDef, err := propagation.New(ep.Config.SymbolsAccessor).TypecastExpr(attr.DataTypeList[0], def)
@@ -1009,6 +1019,45 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				// TODO(jchaloup): set the right type's package
 				return types.ExprAttributeFromDataType(typeDef).AddTypeVar(
 					typevars.MakeConstant(ep.Config.PackageName, typeDef),
+				), err
+			case "append":
+				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+				arglen := len(expr.Args)
+
+				if arglen == 0 {
+					return nil, fmt.Errorf("append must have at least one argument")
+				}
+
+				glog.V(2).Infof("Processing append arguments: %#v", expr.Args)
+				if err := processArgs(f, expr.Args[1:], nil); err != nil {
+					return nil, err
+				}
+
+				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+					F:         f,
+					ArgsCount: arglen,
+				})
+
+				attrArg, err := ep.Parse(expr.Args[0])
+				if err != nil {
+					return nil, err
+				}
+
+				if len(attrArg.DataTypeList) != 1 {
+					return nil, fmt.Errorf("First argument of append is not a single expression at %v", expr.Args[0].Pos())
+				}
+
+				nonIdentDT, err := ep.SymbolsAccessor.FindFirstNonidDataType(attrArg.DataTypeList[0])
+				if err != nil {
+					return nil, err
+				}
+
+				if nonIdentDT.GetType() != gotypes.SliceType && nonIdentDT.GetType() != gotypes.EllipsisType {
+					return nil, fmt.Errorf("First argument of append is not a slice/ellipsis expression at %v, got %v instead (%#v)", expr.Args[0].Pos(), nonIdentDT.GetType(), nonIdentDT)
+				}
+
+				return types.ExprAttributeFromDataType(attrArg.DataTypeList[0]).AddTypeVar(
+					attrArg.TypeVarList[0],
 				), err
 			case "new":
 				// The new built-in function allocates memory. The first argument is a type,
@@ -1154,7 +1203,7 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				Pos: fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 			})
 		}
-	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue:
+	case *typevars.Constant, *typevars.Field, *typevars.ReturnType, *typevars.ListValue, *typevars.MapValue:
 		newVar := ep.Config.ContractTable.NewVirtualVar()
 		ep.Config.ContractTable.AddContract(&contracts.PropagatesTo{
 			X:   attr.TypeVarList[0],
@@ -1229,13 +1278,75 @@ func (ep *Parser) parseSliceExpr(expr *ast.SliceExpr) (*types.ExprAttribute, err
 		return nil, fmt.Errorf("SliceExpr is not a single argument")
 	}
 
+	nonIdentDef, err := ep.SymbolsAccessor.FindFirstNonidDataType(exprDefAttr.DataTypeList[0])
+	if err != nil {
+		return nil, err
+	}
+
+	if pointer, ok := nonIdentDef.(*gotypes.Pointer); ok {
+		// TODO(jchaloup): overapproximation: should error for constants
+		nonIdentDef, err = ep.SymbolsAccessor.FindFirstNonidDataType(pointer.Def)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var sliceExpr gotypes.DataType
+	switch d := nonIdentDef.(type) {
+	case *gotypes.Slice:
+		// If it is already slice, keep the same type as it can have its own methods
+		ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
+			X: exprDefAttr.TypeVarList[0],
+			// TODO(jchaloup): this can be removed
+			IsSlice: true,
+			Pos:     fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
+		})
+
+		return types.ExprAttributeFromDataType(exprDefAttr.DataTypeList[0]).AddTypeVar(
+			exprDefAttr.TypeVarList[0],
+		), nil
+	case *gotypes.Array:
+		sliceExpr = &gotypes.Slice{
+			Elmtype: d.Elmtype,
+		}
+	case *gotypes.Identifier:
+		if d.Package == "builtin" && d.Def == "string" {
+			sliceExpr = d
+		}
+	case *gotypes.Constant:
+		if d.Package == "builtin" && d.Def == "string" {
+			sliceExpr = d
+		}
+		nonIdentConstDef, err := ep.SymbolsAccessor.FindFirstNonidDataType(&gotypes.Identifier{Package: d.Package, Def: d.Def})
+		if err != nil {
+			return nil, err
+		}
+		constIdent, ok := nonIdentConstDef.(*gotypes.Identifier)
+		if ok {
+			if constIdent.Package == "builtin" && constIdent.Def == "string" {
+				sliceExpr = d
+			}
+		}
+	case *gotypes.Ellipsis:
+		sliceExpr = &gotypes.Slice{
+			Elmtype: d.Def,
+		}
+	}
+
+	if sliceExpr == nil {
+		panic(fmt.Errorf("Unsupported expression for slice operation: %#v", nonIdentDef))
+	}
+
 	ep.Config.ContractTable.AddContract(&contracts.IsIndexable{
-		X:       exprDefAttr.TypeVarList[0],
+		X: exprDefAttr.TypeVarList[0],
+		// TODO(jchaloup): this can be removed
 		IsSlice: true,
 		Pos:     fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()),
 	})
 
-	return exprDefAttr, nil
+	return types.ExprAttributeFromDataType(sliceExpr).AddTypeVar(
+		exprDefAttr.TypeVarList[0],
+	), nil
 }
 
 // parseChanType consumes ast.ChanType and produces a data type corresponding to channel definition

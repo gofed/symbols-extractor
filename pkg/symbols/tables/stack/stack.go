@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
+	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
 
@@ -49,6 +50,10 @@ func (s *Stack) Pop() {
 
 func (s *Stack) AddImport(sym *symbols.SymbolDef) error {
 	s.Imports[sym.Name] = sym
+	if s.Size <= 0 {
+		return fmt.Errorf("Symbol table stack is empty")
+	}
+	s.Tables[0].Imports = append(s.Tables[0].Imports, sym.Def.(*gotypes.Packagequalifier).Path)
 	return nil
 }
 
