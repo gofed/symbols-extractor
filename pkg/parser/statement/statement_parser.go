@@ -1188,6 +1188,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 
 	var rhsIdentifier *gotypes.Identifier
 	var typeTypeVar typevars.Interface
+	var typeDef gotypes.DataType
 
 	switch assignStmt := statement.Assign.(type) {
 	case *ast.AssignStmt:
@@ -1211,9 +1212,10 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 		}
 		typeAttr, err := sp.ExprParser.Parse(typeAssert.X)
 		if err != nil {
-			return nil
+			return err
 		}
 		typeTypeVar = typeAttr.TypeVarList[0]
+		typeDef = typeAttr.DataTypeList[0]
 
 		ident, ok := assignStmt.Lhs[0].(*ast.Ident)
 		if !ok {
@@ -1239,6 +1241,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 			return nil
 		}
 		typeTypeVar = typeAttr.TypeVarList[0]
+		typeDef = typeAttr.DataTypeList[0]
 	default:
 		return fmt.Errorf("Unsupported statement in type switch")
 	}
@@ -1254,6 +1257,11 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 			// in case there are at least two data types (or none = default case), the type is interface{}
 			if len(caseStmt.List) != 1 {
 				for _, caseExpr := range caseStmt.List {
+					// case nil:
+					if ident, ok := skipPars(caseExpr).(*ast.Ident); ok && ident.Name == "nil" {
+						continue
+					}
+
 					rhsType, err := sp.TypeParser.Parse(caseExpr)
 					if err != nil {
 						return err
@@ -1267,7 +1275,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 				if rhsIdentifier != nil {
 					sDef := &symbols.SymbolDef{
 						Name:    rhsIdentifier.Def,
-						Def:     &gotypes.Interface{},
+						Def:     typeDef,
 						Package: sp.PackageName,
 						// The Pos in this context is not applicable to the typevars in each
 						// case block the rhsIdentifier.Def has different scope
@@ -1276,37 +1284,45 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 					}
 					sp.SymbolTable.AddVariable(sDef)
 					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-						X:   typevars.MakeConstant(sp.Config.PackageName, &gotypes.Interface{}),
+						X:   typevars.MakeConstant(sp.Config.PackageName, typeDef),
 						Y:   typevars.VariableFromSymbolDef(sDef),
 						Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
 					})
 				}
 			} else {
-				rhsType, err := sp.TypeParser.Parse(caseStmt.List[0])
-				if err != nil {
-					return err
+				// case nil:
+				skipCase := false
+				if ident, ok := skipPars(caseStmt.List[0]).(*ast.Ident); ok && ident.Name == "nil" {
+					skipCase = true
 				}
-				sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
-					X:    typevars.MakeConstant(sp.Config.PackageName, rhsType),
-					Y:    typeTypeVar,
-					Weak: true,
-				})
-				if rhsIdentifier != nil {
-					sDef := &symbols.SymbolDef{
-						Name:    rhsIdentifier.Def,
-						Package: sp.PackageName,
-						Def:     rhsType,
-						// The Pos in this context is not applicable to the typevars in each
-						// case block the rhsIdentifier.Def has different scope
-						// TODO(jchaloup): find a different way to state the position of the rhsIdentifier
-						Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
+
+				if !skipCase {
+					rhsType, err := sp.TypeParser.Parse(caseStmt.List[0])
+					if err != nil {
+						return err
 					}
-					sp.SymbolTable.AddVariable(sDef)
-					sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
-						X:   typevars.MakeConstant(sp.Config.PackageName, rhsType),
-						Y:   typevars.VariableFromSymbolDef(sDef),
-						Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
+					sp.Config.ContractTable.AddContract(&contracts.IsCompatibleWith{
+						X:    typevars.MakeConstant(sp.Config.PackageName, rhsType),
+						Y:    typeTypeVar,
+						Weak: true,
 					})
+					if rhsIdentifier != nil {
+						sDef := &symbols.SymbolDef{
+							Name:    rhsIdentifier.Def,
+							Package: sp.PackageName,
+							Def:     rhsType,
+							// The Pos in this context is not applicable to the typevars in each
+							// case block the rhsIdentifier.Def has different scope
+							// TODO(jchaloup): find a different way to state the position of the rhsIdentifier
+							Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
+						}
+						sp.SymbolTable.AddVariable(sDef)
+						sp.Config.ContractTable.AddContract(&contracts.PropagatesTo{
+							X:   typevars.MakeConstant(sp.Config.PackageName, rhsType),
+							Y:   typevars.VariableFromSymbolDef(sDef),
+							Pos: fmt.Sprintf("%v:%v", sp.Config.FileName, caseStmt.Pos()),
+						})
+					}
 				}
 			}
 
@@ -1320,7 +1336,7 @@ func (sp *Parser) parseTypeSwitchStmt(statement *ast.TypeSwitchStmt) error {
 
 			return nil
 		}(); err != nil {
-			return nil
+			return err
 		}
 	}
 
