@@ -11,8 +11,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
 	"github.com/gofed/symbols-extractor/pkg/parser"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
+	contractglobal "github.com/gofed/symbols-extractor/pkg/parser/contracts/global"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/gofed/symbols-extractor/pkg/snapshots/glide"
 	"github.com/gofed/symbols-extractor/pkg/snapshots/godeps"
@@ -64,7 +66,7 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 	}
 }
 
-func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.Table, f *flags) error {
+func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.Table, contractTable *contractglobal.Table, f *flags) error {
 
 	pkg := *f.packagePath
 	perfile := *f.perfile
@@ -103,9 +105,27 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 			}
 			if !tt.FilterOut("github.com/coreos/etcd") {
 				packageAllocTables[p] = tt
+				// Get the dynamic allocations
+				ct, err := contractTable.Lookup(p)
+				if err != nil {
+					return err
+				}
+				r := runner.New(p, globalTable, allocTable, ct)
+				if err := r.Run(); err != nil {
+					return fmt.Errorf("Unable to evaluate contracts for %v: %v", p, err)
+				}
 			}
 		}
 	} else {
+		// Get the dynamic allocations
+		ct, err := contractTable.Lookup(pkg)
+		if err != nil {
+			return err
+		}
+		r := runner.New(pkg, globalTable, allocTable, ct)
+		if err := r.Run(); err != nil {
+			return fmt.Errorf("Unable to evaluate contracts for %v: %v", pkg, err)
+		}
 		if perfile {
 			tt, err := allocTable.LookupPackage(pkg)
 			if err != nil {
@@ -124,6 +144,8 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 		}
 	}
 
+	// Collect dynamic allocations
+
 	if tojson {
 		byteSlice, err := json.Marshal(packageAllocTables)
 		if err != nil {
@@ -136,7 +158,12 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 	if perfile {
 		allocTable.Print(pkg, allallocated)
 	} else {
-		packageAllocTables[pkg][""].Print(allallocated)
+		for p, files := range packageAllocTables {
+			for file, t := range files {
+				fmt.Printf("file: %v\n", path.Join(p, file))
+				t.Print(allallocated)
+			}
+		}
 	}
 	return nil
 }
@@ -284,7 +311,7 @@ func main() {
 	}
 
 	if *(f.allocated) {
-		if err := printPackageAllocTables(p.GlobalAllocTable(), p.GlobalSymbolTable(), f); err != nil {
+		if err := printPackageAllocTables(p.GlobalAllocTable(), p.GlobalSymbolTable(), p.GlobalContractsTable(), f); err != nil {
 			fmt.Print(err)
 			os.Exit(1)
 		}

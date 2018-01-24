@@ -558,18 +558,6 @@ func (pp *ProjectParser) Parse(allocation bool) error {
 	// check if the requested package is already provided
 	if pp.packageProcessed(pp.packagePath) {
 		fmt.Fprintf(os.Stderr, "Package %q already processed\n", pp.packagePath)
-		// Collect dynamically allocated symbols (if requested)
-		if allocation {
-			contractTable, err := pp.globalContractsTable.Lookup(pp.packagePath)
-			if err != nil {
-				return err
-			}
-
-			r := runner.New(pp.packagePath, pp.globalSymbolTable, pp.globalAllocSymbolTable, contractTable)
-			if err := r.Run(); err != nil {
-				panic(err)
-			}
-		}
 		return nil
 	}
 
@@ -773,6 +761,10 @@ func (pp *ProjectParser) GlobalSymbolTable() *global.Table {
 
 func (pp *ProjectParser) GlobalAllocTable() *allocglobal.Table {
 	return pp.globalAllocSymbolTable
+}
+
+func (pp *ProjectParser) GlobalContractsTable() *contractglobal.Table {
+	return pp.globalContractsTable
 }
 
 func printDataType(dataType gotypes.DataType) {

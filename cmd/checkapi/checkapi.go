@@ -107,50 +107,57 @@ func initExercisedGlobaST(f *flags) (*global.Table, snapshots.Snapshot, error) {
 	return global.New(*(f.symbolTablePath), *(f.goVersion), snapshot), snapshot, nil
 }
 
-type Triplet struct {
-	Parent, Name string
-	Pos          []string
+type SymbolInfo struct {
+	Package string
+	Parent  string
+	Name    string
+	Pos     []string
 }
 
-type Duplet struct {
-	Name string
-	Pos  []string
+func (s *SymbolInfo) str() string {
+	if s.Parent == "" {
+		return fmt.Sprintf("%v.%v", s.Package, s.Name)
+	}
+	return fmt.Sprintf("%v.%v.%v", s.Package, s.Parent, s.Name)
 }
 
 type ApiDiff struct {
-	DatatypesMissing    []Duplet
-	Datatypes           []Duplet
-	FunctionsMissing    []Duplet
-	Functions           []Duplet
-	VariablesMissing    []Duplet
-	Variables           []Duplet
-	MethodsMissing      []Triplet
-	Methods             []Triplet
-	StructFieldsMissing []Triplet
-	StructFields        []Triplet
+	DatatypesMissing    []SymbolInfo
+	Datatypes           []SymbolInfo
+	FunctionsMissing    []SymbolInfo
+	Functions           []SymbolInfo
+	VariablesMissing    []SymbolInfo
+	Variables           []SymbolInfo
+	MethodsMissing      []SymbolInfo
+	Methods             []SymbolInfo
+	StructFieldsMissing []SymbolInfo
+	StructFields        []SymbolInfo
 }
+
+type ident struct {
+	pkg, name, field string
+}
+
+func (i ident) str() string {
+	if i.field == "" {
+		return fmt.Sprintf("%v.%v", i.pkg, i.name)
+	}
+	return fmt.Sprintf("%v.%v.%v", i.pkg, i.name, i.field)
+}
+
+type typeSymbols map[ident][]string
 
 func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix string, refGlobalST, exercisedGlobalST *global.Table) (*ApiDiff, error) {
 	apidiff := ApiDiff{}
 
-	refSTable, err := refGlobalST.Lookup(packagePrefix)
-	if err != nil {
-		return nil, err
-	}
-
-	exerSTable, err := exercisedGlobalST.Lookup(packagePrefix)
-	if err != nil {
-		return nil, err
-	}
-
 	refAccessor := accessors.NewAccessor(refGlobalST)
 	exerAccessor := accessors.NewAccessor(exercisedGlobalST)
 
-	dtNames := make(map[string][]string, 0)
-	fncNames := make(map[string][]string, 0)
-	varNames := make(map[string][]string, 0)
-	fieldNames := make(map[struct{ parent, field string }][]string, 0)
-	methodNames := make(map[struct{ parent, name string }][]string, 0)
+	dtNames := make(typeSymbols, 0)
+	fncNames := make(typeSymbols, 0)
+	varNames := make(typeSymbols, 0)
+	fieldNames := make(typeSymbols, 0)
+	methodNames := make(typeSymbols, 0)
 
 	for tablePkg, table := range tables {
 		for file, fileItem := range table {
@@ -161,49 +168,51 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 					continue
 				}
 
-				if pkg != packagePrefix {
+				if !strings.HasPrefix(pkg, packagePrefix) {
 					continue
 				}
 
 				glog.V(1).Infof("Processing %q\n", pkg)
 
-				// Just collect names without positions
 				// Datatypes
 				for _, item := range symbolsSet.Datatypes {
-					if _, ok := dtNames[item.Name]; ok {
-						dtNames[item.Name] = append(dtNames[item.Name], path.Join(fileItem.Package, item.Pos))
+					key := ident{pkg: pkg, name: item.Name}
+					if _, ok := dtNames[key]; ok {
+						dtNames[key] = append(dtNames[key], path.Join(fileItem.Package, item.Pos))
 						continue
 					}
 					if !ast.IsExported(item.Name) {
 						continue
 					}
-					dtNames[item.Name] = []string{path.Join(fileItem.Package, item.Pos)}
+					dtNames[key] = []string{path.Join(fileItem.Package, item.Pos)}
 				}
 				// Functions
 				for _, item := range symbolsSet.Functions {
-					if _, ok := fncNames[item.Name]; ok {
-						fncNames[item.Name] = append(fncNames[item.Name], path.Join(fileItem.Package, item.Pos))
+					key := ident{pkg: pkg, name: item.Name}
+					if _, ok := fncNames[key]; ok {
+						fncNames[key] = append(fncNames[key], path.Join(fileItem.Package, item.Pos))
 						continue
 					}
 					if !ast.IsExported(item.Name) {
 						continue
 					}
-					fncNames[item.Name] = []string{path.Join(fileItem.Package, item.Pos)}
+					fncNames[key] = []string{path.Join(fileItem.Package, item.Pos)}
 				}
 				// Variables
 				for _, item := range symbolsSet.Variables {
-					if _, ok := varNames[item.Name]; ok {
-						varNames[item.Name] = append(varNames[item.Name], path.Join(fileItem.Package, item.Pos))
+					key := ident{pkg: pkg, name: item.Name}
+					if _, ok := varNames[key]; ok {
+						varNames[key] = append(varNames[key], path.Join(fileItem.Package, item.Pos))
 						continue
 					}
 					if !ast.IsExported(item.Name) {
 						continue
 					}
-					varNames[item.Name] = []string{path.Join(fileItem.Package, item.Pos)}
+					varNames[key] = []string{path.Join(fileItem.Package, item.Pos)}
 				}
 				// Struct fields
 				for _, item := range symbolsSet.Structfields {
-					key := struct{ parent, field string }{item.Parent, item.Field}
+					key := ident{pkg: pkg, name: item.Parent, field: item.Field}
 					if _, ok := fieldNames[key]; ok {
 						fieldNames[key] = append(fieldNames[key], path.Join(fileItem.Package, item.Pos))
 						continue
@@ -218,7 +227,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 				}
 				// Methods
 				for _, item := range symbolsSet.Methods {
-					key := struct{ parent, name string }{item.Parent, item.Name}
+					key := ident{pkg: pkg, name: item.Parent, field: item.Name}
 					if _, ok := methodNames[key]; ok {
 						methodNames[key] = append(methodNames[key], path.Join(fileItem.Package, item.Pos))
 						continue
@@ -235,172 +244,250 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 		}
 	}
 
-	for name := range dtNames {
-		glog.V(1).Infof("Checking %q type", name)
-		refSDef, err := refSTable.LookupDataType(name)
+	for symbolItem, positions := range dtNames {
+		glog.V(1).Infof("Checking %q type", symbolItem.str())
+		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			return nil, fmt.Errorf("Type %q of %q package not found", name, packagePrefix)
+			return nil, err
+		}
+		refSDef, err := refSTable.LookupDataType(symbolItem.name)
+		if err != nil {
+			return nil, fmt.Errorf("Type %q of %q package not found", symbolItem.name, symbolItem.pkg)
 		}
 
-		exerSDef, err := exerSTable.LookupDataType(name)
+		exerSTable, err := exercisedGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			apidiff.DatatypesMissing = append(apidiff.DatatypesMissing, Duplet{
-				Name: name,
-				Pos:  dtNames[name],
+			apidiff.DatatypesMissing = append(apidiff.DatatypesMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
+			})
+			continue
+		}
+		exerSDef, err := exerSTable.LookupDataType(symbolItem.name)
+		if err != nil {
+			apidiff.DatatypesMissing = append(apidiff.DatatypesMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
 			})
 			continue
 		}
 
 		// Compare both symbols
 		if !reflect.DeepEqual(refSDef.Def, exerSDef.Def) {
-			apidiff.Datatypes = append(apidiff.Datatypes, Duplet{
-				Name: name,
-				Pos:  dtNames[name],
+			apidiff.Datatypes = append(apidiff.Datatypes, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
 			})
 		}
 	}
 
-	for name := range fncNames {
-		glog.V(1).Infof("Checking %q function", name)
-		refSDef, err := refSTable.LookupFunction(name)
+	for symbolItem, positions := range fncNames {
+		glog.V(1).Infof("Checking %q function", symbolItem.str())
+		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			return nil, fmt.Errorf("Function %q of %q package not found", name, packagePrefix)
+			return nil, err
+		}
+		refSDef, err := refSTable.LookupFunction(symbolItem.name)
+		if err != nil {
+			return nil, fmt.Errorf("Function %q of %q package not found", symbolItem.name, symbolItem.pkg)
 		}
 
-		exerSDef, err := exerSTable.LookupFunction(name)
+		exerSTable, err := exercisedGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			apidiff.FunctionsMissing = append(apidiff.FunctionsMissing, Duplet{
-				Name: name,
-				Pos:  fncNames[name],
+			apidiff.FunctionsMissing = append(apidiff.FunctionsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
+			})
+			continue
+		}
+		exerSDef, err := exerSTable.LookupFunction(symbolItem.name)
+		if err != nil {
+			apidiff.FunctionsMissing = append(apidiff.FunctionsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
 			})
 			continue
 		}
 
 		// Compare both symbols
 		if !reflect.DeepEqual(refSDef.Def, exerSDef.Def) {
-			apidiff.Functions = append(apidiff.Functions, Duplet{
-				Name: name,
-				Pos:  fncNames[name],
+			apidiff.Functions = append(apidiff.Functions, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
 			})
 		}
 	}
 
-	for name := range varNames {
-		glog.V(1).Infof("Checking %q variable", name)
-		refSDef, err := refSTable.LookupVariable(name)
+	for symbolItem, positions := range varNames {
+		glog.V(1).Infof("Checking %q variable", symbolItem.str())
+		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			return nil, fmt.Errorf("Variable %q of %q package not found", name, packagePrefix)
+			return nil, err
+		}
+		refSDef, err := refSTable.LookupVariable(symbolItem.name)
+		if err != nil {
+			return nil, fmt.Errorf("Type %q of %q package not found", symbolItem.name, symbolItem.pkg)
 		}
 
-		exerSDef, err := exerSTable.LookupVariable(name)
+		exerSTable, err := exercisedGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			apidiff.VariablesMissing = append(apidiff.VariablesMissing, Duplet{
-				Name: name,
-				Pos:  varNames[name],
+			apidiff.VariablesMissing = append(apidiff.VariablesMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
+			})
+			continue
+		}
+		exerSDef, err := exerSTable.LookupVariable(symbolItem.name)
+		if err != nil {
+			apidiff.VariablesMissing = append(apidiff.VariablesMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
 			})
 			continue
 		}
 
 		// Compare both symbols
 		if !reflect.DeepEqual(refSDef.Def, exerSDef.Def) {
-			apidiff.Variables = append(apidiff.Variables, Duplet{
-				Name: name,
-				Pos:  varNames[name],
+			apidiff.Variables = append(apidiff.Variables, SymbolInfo{
+				Package: symbolItem.pkg,
+				Name:    symbolItem.name,
+				Pos:     positions,
 			})
 		}
 	}
 
-	for item := range methodNames {
-		glog.V(1).Infof("Checking %q method", fmt.Sprintf("%v.%v", item.parent, item.name))
+	for symbolItem, positions := range methodNames {
+		glog.V(1).Infof("Checking %q method", symbolItem.str())
 
-		refSDef, err := refSTable.LookupDataType(item.parent)
+		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			return nil, fmt.Errorf("Type %q of %q package not found", item.parent, packagePrefix)
+			return nil, err
+		}
+		refSDef, err := refSTable.LookupDataType(symbolItem.name)
+		if err != nil {
+			return nil, fmt.Errorf("Method %q of %q package not found", symbolItem.name, symbolItem.pkg)
 		}
 
 		refMethodDef, err := refAccessor.RetrieveDataTypeField(
-			accessors.NewFieldAccessor(refSTable, refSDef, &ast.Ident{Name: item.name}),
+			accessors.NewFieldAccessor(refSTable, refSDef, &ast.Ident{Name: symbolItem.field}),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("Method %q of %q Type in %q package not found", item.name, item.parent, packagePrefix)
+			return nil, fmt.Errorf("Method %q of %q Type in %q package not found", symbolItem.field, symbolItem.name, symbolItem.pkg)
 		}
 
-		exerSDef, err := exerSTable.LookupDataType(item.parent)
+		exerSTable, err := exercisedGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			apidiff.MethodsMissing = append(apidiff.MethodsMissing, Triplet{
-				Parent: item.parent,
-				Name:   item.name,
-				Pos:    methodNames[item],
+			apidiff.MethodsMissing = append(apidiff.MethodsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
+			})
+			continue
+		}
+		exerSDef, err := exerSTable.LookupDataType(symbolItem.name)
+		if err != nil {
+			apidiff.MethodsMissing = append(apidiff.MethodsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
 			})
 			continue
 		}
 
 		exerMethodDef, err := exerAccessor.RetrieveDataTypeField(
-			accessors.NewFieldAccessor(exerSTable, exerSDef, &ast.Ident{Name: item.name}),
+			accessors.NewFieldAccessor(exerSTable, exerSDef, &ast.Ident{Name: symbolItem.field}),
 		)
 		if err != nil {
-			apidiff.MethodsMissing = append(apidiff.MethodsMissing, Triplet{
-				Parent: item.parent,
-				Name:   item.name,
-				Pos:    methodNames[item],
+			apidiff.MethodsMissing = append(apidiff.MethodsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
 			})
 			continue
 		}
 
 		// Compare both symbols
 		if !reflect.DeepEqual(refMethodDef.DataType, exerMethodDef.DataType) {
-			apidiff.Methods = append(apidiff.Methods, Triplet{
-				Parent: item.parent,
-				Name:   item.name,
-				Pos:    methodNames[item],
+			apidiff.Methods = append(apidiff.Methods, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
 			})
 		}
 	}
 
-	for item := range fieldNames {
-		glog.V(1).Infof("Checking %q field", fmt.Sprintf("%v.%v", item.parent, item.field))
+	for symbolItem, positions := range fieldNames {
+		glog.V(1).Infof("Checking %q field", symbolItem.str())
 
-		refSDef, err := refSTable.LookupDataType(item.parent)
+		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			return nil, fmt.Errorf("Type %q of %q package not found", item.parent, packagePrefix)
+			return nil, err
+		}
+		refSDef, err := refSTable.LookupDataType(symbolItem.name)
+		if err != nil {
+			return nil, fmt.Errorf("Method %q of %q package not found", symbolItem.name, symbolItem.pkg)
 		}
 
-		refFieldDef, err := refAccessor.RetrieveDataTypeField(
-			accessors.NewFieldAccessor(refSTable, refSDef, &ast.Ident{Name: item.field}),
+		refMethodDef, err := refAccessor.RetrieveDataTypeField(
+			accessors.NewFieldAccessor(refSTable, refSDef, &ast.Ident{Name: symbolItem.field}),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("Field %q of %q Type in %q package not found", item.field, item.parent, packagePrefix)
+			return nil, fmt.Errorf("Method %q of %q Type in %q package not found", symbolItem.field, symbolItem.name, symbolItem.pkg)
 		}
 
-		exerSDef, err := exerSTable.LookupDataType(item.parent)
+		exerSTable, err := exercisedGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
-			apidiff.StructFieldsMissing = append(apidiff.StructFieldsMissing, Triplet{
-				Parent: item.parent,
-				Name:   item.field,
-				Pos:    fieldNames[item],
+			apidiff.StructFieldsMissing = append(apidiff.StructFieldsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
+			})
+			continue
+		}
+		exerSDef, err := exerSTable.LookupDataType(symbolItem.name)
+		if err != nil {
+			apidiff.StructFieldsMissing = append(apidiff.StructFieldsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
 			})
 			continue
 		}
 
-		exerFieldDef, err := exerAccessor.RetrieveDataTypeField(
-			accessors.NewFieldAccessor(exerSTable, exerSDef, &ast.Ident{Name: item.field}),
+		exerMethodDef, err := exerAccessor.RetrieveDataTypeField(
+			accessors.NewFieldAccessor(exerSTable, exerSDef, &ast.Ident{Name: symbolItem.field}),
 		)
-
 		if err != nil {
-			apidiff.StructFieldsMissing = append(apidiff.StructFieldsMissing, Triplet{
-				Parent: item.parent,
-				Name:   item.field,
-				Pos:    fieldNames[item],
+			apidiff.StructFieldsMissing = append(apidiff.StructFieldsMissing, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
 			})
 			continue
 		}
 
 		// Compare both symbols
-		if !reflect.DeepEqual(refFieldDef.DataType, exerFieldDef.DataType) {
-			apidiff.StructFields = append(apidiff.StructFields, Triplet{
-				Parent: item.parent,
-				Name:   item.field,
-				Pos:    fieldNames[item],
+		if !reflect.DeepEqual(refMethodDef.DataType, exerMethodDef.DataType) {
+			apidiff.StructFields = append(apidiff.StructFields, SymbolInfo{
+				Package: symbolItem.pkg,
+				Parent:  symbolItem.name,
+				Name:    symbolItem.field,
+				Pos:     positions,
 			})
 		}
 	}
@@ -518,43 +605,43 @@ func main() {
 		// 	continue
 		// }
 
-		fmt.Printf("%v?type %q changed%v\n\tused at %v\n", CLR_B, item.Name, CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v?type %q changed%v\n\tused at %v\n", CLR_B, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.DatatypesMissing {
-		fmt.Printf("%v-type %q missing%v\n\tused at %v\n", CLR_R, item.Name, CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v-type %q missing%v\n\tused at %v\n", CLR_R, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.VariablesMissing {
-		fmt.Printf("%v-function %q missing%v\n\tused at %v\n", CLR_R, item.Name, CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v-function %q missing%v\n\tused at %v\n", CLR_R, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.Variables {
-		fmt.Printf("%v?function %q changed%v\n\tused at %v\n", CLR_B, item.Name, CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v?function %q changed%v\n\tused at %v\n", CLR_B, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.FunctionsMissing {
-		fmt.Printf("%v-function %q missing%v\n\tused at %v\n", CLR_R, item.Name, CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v-function %q missing%v\n\tused at %v\n", CLR_R, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.Functions {
-		fmt.Printf("%v?function %q changed%v\n\tused at %v\n", CLR_B, item.Name, CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v?function %q changed%v\n\tused at %v\n", CLR_B, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.StructFieldsMissing {
-		fmt.Printf("%v-field %q missing%v\n\tused at %v\n", CLR_R, fmt.Sprintf("%v.%v", item.Parent, item.Name), CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v-field %q missing%v\n\tused at %v\n", CLR_R, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.StructFields {
-		fmt.Printf("%v?field %q changed%v\n\tused at %v\n", CLR_B, fmt.Sprintf("%v.%v", item.Parent, item.Name), CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v?field %q changed%v\n\tused at %v\n", CLR_B, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.MethodsMissing {
-		fmt.Printf("%v-method %q missing%v\n\tused at %v\n", CLR_R, fmt.Sprintf("%v.%v", item.Parent, item.Name), CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v-method %q missing%v\n\tused at %v\n", CLR_R, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 	for _, item := range apidiff.Methods {
-		fmt.Printf("%v?method %q changed%v\n\tused at %v\n", CLR_B, fmt.Sprintf("%v.%v", item.Parent, item.Name), CLR_N, strings.Join(item.Pos, "\n\tused at "))
+		fmt.Printf("%v?method %q changed%v\n\tused at %v\n", CLR_B, item.str(), CLR_N, strings.Join(item.Pos, "\n\tused at "))
 	}
 
 }
