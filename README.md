@@ -1,8 +1,8 @@
-# symbols-extractor
+# Symbols extractor
 
 ![tTravis CI](https://api.travis-ci.org/gofed/symbols-extractor.svg?branch=master)
 
-STILL A DRAFT!!!
+STILL A DRAFT!!! STILL IN EXPERIMENTAL STATE!!!
 
 Extracted artefacts generated in the following directory hierarchy:
 
@@ -136,6 +136,8 @@ file: github.com/coreos/etcd/cmd/etcdctl
 	V: os.Stderr:                                 	1
 ==========================================================================
 ```
+
+
 
 #### API Compatibility detection
 
