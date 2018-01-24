@@ -10,6 +10,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
+	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	symbolsglobal "github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
@@ -1016,16 +1017,26 @@ func (r *Runner) Run() error {
 		if err != nil {
 			return err
 		}
-		sDef, _, sErr := st.Lookup(ev.Name)
+		sDef, sType, sErr := st.Lookup(ev.Name)
 		if sErr != nil {
 			return sErr
 		}
-		r.varTable.SetVariable(ev.String(), &varTableItem{
-			dataType:    sDef.Def,
-			packageName: ev.Package,
-			symbolTable: st,
-			entry:       true,
-		})
+
+		if sType == symbols.DataTypeSymbol {
+			r.varTable.SetVariable(ev.String(), &varTableItem{
+				dataType:    &gotypes.Identifier{Package: ev.Package, Def: ev.Name},
+				packageName: ev.Package,
+				symbolTable: st,
+				entry:       true,
+			})
+		} else {
+			r.varTable.SetVariable(ev.String(), &varTableItem{
+				dataType:    sDef.Def,
+				packageName: ev.Package,
+				symbolTable: st,
+				entry:       true,
+			})
+		}
 	}
 
 	ready, unready := r.splitContracts(newContractPayload(r.waitingContracts.contracts()))

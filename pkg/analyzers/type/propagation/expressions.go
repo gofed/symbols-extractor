@@ -53,6 +53,16 @@ func (xType *opr) equals(yType *opr) bool {
 		}
 	}
 
+	// x unchanged?
+	if xType.pkg == xType.oPkg && xType.id == xType.oId {
+		return yType.pkg == xType.pkg && yType.id == yType.id
+	}
+
+	// y unchanged?
+	if yType.pkg == yType.oPkg && yType.id == yType.oId {
+		return yType.pkg == xType.pkg && yType.id == yType.id
+	}
+
 	return xId == yId && xType.oPkg == yType.oPkg
 }
 
@@ -1068,7 +1078,7 @@ func (c *Config) binaryExprStrings(exprOp token.Token, xType, yType *opr, xDataT
 		return &gotypes.Builtin{Def: "bool", Untyped: true}, nil
 	}
 	// both operands are typed
-	if xType.oId == yType.oId && xType.oPkg == yType.oPkg {
+	if xType.equals(yType) {
 		if exprOp == token.ADD {
 			return &gotypes.Constant{Package: yType.oPkg, Def: yType.oId}, nil
 		}
@@ -1342,17 +1352,20 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 	// If the X expression is a qualified id, the selector is a symbol from a package pointed by the id
 	case *gotypes.Packagequalifier:
 		glog.V(2).Infof("Trying to retrieve a symbol %#v from package %v\n", item, xType.Path)
-		_, packageIdent, err := c.symbolsAccessor.RetrieveQid(xType, &ast.Ident{Name: item})
+		_, packageIdent, sType, err := c.symbolsAccessor.RetrieveQid(xType, &ast.Ident{Name: item})
 		if err != nil {
 			return nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", xType, err)
 		}
 		jsonMarshal("packageIdent", packageIdent)
-		// TODO(jchaloup): check if the packageIdent is a global variable, method, function or a data type
-		//                 based on that, use the corresponding Add method
-		//ep.AllocatedSymbolsTable.AddSymbol(xType.Path, item, "")
-		return &accessors.FieldAttribute{
-			DataType: packageIdent.Def,
-		}, nil
+		if sType == symbols.VariableSymbol {
+			return &accessors.FieldAttribute{
+				DataType: packageIdent.Def,
+			}, nil
+		} else {
+			return &accessors.FieldAttribute{
+				DataType: &gotypes.Identifier{Package: xType.Path, Def: item},
+			}, nil
+		}
 	case *gotypes.Pointer:
 		switch def := xType.Def.(type) {
 		case *gotypes.Identifier:
@@ -1401,6 +1414,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 				Def:     constant.Def,
 			}
 		}
+
 		// Get struct/interface definition given by its identifier
 		defSymbol, symbolTable, err := c.symbolsAccessor.LookupDataType(ident)
 		if err != nil {
@@ -1419,11 +1433,11 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 			return c.symbolsAccessor.RetrieveInterfaceMethod(symbolTable, defSymbol, item)
 		case *gotypes.Identifier:
 			return c.symbolsAccessor.RetrieveDataTypeField(
-				accessors.NewFieldAccessor(symbolTable, defSymbol, &ast.Ident{Name: item}).SetFieldsOnly().SetDropFieldsOnly(),
+				accessors.NewFieldAccessor(symbolTable, defSymbol, &ast.Ident{Name: item}),
 			)
 		case *gotypes.Selector:
 			return c.symbolsAccessor.RetrieveDataTypeField(
-				accessors.NewFieldAccessor(symbolTable, defSymbol, &ast.Ident{Name: item}).SetFieldsOnly().SetDropFieldsOnly(),
+				accessors.NewFieldAccessor(symbolTable, defSymbol, &ast.Ident{Name: item}),
 			)
 		default:
 			// check data types with receivers
@@ -1437,6 +1451,7 @@ func (c *Config) SelectorExpr(xDataType gotypes.DataType, item string) (*accesso
 				IsMethod: true,
 			}, nil
 		}
+
 	// anonymous struct
 	case *gotypes.Struct:
 		_, currentSt := c.symbolsAccessor.CurrentTable()

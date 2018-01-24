@@ -1082,21 +1082,32 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 				// not a value, and the value returned is a pointer to a newly
 				// allocated zero value of that type.
 				if len(expr.Args) != 1 {
-					return nil, fmt.Errorf("Len of new args != 1, it is %#v", expr.Args)
-				}
-				f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
-				ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
-					F:         f,
-					ArgsCount: 1,
-				})
+					// custom function?
+					if fnc, ok := funcDefAttr.DataTypeList[0].(*gotypes.Function); ok && fnc.Package == "builtin" {
+						return nil, fmt.Errorf("Len of new args != 1, it is %#v", expr.Args)
+					}
+				} else {
+					// is the argument really a data type?
+					isDT, err := ep.isDataType(expr.Args[0])
+					if err != nil {
+						return nil, err
+					}
+					if isDT {
+						f := typevars.MakeVar("builtin", ident.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+						ep.Config.ContractTable.AddContract(&contracts.IsInvocable{
+							F:         f,
+							ArgsCount: 1,
+						})
 
-				typeDef, err := ep.TypeParser.Parse(expr.Args[0])
-				return types.ExprAttributeFromDataType(
-					&gotypes.Pointer{Def: typeDef},
-				).AddTypeVar(
-					// TODO(jchaloup): set the right type's package
-					typevars.MakeConstant(ep.Config.PackageName, &gotypes.Pointer{Def: typeDef}),
-				), err
+						typeDef, err := ep.TypeParser.Parse(expr.Args[0])
+						return types.ExprAttributeFromDataType(
+							&gotypes.Pointer{Def: typeDef},
+						).AddTypeVar(
+							// TODO(jchaloup): set the right type's package
+							typevars.MakeConstant(ep.Config.PackageName, &gotypes.Pointer{Def: typeDef}),
+						), err
+					}
+				}
 			case "len":
 				// if the argument is array or a pointer to an array
 				// check if the len can be determined (in case then len is a constant).
@@ -1569,6 +1580,9 @@ func (ep *Parser) parseSelectorExpr(expr *ast.SelectorExpr) (*types.ExprAttribut
 			ep.AllocatedSymbolsTable.AddFunction(qid.Path, expr.Sel.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
 		case symbols.VariableSymbol:
 			ep.AllocatedSymbolsTable.AddVariable(qid.Path, expr.Sel.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
+		case symbols.DataTypeSymbol:
+			// in case of container.Isolation.IsDefault, the Isolation is a data type
+			ep.AllocatedSymbolsTable.AddDataType(qid.Path, expr.Sel.Name, fmt.Sprintf("%v:%v", ep.Config.FileName, expr.Pos()))
 		default:
 			fmt.Printf("symbolType: %v\n", symbolType)
 			panic("/O/")
