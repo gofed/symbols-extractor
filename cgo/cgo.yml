@@ -63,6 +63,40 @@ variables:
 - name: RTLD_LAZY
   type:
     constant: int
+- name: _SC_CLK_TCK
+  type:
+    constant: int
+- name: __TASKSTATS_CMD_MAX
+  type:
+    constant: int
+- name: nvmlHandle
+  type:
+    pointer:
+      identifier: C.void
+- name: NVML_GPU_UTILIZATION_SAMPLES
+  type:
+    constant: int
+- name: NVML_TOTAL_POWER_SAMPLES
+  type:
+    constant: int
+- name: NVML_SUCCESS
+  type:
+    constant: int
+- name: NVML_DEVICE_UUID_BUFFER_SIZE
+  type:
+    constant: int
+- name: NVML_DEVICE_NAME_BUFFER_SIZE
+  type:
+    constant: int
+- name: NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE
+  type:
+    constant: int
+- name: NVML_ERROR_LIBRARY_NOT_FOUND
+  type:
+    constant: int
+- name: _SC_NPROCESSORS_ONLN
+  type:
+    constant: int
 # no need to know definition of the data type, just its name
 types:
 - name: struct_sockaddr
@@ -77,6 +111,12 @@ types:
 - name: int
   type:
     identifier: C.int
+- name: ulonglong
+  type:
+    identifier: C.ulonglong
+- name: uint
+  type:
+    identifier: C.uint
 - name: struct_addrinfo
   type:
     struct:
@@ -124,6 +164,25 @@ types:
     - name: gr_name
       pointer:
         identifier: C.char
+- name: nvmlUtilization_t
+  type:
+    struct:
+    - name: gpu
+      identifier: C.uint
+    - name: memory
+      identifier: C.uint
+- name: nvmlMemory_t
+  type:
+    struct:
+    - name: total
+      identifier: C.ulonglong
+    - name: free
+      identifier: C.ulonglong
+    - name: used
+      identifier: C.ulonglong
+- name: nvmlReturn_t
+  type:
+    identifier: C.uint
 # ???
 functions:
 - name: getnameinfo
@@ -331,4 +390,106 @@ functions:
 - name: am_session_leader
   result:
   - identifier: C.int
-
+- name: nvmlDeviceGetAverageUsage
+  params:
+  - identifier: C.nvmlDevice_t
+  - identifier: C.nvmlSamplingType_t
+  - identifier: C.ulonglong
+  - pointer:
+      identifier: C.uint
+  result:
+  - identifier: C.nvmlReturn_t
+- name: nvmlDeviceGetPowerUsage
+  params:
+  - identifier: C.nvmlDevice_t
+  - pointer:
+      identifier: C.uint
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetUtilizationRates(nvmlDevice_t device, nvmlUtilization_t *utilization)
+- name: nvmlDeviceGetUtilizationRates
+  params:
+  - identifier: C.nvmlDevice_t
+  - pointer:
+      identifier: C.nvmlUtilization_t
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetMemoryInfo(nvmlDevice_t device, nvmlMemory_t *memory)
+- name: nvmlDeviceGetMemoryInfo
+  params:
+  - identifier: C.nvmlDevice_t
+  - pointer:
+      identifier: C.nvmlMemory_t
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetName(nvmlDevice_t device, char *name, unsigned int length)
+- name: nvmlDeviceGetName
+  params:
+  - identifier: C.nvmlDevice_t
+  - pointer:
+      identifier: C.char
+  - identifier: C.uint
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetUUID(nvmlDevice_t device, char *uuid, unsigned int length)
+- name: nvmlDeviceGetUUID
+  params:
+  - identifier: C.nvmlDevice_t
+  - pointer:
+      identifier: C.char
+  - identifier: C.uint
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int *minorNumber)
+- name: nvmlDeviceGetMinorNumber
+  params:
+  - identifier: C.nvmlDevice_t
+  - pointer:
+      identifier: C.uint
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetHandleByIndex(unsigned int index, nvmlDevice_t *device)
+- name: nvmlDeviceGetHandleByIndex
+  params:
+  - identifier: C.uint
+  - pointer:
+      identifier: C.nvmlDevice_t
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlDeviceGetCount(unsigned int *deviceCount)
+- name: nvmlDeviceGetCount
+  params:
+  - pointer:
+      identifier: C.uint
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlSystemGetDriverVersion(char *version, unsigned int length)
+- name: nvmlSystemGetDriverVersion
+  params:
+  - pointer:
+      identifier: C.char
+  - identifier: uint
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlShutdown_dl(void)
+- name: nvmlShutdown_dl
+  result:
+  - identifier: C.nvmlReturn_t
+# nvmlReturn_t nvmlInit_dl(void)
+- name: nvmlInit_dl
+  result:
+  - identifier: C.nvmlReturn_t
+# const char* nvmlErrorString(nvmlReturn_t result)
+- name: nvmlErrorString
+  params:
+  - identifier: C.nvmlReturn_t
+  result:
+  - pointer:
+      identifier: C.char
+# static int load_simple_bpf(int prog_type, int ret)
+- name: load_simple_bpf
+  params:
+  - identifier: C.int
+  - identifier: C.int
+  result:
+  - identifier: C.int
