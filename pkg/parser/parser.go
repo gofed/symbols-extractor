@@ -131,11 +131,11 @@ type ProjectParser struct {
 	packageStack []*PackageContext
 
 	goVersion string
+	allocated bool
 }
 
-func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string, snapshot snapshots.Snapshot) *ProjectParser {
-	return &ProjectParser{
-		packagePath:            packagePath,
+func New(symbolTableDir, cgoSymbolsPath, goVersion string, snapshot snapshots.Snapshot) (*ProjectParser, error) {
+	pp := &ProjectParser{
 		symbolTableDirectory:   symbolTableDir,
 		cgoSymbolsPath:         cgoSymbolsPath,
 		packageStack:           make([]*PackageContext, 0),
@@ -144,6 +144,15 @@ func New(packagePath, symbolTableDir, cgoSymbolsPath, goVersion string, snapshot
 		globalContractsTable:   contractglobal.New(symbolTableDir, goVersion, snapshot),
 		goVersion:              goVersion,
 	}
+
+	// set C pseudo-package
+	pp.cgoSymbolTable = tables.NewCGOTable()
+	pp.cgoSymbolTable.PackageQID = "C"
+	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable, false); err != nil {
+		return nil, fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
+	}
+
+	return pp, nil
 }
 
 func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) (missingImports []*gotypes.Packagequalifier) {
@@ -241,7 +250,7 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 		var searched []string
 		// First searched the vendor directories
 		pathParts := strings.Split(pp.packagePath, string(os.PathSeparator))
-		for i := len(pathParts) - 1; i >= 0; i-- {
+		for i := len(pathParts); i >= 0; i-- {
 			vendorpath := path.Join(path.Join(pathParts[:i]...), "vendor", packagePath)
 			glog.V(1).Infof("Checking %v directory", vendorpath)
 			if l, e := listGoFiles(vendorpath, false); e == nil {
@@ -539,14 +548,9 @@ func (pp *ProjectParser) packageProcessed(pkg string) bool {
 	return true
 }
 
-func (pp *ProjectParser) Parse(allocation bool) error {
-	// set C pseudo-package
-	// TODO(jchaloup): generate C.json from cgo.yaml and read it as any ordinary symbol table
-	pp.cgoSymbolTable = tables.NewCGOTable()
-	pp.cgoSymbolTable.PackageQID = "C"
-	if err := pp.globalSymbolTable.Add("C", pp.cgoSymbolTable, false); err != nil {
-		return fmt.Errorf("Unable to add C pseudo-package symbol table: %v", err)
-	}
+func (pp *ProjectParser) Parse(packagePath string, allocated bool) error {
+	pp.packagePath = packagePath
+	pp.allocated = allocated
 
 	// process builtin package first
 	if !pp.packageProcessed("builtin") {
@@ -733,11 +737,13 @@ PACKAGE_STACK:
 			panic(err)
 		}
 
-		// Evaluate contracts to collect remaining allocated symbols (so called dynamicly allocated symbols).
-		// The symbols are not stored as they depend on a specific dependency package commit
-		r := runner.New(p.Config.PackageName, pp.globalSymbolTable, pp.globalAllocSymbolTable, p.Config.ContractTable)
-		if err := r.Run(); err != nil {
-			panic(err)
+		if pp.allocated {
+			// Evaluate contracts to collect remaining allocated symbols (so called dynamicly allocated symbols).
+			// The symbols are not stored as they depend on a specific dependency package commit
+			r := runner.New(p.Config.PackageName, pp.globalSymbolTable, pp.globalAllocSymbolTable, p.Config.ContractTable)
+			if err := r.Run(); err != nil {
+				panic(err)
+			}
 		}
 
 		if err := pp.globalContractsTable.Save(p.PackagePath); err != nil {

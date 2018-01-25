@@ -68,7 +68,7 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 
 func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.Table, contractTable *contractglobal.Table, f *flags) error {
 
-	pkg := *f.packagePath
+	pkgs := strings.Split(*f.packagePath, ":")
 	perfile := *f.perfile
 	allallocated := *f.allallocated
 	tojson := *f.tojson
@@ -78,7 +78,7 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 	// collect all packages with a given prefix
 	if *f.recursiveFrom != "" {
 		processed := make(map[string]struct{})
-		toProcess := []string{pkg}
+		toProcess := pkgs
 		for len(toProcess) > 0 {
 			st, err := globalTable.Lookup(toProcess[0])
 			if err != nil {
@@ -117,30 +117,32 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 			}
 		}
 	} else {
-		// Get the dynamic allocations
-		ct, err := contractTable.Lookup(pkg)
-		if err != nil {
-			return err
-		}
-		r := runner.New(pkg, globalTable, allocTable, ct)
-		if err := r.Run(); err != nil {
-			return fmt.Errorf("Unable to evaluate contracts for %v: %v", pkg, err)
-		}
-		if perfile {
-			tt, err := allocTable.LookupPackage(pkg)
+		for _, pkg := range pkgs {
+			// Get the dynamic allocations
+			ct, err := contractTable.Lookup(pkg)
 			if err != nil {
 				return err
 			}
-			packageAllocTables[pkg] = tt
-		} else {
-			if _, err := allocTable.LookupPackage(pkg); err != nil {
-				return err
+			r := runner.New(pkg, globalTable, allocTable, ct)
+			if err := r.Run(); err != nil {
+				return fmt.Errorf("Unable to evaluate contracts for %v: %v", pkg, err)
 			}
-			tt, err := allocTable.MergeFiles(pkg)
-			if err != nil {
-				return err
+			if perfile {
+				tt, err := allocTable.LookupPackage(pkg)
+				if err != nil {
+					return err
+				}
+				packageAllocTables[pkg] = tt
+			} else {
+				if _, err := allocTable.LookupPackage(pkg); err != nil {
+					return err
+				}
+				tt, err := allocTable.MergeFiles(pkg)
+				if err != nil {
+					return err
+				}
+				packageAllocTables[pkg] = tt
 			}
-			packageAllocTables[pkg] = tt
 		}
 	}
 
@@ -156,7 +158,9 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 	}
 
 	if perfile {
-		allocTable.Print(pkg, allallocated)
+		for _, pkg := range pkgs {
+			allocTable.Print(pkg, allallocated)
+		}
 	} else {
 		for p, files := range packageAllocTables {
 			for file, t := range files {
@@ -268,8 +272,11 @@ func main() {
 
 		for _, pkg := range packages {
 			fmt.Printf("Parsing %q...\n", pkg)
-			p := parser.New(pkg, generatedDir, *(f.cgoSymbolsPath), goversion, nil)
-			if err := p.Parse(false); err != nil {
+			p, err := parser.New(generatedDir, *(f.cgoSymbolsPath), goversion, nil)
+			if err != nil {
+				panic(err)
+			}
+			if err := p.Parse(pkg, false); err != nil {
 				glog.Fatalf("Parse error when parsing (%v): %v", pkg, err)
 			}
 		}
@@ -305,9 +312,14 @@ func main() {
 		snapshot = sn
 	}
 
-	p := parser.New(*f.packagePath, *(f.symbolTablePath), *(f.cgoSymbolsPath), goversion, snapshot)
-	if err := p.Parse(*(f.allocated)); err != nil {
-		glog.Fatalf("Parse error: %v", err)
+	p, err := parser.New(*(f.symbolTablePath), *(f.cgoSymbolsPath), goversion, snapshot)
+	if err != nil {
+		panic(err)
+	}
+	for _, pkgPath := range strings.Split(*f.packagePath, ":") {
+		if err := p.Parse(pkgPath, *(f.allocated)); err != nil {
+			glog.Fatalf("Parse error: %v", err)
+		}
 	}
 
 	if *(f.allocated) {
