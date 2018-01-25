@@ -437,14 +437,14 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 		}
 		refSDef, err := refSTable.LookupDataType(symbolItem.name)
 		if err != nil {
-			return nil, fmt.Errorf("Method %q of %q package not found", symbolItem.name, symbolItem.pkg)
+			return nil, fmt.Errorf("Field %q of %q package not found", symbolItem.name, symbolItem.pkg)
 		}
 
 		refMethodDef, err := refAccessor.RetrieveDataTypeField(
 			accessors.NewFieldAccessor(refSTable, refSDef, &ast.Ident{Name: symbolItem.field}),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("Method %q of %q Type in %q package not found", symbolItem.field, symbolItem.name, symbolItem.pkg)
+			return nil, fmt.Errorf("Field %q of %q Type in %q package not found", symbolItem.field, symbolItem.name, symbolItem.pkg)
 		}
 
 		exerSTable, err := exercisedGlobalST.Lookup(symbolItem.pkg)
