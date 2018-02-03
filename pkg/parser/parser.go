@@ -28,6 +28,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
+	"github.com/gofed/symbols-extractor/pkg/util"
 	"github.com/golang/glog"
 )
 
@@ -182,40 +183,6 @@ func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) 
 	return
 }
 
-func skipGoFile(filename string) bool {
-	// http://blog.ralch.com/tutorial/golang-conditional-compilation/#file-suffixes
-	// *_GOOS // operation system
-	// *_GOARCH // platform architecture
-	// *_GOOS_GOARCH // both combined
-	// strip the *.go part
-	parts := strings.Split(strings.TrimSuffix(filename, ".go"), "_")
-	l := len(parts)
-	// GOOS or GOARCH
-	if _, ok := GOOS[parts[l-1]]; ok {
-		if parts[l-1] == "linux" {
-			return false
-		}
-		return true
-	}
-
-	if _, ok := GOARCH[parts[l-1]]; ok {
-		if l > 1 {
-			if _, ok := GOOS[parts[l-2]]; ok {
-				if parts[l-2] == "linux" && parts[l-1] == "amd64" {
-					return false
-				}
-				return true
-			}
-			if parts[l-1] == "amd64" {
-				return false
-			}
-		}
-		return true
-	}
-
-	return false
-}
-
 func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, packageLocation string, err error) {
 
 	listGoFiles := func(packagePath string, cgo bool) ([]string, error) {
@@ -302,7 +269,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 		SymbolTable: stack.New(),
 	}
 
-	files, path, err := pp.getPackageFiles(packagePath)
+	files, path, err := util.GetPackageFiles(pp.packagePath, packagePath)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to get %q package files: %v", packagePath, err)
 	}
@@ -561,7 +528,7 @@ func (pp *ProjectParser) Parse(packagePath string, allocated bool) error {
 
 	// check if the requested package is already provided
 	if pp.packageProcessed(pp.packagePath) {
-		fmt.Fprintf(os.Stderr, "Package %q already processed\n", pp.packagePath)
+		glog.V(1).Infof("Package %q already processed\n", pp.packagePath)
 		return nil
 	}
 

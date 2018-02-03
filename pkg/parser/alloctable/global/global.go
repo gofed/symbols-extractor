@@ -7,14 +7,11 @@ import (
 	"os"
 	"path"
 	"sort"
-	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/golang/glog"
 )
-
-type PackageTable map[string]*alloctable.Table
 
 // Table captures list of allocated symbols for each package and its files
 type Table struct {
@@ -51,7 +48,7 @@ func (t *Table) getPackagePath(pkg string) string {
 
 func (t *Table) Add(packagePath, file string, table *alloctable.Table) {
 	if _, ok := t.tables[packagePath]; !ok {
-		t.tables[packagePath] = make(PackageTable, 0)
+		t.tables[packagePath] = *NewPackageTable()
 	}
 
 	if _, ok := t.tables[packagePath][file]; !ok {
@@ -198,41 +195,6 @@ func (t *Table) Save(pkg string) error {
 	}
 
 	return nil
-}
-
-func (t *PackageTable) Load(file string) error {
-	raw, err := ioutil.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("Unable to load symbol table from %q: %v", file, err)
-	}
-
-	var table PackageTable
-	if err := json.Unmarshal(raw, &table); err != nil {
-		return fmt.Errorf("Unable to load symbol table from %q: %v", file, err)
-	}
-
-	*t = table
-	return nil
-}
-
-func (t *PackageTable) FilterOut(prefix string) bool {
-	emptyTable := true
-	for file, tab := range *t {
-		empty := true
-		for pkg := range tab.Symbols {
-			if !strings.HasPrefix(pkg, prefix) {
-				delete(tab.Symbols, pkg)
-				continue
-			}
-			empty = false
-		}
-		if empty {
-			delete(*t, file)
-			continue
-		}
-		emptyTable = false
-	}
-	return emptyTable
 }
 
 func (t *Table) loadFromFile(pkg string) (PackageTable, error) {

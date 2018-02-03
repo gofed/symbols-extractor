@@ -70,6 +70,30 @@ func newPackage() *Package {
 	}
 }
 
+func (allSt *Table) MergeWith(pt *Table) {
+	for pkg, symbolSet := range pt.Symbols {
+		if _, ok := allSt.Symbols[pkg]; ok {
+			for _, item := range symbolSet.Datatypes {
+				allSt.AddDataType(pkg, item.Name, item.Pos)
+			}
+			for _, item := range symbolSet.Functions {
+				allSt.AddFunction(pkg, item.Name, item.Pos)
+			}
+			for _, item := range symbolSet.Variables {
+				allSt.AddVariable(pkg, item.Name, item.Pos)
+			}
+			for _, item := range symbolSet.Structfields {
+				allSt.AddStructField(pkg, item.Parent, item.Field, item.Pos)
+			}
+			for _, item := range symbolSet.Methods {
+				allSt.AddStructField(pkg, item.Parent, item.Name, item.Pos)
+			}
+		} else {
+			allSt.Symbols[pkg] = symbolSet
+		}
+	}
+}
+
 func (allSt *Table) Lock() {
 	allSt.locked = true
 }
@@ -86,7 +110,7 @@ func (allSt *Table) AddDataType(pkg, name, pos string) {
 	}
 
 	k := toKey(name, pos)
-	if _, ok := items.Functions[k]; ok {
+	if _, ok := items.Datatypes[k]; ok {
 		return
 	}
 
