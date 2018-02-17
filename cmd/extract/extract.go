@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/snapshots/godeps"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
+	"github.com/gofed/symbols-extractor/pkg/util"
 	"github.com/golang/glog"
 )
 
@@ -317,57 +317,16 @@ func buildSnapshot(glidefile, godepsfile, packagePrefix string) (snapshots.Snaps
 	panic("glidefile or godepsfile must be nonempty")
 }
 
-func exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return true, err
-}
-
 func buildEntryPoints(packagePath string, library bool) ([]string, error) {
 	if library {
-		gopath := os.Getenv("GOPATH")
-		if gopath == "" {
-			return nil, fmt.Errorf("GOPATH not set")
-		}
-
-		var abspath, pathPrefix string
+		var entryPoints []string
 
 		for _, ep := range strings.Split(packagePath, ":") {
-			// first, find the absolute path
-			for _, gpath := range strings.Split(gopath, ":") {
-				abspath = path.Join(gpath, "src", ep)
-
-				if e, err := exists(abspath); err == nil && e {
-					pathPrefix = path.Join(gpath, "src")
-					break
-				}
+			pkgs, err := util.BuildPackageTree(ep, true, false, nil)
+			if err != nil {
+				return nil, err
 			}
-		}
-
-		pkgs := make(map[string]struct{})
-
-		visit := func(path string, info os.FileInfo, err error) error {
-			if !info.IsDir() {
-				if strings.HasSuffix(path, ".go") {
-					pkgs[filepath.Dir(path[len(pathPrefix)+1:])] = struct{}{}
-				}
-			}
-			return nil
-		}
-
-		err := filepath.Walk(abspath+"/", visit)
-		if err != nil {
-			return nil, err
-		}
-
-		var entryPoints []string
-		for p := range pkgs {
-			entryPoints = append(entryPoints, p)
+			entryPoints = append(entryPoints, pkgs...)
 		}
 
 		return entryPoints, nil

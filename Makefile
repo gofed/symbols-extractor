@@ -112,8 +112,11 @@ goenv:
 
 build:
 	$(RMLOG)
+	rm -f pkg/util/internal
+	ln -s $$GOROOT/src/cmd/go/internal/ pkg/util/internal
 	$(GO_BUILD) $(GO_BUILD_FLAGS) -o extract $(PROJECT_ROOT)/cmd/extract $(WLOG)
 	$(GO_BUILD) $(GO_BUILD_FLAGS) -o checkapi $(PROJECT_ROOT)/cmd/checkapi $(WLOG)
+	$(GO_BUILD) $(GO_BUILD_FLAGS) -o golist $(PROJECT_ROOT)/cmd/golist $(WLOG)
 
 test:
 	@ $(RMLOG)
