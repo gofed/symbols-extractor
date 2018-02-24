@@ -90,7 +90,7 @@ func main() {
 	if *f.ignoreDirs != "" {
 		for _, dir := range strings.Split(*f.ignoreDirs, ",") {
 			// skip all ignored dirs that are prefixes of the package-path
-			if strings.HasPrefix(*f.packagePath, dir) {
+			if strings.HasPrefix(*f.packagePath, dir) && *f.packagePath != dir {
 				continue
 			}
 			ignore.Dirs = append(ignore.Dirs, dir)
