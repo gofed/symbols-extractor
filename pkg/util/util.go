@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/gofed/symbols-extractor/pkg/util/internal/load"
@@ -78,57 +79,14 @@ func (ignore *Ignore) ignore(path string) bool {
 	return false
 }
 
-func collectPackageInfos(abspath, pathPrefix string, ignore *Ignore) (map[string]*load.PackagePublic, error) {
-	pkgs := make(map[string]*load.PackagePublic)
-
-	visit := func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			return nil
-		}
-
-		relPath := path[len(pathPrefix)+1:]
-		if strings.HasSuffix(relPath, "/") {
-			relPath = relPath[:len(relPath)-1]
-		}
-		// skip .git directory
-		if strings.HasSuffix(relPath, ".git") {
-			return filepath.SkipDir
-		}
-
-		// skip vendor directory
-		if strings.HasSuffix(relPath, "/vendor") {
-			return filepath.SkipDir
-		}
-
-		if ignore.ignore(relPath) {
-			return nil
-		}
-
-		pkgInfo, err := ListPackage(relPath)
-		if err != nil {
-			if strings.Contains(err.Error(), "no Go files in") {
-				return nil
-			}
-			// TODO(jchaloup): remove later
-			if strings.Contains(err.Error(), "build constraints exclude all Go files in") {
-				return nil
-			}
-			panic(err)
-			return nil
-		}
-		if len(pkgInfo.GoFiles) > 0 {
-			pkgs[relPath] = pkgInfo
-		}
-
-		return nil
-	}
-
-	err := filepath.Walk(abspath+"/", visit)
-	if err != nil {
-		return nil, err
-	}
-
-	return pkgs, nil
+type PackageInfoCollector struct {
+	packageInfos   map[string]*load.PackagePublic
+	mainFiles      map[string][]string
+	packagePath    string
+	ignore         *Ignore
+	extensions     []string
+	otherResources *OtherResources
+	isStdPackages  map[string]bool
 }
 
 type OtherResources struct {
@@ -138,20 +96,49 @@ type OtherResources struct {
 	Other      []string
 }
 
-func collectOtherResources(abspath, pathPrefix string, extensions []string, ignore *Ignore) (*OtherResources, error) {
-	otherResources := &OtherResources{}
+func NewPackageInfoCollector(ignore *Ignore, extensions []string) *PackageInfoCollector {
+	return &PackageInfoCollector{
+		packageInfos:  make(map[string]*load.PackagePublic),
+		mainFiles:     make(map[string][]string),
+		isStdPackages: make(map[string]bool),
+		ignore:        ignore,
+		extensions:    extensions,
+	}
+}
 
-	visit := func(path string, info os.FileInfo, err error) error {
+func (p *PackageInfoCollector) isStandard(pkg string) (bool, error) {
+	if is, exists := p.isStdPackages[pkg]; exists {
+		return is, nil
+	}
+	pkgInfo, err := ListPackage(pkg)
+	if err != nil {
+		return false, err
+	}
+
+	p.isStdPackages[pkg] = pkgInfo.Standard
+
+	return pkgInfo.Standard, nil
+}
+
+func (p *PackageInfoCollector) CollectPackageInfos(packagePath string) error {
+	abspath, pathPrefix, err := findPackageLocation(packagePath)
+	if err != nil {
+		return err
+	}
+
+	p.otherResources = &OtherResources{}
+
+	if err := filepath.Walk(abspath+"/", func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
-			for _, ext := range extensions {
+			for _, ext := range p.extensions {
 				if strings.HasSuffix(path, ext) {
 					switch ext {
 					case ".proto":
-						otherResources.ProtoFiles = append(otherResources.ProtoFiles, path)
+						p.otherResources.ProtoFiles = append(p.otherResources.ProtoFiles, path)
 					case ".md":
-						otherResources.MDFiles = append(otherResources.MDFiles, path)
+						p.otherResources.MDFiles = append(p.otherResources.MDFiles, path)
 					default:
-						otherResources.Other = append(otherResources.Other, path)
+						p.otherResources.Other = append(p.otherResources.Other, path)
 					}
 				}
 			}
@@ -172,35 +159,91 @@ func collectOtherResources(abspath, pathPrefix string, extensions []string, igno
 			return filepath.SkipDir
 		}
 
-		if ignore.ignore(relPath) {
+		if p.ignore.ignore(relPath) {
 			return nil
 		}
 
+		pkgInfo, err := ListPackage(relPath)
+		if err != nil {
+			if strings.Contains(err.Error(), "no Go files in") {
+				return nil
+			}
+			// TODO(jchaloup): remove later
+			if strings.Contains(err.Error(), "build constraints exclude all Go files in") {
+				return nil
+			}
+			panic(err)
+			return nil
+		}
+
+		if len(pkgInfo.GoFiles) > 0 || len(pkgInfo.CgoFiles) > 0 {
+			p.packageInfos[relPath] = pkgInfo
+		}
+
 		return nil
+	}); err != nil {
+		return err
 	}
 
-	err := filepath.Walk(abspath+"/", visit)
-	if err != nil {
-		return nil, err
-	}
-
-	return otherResources, nil
+	p.packagePath = packagePath
+	return nil
 }
 
-func CollectInstalledResources(packagePath string, extensions []string, ignore *Ignore) ([]string, error) {
-	abspath, pathPrefix, err := findPackageLocation(packagePath)
-	if err != nil {
+func (p *PackageInfoCollector) BuildArtifact() (*ProjectData, error) {
+	data := &ProjectData{}
+	var err error
+
+	// Get provided packages
+	if data.Packages, err = p.BuildPackageTree(false, false); err != nil {
 		return nil, err
 	}
+	sort.Strings(data.Packages)
 
-	pkgInfos, err := collectPackageInfos(abspath, pathPrefix, ignore)
-	if err != nil {
-		return nil, err
+	// Get imported packages
+	data.Dependencies = make(map[string][]string)
+	for pkgName, info := range p.packageInfos {
+		data.Dependencies[pkgName] = []string{}
+		for _, item := range info.Imports {
+			if pos := strings.LastIndex(item, "/vendor/"); pos != -1 {
+				item = item[pos+8:]
+			}
+			if is, _ := p.isStandard(item); !is {
+				data.Dependencies[pkgName] = append(data.Dependencies[pkgName], item)
+			}
+		}
 	}
 
+	// Get tests
+	data.Tests = make(map[string][]string)
+	for pkgName, pkgInfo := range p.packageInfos {
+		if len(pkgInfo.TestGoFiles) > 0 {
+			data.Tests[pkgName] = []string{}
+			for _, item := range pkgInfo.TestImports {
+				if is, _ := p.isStandard(item); !is {
+					data.Tests[pkgName] = append(data.Tests[pkgName], item)
+				}
+			}
+		}
+	}
+
+	// Get main files
+	data.MainFiles = make(map[string][]string)
+	for pkgName, item := range p.mainFiles {
+		data.MainFiles[pkgName] = []string{}
+		for _, dep := range item {
+			if is, _ := p.isStandard(dep); !is {
+				data.MainFiles[pkgName] = append(data.MainFiles[pkgName], dep)
+			}
+		}
+	}
+
+	return data, nil
+}
+
+func (p *PackageInfoCollector) CollectInstalledResources() ([]string, error) {
 	var resources []string
 
-	for _, info := range pkgInfos {
+	for _, info := range p.packageInfos {
 		resources = append(resources, info.Dir)
 		for _, file := range info.GoFiles {
 			resources = append(resources, path.Join(info.Dir, file))
@@ -244,41 +287,24 @@ func CollectInstalledResources(packagePath string, extensions []string, ignore *
 
 	}
 
-	otherResources, err := collectOtherResources(abspath, pathPrefix, extensions, ignore)
-	if err != nil {
-		return nil, err
+	if p.otherResources.ProtoFiles != nil {
+		resources = append(resources, p.otherResources.ProtoFiles...)
 	}
-
-	if otherResources != nil {
-		if otherResources.ProtoFiles != nil {
-			resources = append(resources, otherResources.ProtoFiles...)
-		}
-		if otherResources.MDFiles != nil {
-			resources = append(resources, otherResources.MDFiles...)
-		}
-		if otherResources.Other != nil {
-			resources = append(resources, otherResources.Other...)
-		}
+	if p.otherResources.MDFiles != nil {
+		resources = append(resources, p.otherResources.MDFiles...)
+	}
+	if p.otherResources.Other != nil {
+		resources = append(resources, p.otherResources.Other...)
 	}
 
 	return resources, nil
 }
 
-func CollectProjectDeps(packagePath string, standard bool, skipSelf bool, tests bool, ignore *Ignore) ([]string, error) {
-	abspath, pathPrefix, err := findPackageLocation(packagePath)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgInfos, err := collectPackageInfos(abspath, pathPrefix, ignore)
-	if err != nil {
-		return nil, err
-	}
-
+func (p *PackageInfoCollector) CollectProjectDeps(standard bool, skipSelf bool, tests bool) ([]string, error) {
 	imports := make(map[string]struct{})
 
 	if tests {
-		for _, info := range pkgInfos {
+		for _, info := range p.packageInfos {
 			for _, item := range info.TestImports {
 				if item == "C" {
 					continue
@@ -292,7 +318,7 @@ func CollectProjectDeps(packagePath string, standard bool, skipSelf bool, tests 
 			}
 		}
 	} else {
-		for _, info := range pkgInfos {
+		for _, info := range p.packageInfos {
 			for _, item := range info.Imports {
 				if item == "C" {
 					continue
@@ -310,11 +336,11 @@ func CollectProjectDeps(packagePath string, standard bool, skipSelf bool, tests 
 	var pkgs []string
 
 	for relPath := range imports {
-		if skipSelf && strings.HasPrefix(relPath, packagePath) {
+		if skipSelf && strings.HasPrefix(relPath, p.packagePath) {
 			continue
 		}
 
-		if ignore.ignore(relPath) {
+		if p.ignore.ignore(relPath) {
 			continue
 		}
 
@@ -330,27 +356,17 @@ func CollectProjectDeps(packagePath string, standard bool, skipSelf bool, tests 
 	return pkgs, nil
 }
 
-func BuildPackageTree(packagePath string, includeMain bool, tests bool, ignore *Ignore) ([]string, error) {
+func (p *PackageInfoCollector) BuildPackageTree(includeMain bool, tests bool) ([]string, error) {
 	// TODO(jchaloup): strip all main package unless explicitely requested
-	abspath, pathPrefix, err := findPackageLocation(packagePath)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgInfos, err := collectPackageInfos(abspath, pathPrefix, ignore)
-	if err != nil {
-		return nil, err
-	}
-
 	var entryPoints []string
 	if tests {
-		for p, pkgInfo := range pkgInfos {
+		for p, pkgInfo := range p.packageInfos {
 			if len(pkgInfo.TestGoFiles) > 0 {
 				entryPoints = append(entryPoints, p)
 			}
 		}
 	} else {
-		for p, pkgInfo := range pkgInfos {
+		for pkgName, pkgInfo := range p.packageInfos {
 			// check package name of each file
 			var nonMainFiles []string
 			files := pkgInfo.GoFiles
@@ -360,13 +376,21 @@ func BuildPackageTree(packagePath string, includeMain bool, tests bool, ignore *
 				if err != nil {
 					return nil, err
 				}
+				if f.Name.Name == "main" && file != "doc.go" {
+					importsList := make([]string, 0)
+					for _, i := range f.Imports {
+						importsList = append(importsList, i.Path.Value[1:len(i.Path.Value)-1])
+					}
+					p.mainFiles[path.Join(pkgInfo.ImportPath, file)] = importsList
+				}
+
 				if !includeMain && f.Name.Name == "main" {
 					continue
 				}
 				nonMainFiles = append(nonMainFiles, file)
 			}
 			if len(nonMainFiles) > 0 {
-				entryPoints = append(entryPoints, p)
+				entryPoints = append(entryPoints, pkgName)
 			}
 		}
 	}
@@ -474,4 +498,11 @@ func GetPackageFiles(packageRoot, packagePath string) (files []string, packageLo
 	}
 
 	return files, packageLocation, nil
+}
+
+type ProjectData struct {
+	Packages     []string            `json:"packages"`
+	Dependencies map[string][]string `json:"dependencies"`
+	Tests        map[string][]string `json:"tests"`
+	MainFiles    map[string][]string `json:"main"`
 }

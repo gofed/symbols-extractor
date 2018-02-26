@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -35,6 +36,8 @@ type flags struct {
 	ignoreTrees *string
 	ignoreDirs  *string
 	ignoreRegex *string
+	// Display as JSON artefact
+	json *bool
 }
 
 func buildFlags() *flags {
@@ -51,6 +54,7 @@ func buildFlags() *flags {
 		ignoreRegex: flag.String("ignore-regex", "", "Directories to ignore specified by a regex"),
 		toinstall:   flag.Bool("to-install", false, "List all resources recognized as essential part of the Go project"),
 		extensions:  flag.String("with-extensions", "", "Include all files with the extensions in the recognized resources, e.g. *.proto,*.tmpl"),
+		json:        flag.Bool("json", false, "Output as JSON artefact"),
 	}
 }
 
@@ -61,8 +65,8 @@ func (f *flags) parse() error {
 		return fmt.Errorf("--package-path is not set")
 	}
 
-	if !*f.provided && !*f.imported && !*f.toinstall {
-		return fmt.Errorf("At least one of --provided, --imported or --to-install must be set")
+	if !*f.provided && !*f.imported && !*f.toinstall && !*f.json {
+		return fmt.Errorf("At least one of --provided, --imported, --to-install or --json must be set")
 	}
 
 	return nil
@@ -101,8 +105,29 @@ func main() {
 		ignore.Regex = regexp.MustCompile(*f.ignoreRegex)
 	}
 
+	var exts []string
+	for _, item := range strings.Split(*f.extensions, ",") {
+		if item != "" {
+			exts = append(exts, item)
+		}
+	}
+
+	c := util.NewPackageInfoCollector(ignore, exts)
+	if err := c.CollectPackageInfos(*f.packagePath); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	if *f.json {
+		// Collect everything
+		artifact, _ := c.BuildArtifact()
+		str, _ := json.Marshal(artifact)
+		fmt.Printf("%v\n", string(str))
+		return
+	}
+
 	if *f.provided {
-		pkgs, err := util.BuildPackageTree(*f.packagePath, *f.showMain, *f.tests, ignore)
+		pkgs, err := c.BuildPackageTree(*f.showMain, *f.tests)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
@@ -115,7 +140,7 @@ func main() {
 	}
 
 	if *f.imported {
-		pkgs, err := util.CollectProjectDeps(*f.packagePath, *f.allDeps, *f.skipSelf, *f.tests, ignore)
+		pkgs, err := c.CollectProjectDeps(*f.allDeps, *f.skipSelf, *f.tests)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
@@ -127,13 +152,7 @@ func main() {
 	}
 
 	if *f.toinstall {
-		var exts []string
-		for _, item := range strings.Split(*f.extensions, ",") {
-			if item != "" {
-				exts = append(exts, item)
-			}
-		}
-		pkgs, err := util.CollectInstalledResources(*f.packagePath, exts, ignore)
+		pkgs, err := c.CollectInstalledResources()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
