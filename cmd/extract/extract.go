@@ -322,7 +322,12 @@ func buildEntryPoints(packagePath string, library bool) ([]string, error) {
 		var entryPoints []string
 
 		for _, ep := range strings.Split(packagePath, ":") {
-			pkgs, err := util.BuildPackageTree(ep, true, false, nil)
+			c := util.NewPackageInfoCollector(nil, nil)
+			if err := c.CollectPackageInfos(ep); err != nil {
+				return nil, err
+			}
+
+			pkgs, err := c.BuildPackageTree(true, false)
 			if err != nil {
 				return nil, err
 			}
