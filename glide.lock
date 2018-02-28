@@ -7,4 +7,6 @@ imports:
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: github.com/shopspring/decimal
   version: 9ca7f51822d222ae4e246f070f9aad863599bd1a
+- name: github.com/urfave/cli
+  version: 1efa31f08b9333f1bd4882d61f9d668a70cd902e
 testImports: []

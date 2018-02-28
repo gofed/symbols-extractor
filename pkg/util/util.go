@@ -55,14 +55,16 @@ func findPackageLocation(packagePath string) (string, string, error) {
 
 // Ignore specifies a set of resources to ignore
 type Ignore struct {
-	Dirs  []string
-	Trees []string
-	Regex *regexp.Regexp
+	Dirs    []string
+	Trees   []string
+	Regexes []*regexp.Regexp
 }
 
 func (ignore *Ignore) ignore(path string) bool {
-	if ignore.Regex != nil && ignore.Regex.MatchString(path) {
-		return true
+	for _, re := range ignore.Regexes {
+		if re.MatchString(path) {
+			return true
+		}
 	}
 
 	for _, dir := range ignore.Trees {
