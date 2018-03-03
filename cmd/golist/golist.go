@@ -33,7 +33,7 @@ func main() {
 		cli.BoolFlag{"tests", "Apply the listing options over tests", "", nil, false},
 		cli.BoolFlag{"show-main", "Including main files in listings", "", nil, false},
 		cli.BoolFlag{"to-install", "List all resources recognized as essential part of the Go project", "", nil, false},
-		cli.StringSliceFlag{"extension, e", nil, "Include all files with the extension in the recognized resources, e.g. .proto, .tmpl", "", false},
+		cli.StringSliceFlag{"include-extension, e", nil, "Include all files with the extension in the recognized resources, e.g. .proto, .tmpl", "", false},
 		cli.BoolFlag{"json", "Output as JSON artefact", "", nil, false},
 	}
 
@@ -69,7 +69,7 @@ func main() {
 			ignore.Regexes = append(ignore.Regexes, regexp.MustCompile(dir))
 		}
 
-		collector := util.NewPackageInfoCollector(ignore, c.StringSlice("extension"))
+		collector := util.NewPackageInfoCollector(ignore, c.StringSlice("include-extension"))
 		if err := collector.CollectPackageInfos(c.String("package-path")); err != nil {
 			return err
 
