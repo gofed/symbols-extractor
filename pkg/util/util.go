@@ -132,6 +132,12 @@ func (p *PackageInfoCollector) CollectPackageInfos(packagePath string) error {
 
 	if err := filepath.Walk(abspath+"/", func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
+			// Cited from https://golang.org/cmd/go/#hdr-Package_lists:
+			//   Directory and file names that begin with "." or "_" are ignored
+			//   by the go tool, as are directories named "testdata".
+			if base := filepath.Base(path); base[0] == '.' || base[0] == '_' {
+				return nil
+			}
 			for _, ext := range p.extensions {
 				if strings.HasSuffix(path, ext) {
 					switch ext {
@@ -151,13 +157,11 @@ func (p *PackageInfoCollector) CollectPackageInfos(packagePath string) error {
 		if strings.HasSuffix(relPath, "/") {
 			relPath = relPath[:len(relPath)-1]
 		}
-		// skip .git directory
-		if strings.HasSuffix(relPath, ".git") {
-			return filepath.SkipDir
-		}
 
-		// skip vendor directory
-		if strings.HasSuffix(relPath, "/vendor") {
+		// Cited from https://golang.org/cmd/go/#hdr-Package_lists:
+		//   Directory and file names that begin with "." or "_" are ignored
+		//   by the go tool, as are directories named "testdata".
+		if base := filepath.Base(relPath); base[0] == '.' || base[0] == '_' || base == "testdata" || base == "vendor" {
 			return filepath.SkipDir
 		}
 
