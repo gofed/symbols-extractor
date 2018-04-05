@@ -139,6 +139,9 @@ func (p *PackageInfoCollector) CollectPackageInfos(packagePath string) error {
 				return nil
 			}
 			for _, ext := range p.extensions {
+				if ext[0] != '.' {
+					ext = "." + ext
+				}
 				if strings.HasSuffix(path, ext) {
 					switch ext {
 					case ".proto":
