@@ -406,8 +406,7 @@ func (p *PackageInfoCollector) BuildPackageTree(includeMain bool, tests bool) ([
 
 func ListPackage(path string) (*load.PackagePublic, error) {
 	// TODO(jchaloup): more things need to be init most likely
-	work.BuildModeInit()
-
+	work.BuildInit()
 	d := load.PackagesAndErrors([]string{path})
 	if d == nil {
 		return nil, fmt.Errorf("No package listing found for %v", path)
