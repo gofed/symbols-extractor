@@ -97,6 +97,9 @@ variables:
 - name: _SC_NPROCESSORS_ONLN
   type:
     constant: int
+- name: O_RDWR
+  type:
+    constant: int
 # no need to know definition of the data type, just its name
 types:
 - name: struct_sockaddr
@@ -493,3 +496,34 @@ functions:
   - identifier: C.int
   result:
   - identifier: C.int
+- name: posix_openpt
+  params:
+  - identifier: C.int
+  result:
+  - identifier: C.int
+# int grantpt(int fd);
+- name: grantpt
+  params:
+  - identifier: C.int
+  result:
+  - identifier: C.int
+# int close(int fildes);
+- name: close
+  params:
+  - identifier: C.int
+  result:
+  - identifier: C.int
+# int unlockpt(int fd);
+- name: unlockpt
+  params:
+  - identifier: C.int
+  result:
+  - identifier: C.int
+# char *ptsname(int fd);
+- name: ptsname
+  params:
+  - identifier: C.int
+  result:
+  - pointer:
+      identifier: C.char
+

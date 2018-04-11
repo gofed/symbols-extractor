@@ -379,6 +379,34 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 	}
 	glog.V(2).Infof("nonIdentLitTypeDef: %#v", nonIdentLitTypeDef)
 
+	// In case the selector is a qid to C package
+	// os/user/cgo_lookup_unix.go:
+	// 275: sp := C.struct_passwd{}
+	if selector, ok := nonIdentLitTypeDef.(*gotypes.Selector); ok {
+		// get symbol definition
+		qid, ok := selector.Prefix.(*gotypes.Packagequalifier)
+		if !ok {
+			// TODO(jchaloup): we should return error but the code is still in an experimental state, so ...
+			panic(fmt.Errorf("Unsupported CL type: %#v, Prefix expected to be Packagequalifier, got %#v instead", nonIdentLitTypeDef, selector.Prefix))
+		}
+		if qid.Name != "C" {
+			panic(fmt.Errorf("Unsupported CL type: %#v, Prefix expected to be a C package, got %#v instead", nonIdentLitTypeDef, qid.Name))
+		}
+		// check if the definition is CL
+		cTable, err := ep.GlobalSymbolTable.Lookup("C")
+		if err != nil {
+			panic(fmt.Errorf("C global symbol table not found: %v", err))
+		}
+		fmt.Printf("item: %#v\n", qid)
+		def, err := cTable.LookupDataType(selector.Item)
+		if err != nil {
+			panic(fmt.Errorf("C symbol %v not found: %v", selector.Item, err))
+		}
+		fmt.Printf("def: %#v\n", def)
+		nonIdentLitTypeDef = def.Def
+		glog.V(2).Infof("nonIdentLitTypeDef -> %#v", nonIdentLitTypeDef)
+	}
+
 	// If the CL type is anonymous struct, array, slice or map don't store fields into the allocated symbols table (AST)
 	var typeVar typevars.Interface
 	switch litTypeExpr := nonIdentLitTypeDef.(type) {
@@ -404,6 +432,7 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 			return nil, err
 		}
 	default:
+		// TODO(jchaloup): we should return error but the code is still in an experimental state, so ...
 		panic(fmt.Errorf("Unsupported CL type: %#v", nonIdentLitTypeDef))
 	}
 
