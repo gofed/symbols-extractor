@@ -15,6 +15,9 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/util/internal/load"
 	"github.com/gofed/symbols-extractor/pkg/util/internal/work"
 	"github.com/golang/glog"
+
+	// initialize the load.ModInit function
+	"github.com/gofed/symbols-extractor/pkg/util/internal/modload"
 )
 
 func exists(path string) (bool, error) {
@@ -61,6 +64,9 @@ type Ignore struct {
 }
 
 func (ignore *Ignore) ignore(path string) bool {
+	if ignore == nil {
+		return false
+	}
 	for _, re := range ignore.Regexes {
 		if re.MatchString(path) {
 			return true
@@ -410,6 +416,7 @@ func (p *PackageInfoCollector) BuildPackageTree(includeMain bool, tests bool) ([
 func ListPackage(path string) (*load.PackagePublic, error) {
 	// TODO(jchaloup): more things need to be init most likely
 	work.BuildInit()
+	load.ModInit = modload.Init
 	d := load.PackagesAndErrors([]string{path})
 	if d == nil {
 		return nil, fmt.Errorf("No package listing found for %v", path)
@@ -420,8 +427,8 @@ func ListPackage(path string) (*load.PackagePublic, error) {
 		return nil, pkg.Error
 	}
 	// Show vendor-expanded paths in listing
-	pkg.TestImports = pkg.Vendored(pkg.TestImports)
-	pkg.XTestImports = pkg.Vendored(pkg.XTestImports)
+	pkg.TestImports = pkg.Resolve(pkg.TestImports)
+	pkg.XTestImports = pkg.Resolve(pkg.XTestImports)
 	return &pkg.PackagePublic, nil
 }
 
@@ -467,6 +474,7 @@ func GetPackageFiles(packageRoot, packagePath string) (files []string, packageLo
 			vendorpath := path.Join(path.Join(pathParts[:i]...), "vendor", packagePath)
 			glog.V(1).Infof("Checking %v directory", vendorpath)
 			if l, e := ListGoFiles(vendorpath, false); e == nil {
+				glog.V(1).Infof("Found %v directory", vendorpath)
 				return l, vendorpath, e
 			}
 			searched = append(searched, vendorpath)
@@ -474,6 +482,7 @@ func GetPackageFiles(packageRoot, packagePath string) (files []string, packageLo
 
 		glog.V(1).Infof("Checking %v directory", packagePath)
 		if l, e := ListGoFiles(packagePath, false); e == nil {
+			glog.V(1).Infof("Found %v directory", packagePath)
 			return l, packagePath, e
 		}
 		searched = append(searched, packagePath)
