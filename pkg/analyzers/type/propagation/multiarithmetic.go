@@ -312,8 +312,9 @@ func checkIntegerRanges(x *decimal.Decimal, targetType string) error {
 	switch targetType {
 	case "int":
 		// TODO(jchaloup): the architecture must be input of the processing
-		top = decimal.NewFromFloat(math.MaxInt32)
-		bottom = decimal.NewFromFloat(math.MinInt32)
+		// for some reason the NewFromFloat creates negative float64 number
+		top, _ = decimal.NewFromString(fmt.Sprintf("%v", math.MaxInt64))
+		bottom = decimal.NewFromFloat(math.MinInt64)
 	case "int8":
 		top = decimal.NewFromFloat(math.MaxInt8)
 		bottom = decimal.NewFromFloat(math.MinInt8)
@@ -329,7 +330,7 @@ func checkIntegerRanges(x *decimal.Decimal, targetType string) error {
 		bottom = decimal.NewFromFloat(math.MinInt64)
 	case "uint":
 		// TODO(jchaloup): the architecture must be input of the processing
-		top = decimal.NewFromFloat(math.MaxUint32)
+		top = decimal.NewFromFloat(math.MaxUint64)
 		bottom = decimal.NewFromFloat(0)
 	case "uint8":
 		top = decimal.NewFromFloat(math.MaxUint8)
