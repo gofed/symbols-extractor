@@ -83,3 +83,31 @@ func TestSelfTypePropagation(t *testing.T) {
 		},
 	)
 }
+
+func TestShiftRightTypePropagation(t *testing.T) {
+	gopkg := "github.com/gofed/symbols-extractor/tests/integration/typepropagation/type_casting"
+
+	makeVirtual := func(idx int, dataType gotypes.DataType) cutils.VarTableTest {
+		return cutils.VarTableTest{
+			Name:     typevars.MakeVirtualVar(idx).String(),
+			DataType: dataType,
+		}
+	}
+
+	cutils.ParseAndCompareVarTable(
+		t,
+		gopkg,
+		"../../testdata/shiftright.go",
+		[]cutils.VarTableTest{
+			cutils.VarTableTest{
+				Name:     typevars.MakeLocalVar("j", ":49").String(),
+				DataType: &gotypes.Identifier{Def: "int", Package: "builtin"},
+			},
+
+			makeVirtual(1, &gotypes.Builtin{Untyped: true, Def: "bool", Literal: ""}),
+			makeVirtual(2, &gotypes.Constant{Package: "builtin", Untyped: false, Def: "uint64", Literal: "2"}),
+			makeVirtual(3, &gotypes.Identifier{Package: "builtin", Def: "uint64"}),
+			makeVirtual(4, &gotypes.Identifier{Package: "builtin", Def: "uint8"}),
+		},
+	)
+}
