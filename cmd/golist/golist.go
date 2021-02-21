@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gofed/symbols-extractor/pkg/util"
+	util "github.com/gofed/symbols-extractor/cmd/go"
 	"github.com/urfave/cli"
 )
 

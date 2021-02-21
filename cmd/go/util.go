@@ -12,12 +12,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gofed/symbols-extractor/pkg/util/internal/load"
-	"github.com/gofed/symbols-extractor/pkg/util/internal/work"
+	"github.com/gofed/symbols-extractor/cmd/go/internal/load"
+	"github.com/gofed/symbols-extractor/cmd/go/internal/work"
 	"github.com/golang/glog"
 
 	// initialize the load.ModInit function
-	"github.com/gofed/symbols-extractor/pkg/util/internal/modload"
+	"github.com/gofed/symbols-extractor/cmd/go/internal/modload"
 )
 
 func exists(path string) (bool, error) {

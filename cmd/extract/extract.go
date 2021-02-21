@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	util "github.com/gofed/symbols-extractor/cmd/go"
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/runner"
 	"github.com/gofed/symbols-extractor/pkg/parser"
 	allocglobal "github.com/gofed/symbols-extractor/pkg/parser/alloctable/global"
@@ -20,7 +21,6 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/snapshots/godeps"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
-	"github.com/gofed/symbols-extractor/pkg/util"
 	"github.com/golang/glog"
 )
 
