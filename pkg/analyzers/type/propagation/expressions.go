@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"strconv"
 
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/compatibility"
 	"github.com/gofed/symbols-extractor/pkg/symbols"
@@ -542,8 +543,8 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 		if !c.isCompatibleWithInt(xType, xDataType) {
 			return nil, fmt.Errorf("The first operand %v of %v is not int", xDataType, exprOp)
 		}
-		if !c.isCompatibleWithUint(yType, yDataType) {
-			return nil, fmt.Errorf("The second operand %v of %v is not uint", yDataType, exprOp)
+		if !c.isCompatibleWithUint(yType, yDataType) && !c.isCompatibleWithInt(yType, yDataType) {
+			return nil, fmt.Errorf("The second operand %v of %v is not uint nor with int (runtime panic if negative)", yDataType, exprOp)
 		}
 		if xDataType.GetType() == gotypes.ConstantType && yDataType.GetType() == gotypes.ConstantType {
 			var targetType *opr
@@ -1329,7 +1330,88 @@ func (c *Config) UnaryExpr(exprOp token.Token, xDataType gotypes.DataType) (goty
 		}
 		// TODO(jchaloup): implement the remaining variants
 		return xDataType, nil
-	case token.XOR, token.OR, token.NOT, token.ADD:
+	case token.XOR:
+		var yDataType gotypes.DataType
+		// assuming the data type is alway typed (^ needs to know the type to flip the right number of bits), e.g. ^uintptr(0)
+		if xDataType.GetType() == gotypes.ConstantType {
+			underlyingDataType, err := c.symbolsAccessor.ResolveToUnderlyingType(xDataType)
+			if err != nil {
+				return nil, fmt.Errorf("unable to resolve underlying type for %#v: %v", xDataType, err)
+			}
+
+			underlyingTargetType := "int"
+			switch underlyingDataType.Def.GetType() {
+			case gotypes.BuiltinType:
+				underlyingTargetType = underlyingDataType.Def.(*gotypes.Builtin).Def
+			case gotypes.IdentifierType:
+				underlyingTargetType = underlyingDataType.Def.(*gotypes.Identifier).Def
+			}
+
+			constant := xDataType.(*gotypes.Constant)
+
+			switch underlyingTargetType {
+			case "int":
+				// TODO(jchaloup): the architecture must be input of the processing
+				p, _ := strconv.ParseInt(constant.Literal, 10, 64)
+				o := ^int(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "int8":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 8)
+				o := ^int8(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "int16":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 16)
+				o := ^int16(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "int32":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 32)
+				o := ^int32(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "int64":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 64)
+				o := ^int64(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "uint":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 64)
+				o := ^uint64(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "uint8":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 8)
+				o := ^uint8(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "uint16":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 16)
+				o := ^uint16(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "uint32":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 32)
+				o := ^uint32(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "uint64":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 64)
+				o := ^uint64(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "rune":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 32)
+				o := ^int32(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "byte":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 8)
+				o := ^uint8(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			case "uintptr":
+				p, _ := strconv.ParseInt(constant.Literal, 10, 32)
+				o := ^uintptr(p)
+				yDataType = &gotypes.Constant{Package: constant.Package, Def: constant.Def, Literal: fmt.Sprintf("%v", o), Untyped: constant.Untyped}
+			default:
+				panic(fmt.Errorf("%v underlying type not recognized", constant.Def))
+				return nil, fmt.Errorf("%v underlying type not recognized", constant.Def)
+			}
+
+			return yDataType, nil
+		}
+		return xDataType, nil
+	case token.OR, token.NOT, token.ADD:
 		// TODO(jchaloup): perform the operations
 		return xDataType, nil
 	default:
