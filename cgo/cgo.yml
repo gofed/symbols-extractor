@@ -36,6 +36,9 @@ variables:
 - name: IPPROTO_UDP
   type:
     identifier: C.int
+- name: AF_UNSPEC
+  type:
+    identifier: C.int
 - name: AF_INET
   type:
     identifier: C.int
