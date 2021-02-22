@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
-	"github.com/gofed/symbols-extractor/pkg/parser/symboltable"
+	symboltable "github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/types"
 )
 
