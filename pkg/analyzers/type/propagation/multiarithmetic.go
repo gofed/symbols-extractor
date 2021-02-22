@@ -52,7 +52,17 @@ func (m *MultiArith) parseLiteral(literal string) (*decimal.Decimal, *decimal.De
 	}
 
 	// starts with 0x? => hexadecimal number
-	if strings.HasPrefix(literal, "0x") {
+	if strings.HasPrefix(literal, "0x") || strings.HasPrefix(literal, "0X") {
+		i := new(big.Int)
+		if d, _ := i.SetString(literal, 0); d == nil {
+			return nil, nil, false, fmt.Errorf("Unable to parse literal %v", literal)
+		}
+		d := decimal.NewFromBigInt(i, 0)
+		return &d, nil, false, nil
+	}
+
+	// starts with 0b? => binary number
+	if strings.HasPrefix(literal, "0b") || strings.HasPrefix(literal, "0B") {
 		i := new(big.Int)
 		if d, _ := i.SetString(literal, 0); d == nil {
 			return nil, nil, false, fmt.Errorf("Unable to parse literal %v", literal)
