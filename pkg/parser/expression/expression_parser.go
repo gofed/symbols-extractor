@@ -961,6 +961,8 @@ func (ep *Parser) parseCallExpr(expr *ast.CallExpr) (*types.ExprAttribute, error
 
 		castedDef, err := propagation.New(ep.Config.SymbolsAccessor).TypecastExpr(attr.DataTypeList[0], def)
 		if err != nil {
+			// TODO(jchaloup): find a better way to report an error right away and stop the processing
+			panic(fmt.Errorf("Unable to type-cast: %v", err))
 			return nil, fmt.Errorf("Unable to type-cast: %v", err)
 		}
 
