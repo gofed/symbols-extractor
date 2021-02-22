@@ -9,7 +9,7 @@ import (
 
 	contracttable "github.com/gofed/symbols-extractor/pkg/parser/contracts/table"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type PackageTable map[string]*contracttable.Table
@@ -94,11 +94,11 @@ func (t *Table) Load(pkg string) (*contracttable.Table, error) {
 	}
 
 	file := path.Join(t.getPackagePath(pkg), "contracts.json")
-	glog.V(2).Infof("Global contract table %q loading", file)
+	klog.V(2).Infof("Global contract table %q loading", file)
 
 	raw, err := ioutil.ReadFile(file)
 	if err != nil {
-		glog.V(2).Infof("Global contracts table %q loading failed: %v", file, err)
+		klog.V(2).Infof("Global contracts table %q loading failed: %v", file, err)
 		return nil, fmt.Errorf("Unable to load %q contracts table from %q: %v", pkg, file, err)
 	}
 
@@ -126,7 +126,7 @@ func (t *Table) Exists(pkg string) bool {
 func (t *Table) Lookup(pkg string) (*contracttable.Table, error) {
 	// the table must have at least one file processed
 	if table, ok := t.tables[pkg]; ok {
-		glog.V(2).Infof("Package-level contracts table %q found", pkg)
+		klog.V(2).Infof("Package-level contracts table %q found", pkg)
 		return table, nil
 	}
 
@@ -137,7 +137,7 @@ func (t *Table) Lookup(pkg string) (*contracttable.Table, error) {
 	}
 
 	t.tables[pkg] = table
-	glog.V(2).Infof("Package-level contracts table %q loaded", pkg)
+	klog.V(2).Infof("Package-level contracts table %q loaded", pkg)
 
 	return table, nil
 }

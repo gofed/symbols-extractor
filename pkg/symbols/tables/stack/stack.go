@@ -8,7 +8,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 // Stack is a multi-level symbol table for parsing blocks of code
@@ -33,7 +33,7 @@ func New() *Stack {
 func (s *Stack) Push() {
 	s.Tables = append(s.Tables, tables.NewTable())
 	s.Size++
-	glog.V(2).Infof("Pushing to symbol table stack %v\n", s.Size)
+	klog.V(2).Infof("Pushing to symbol table stack %v\n", s.Size)
 }
 
 // Pop pops the top most symbol table from the stack
@@ -45,7 +45,7 @@ func (s *Stack) Pop() {
 		panic("Popping over an empty stack of symbol tables")
 		// If you reached this line you are a magician
 	}
-	glog.V(2).Infof("Popping symbol table stack %v\n", s.Size)
+	klog.V(2).Infof("Popping symbol table stack %v\n", s.Size)
 }
 
 func (s *Stack) AddImport(sym *symbols.SymbolDef) error {
@@ -59,7 +59,7 @@ func (s *Stack) AddImport(sym *symbols.SymbolDef) error {
 
 func (s *Stack) AddVariable(sym *symbols.SymbolDef) error {
 	if s.Size > 0 {
-		glog.V(2).Infof("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
+		klog.V(2).Infof("====Adding %v variable at level %v\n", sym.Name, s.Size-1)
 		// In order to distinguish between global and local variable
 		// all local variable are packageless
 		if s.Size > 1 {
@@ -74,7 +74,7 @@ func (s *Stack) AddVirtualDataType(sym *symbols.SymbolDef) error {
 	if s.Size == 0 {
 		return fmt.Errorf("Symbol table stack is empty")
 	}
-	glog.V(2).Infof("====Adding virtual %#v datatype at level 0\n", sym)
+	klog.V(2).Infof("====Adding virtual %#v datatype at level 0\n", sym)
 	if strings.HasPrefix(sym.Name, "virtual#") {
 		return fmt.Errorf("Data type %#v is already virtually prefixed", sym)
 	}
@@ -90,14 +90,14 @@ func (s *Stack) AddVirtualDataType(sym *symbols.SymbolDef) error {
 
 func (s *Stack) AddDataType(sym *symbols.SymbolDef) error {
 	if s.Size > 0 {
-		glog.V(2).Infof("====Adding %#v datatype at level %v\n", sym, s.Size-1)
+		klog.V(2).Infof("====Adding %#v datatype at level %v\n", sym, s.Size-1)
 		return s.Tables[s.Size-1].AddDataType(sym)
 	}
 	return fmt.Errorf("Symbol table stack is empty")
 }
 
 func (s *Stack) AddFunction(sym *symbols.SymbolDef) error {
-	glog.V(2).Infof("====Adding function %q as: %#v", sym.Name, sym.Def)
+	klog.V(2).Infof("====Adding function %q as: %#v", sym.Name, sym.Def)
 	if s.Size > 0 {
 		return s.Tables[s.Size-1].AddFunction(sym)
 	}
@@ -105,7 +105,7 @@ func (s *Stack) AddFunction(sym *symbols.SymbolDef) error {
 }
 
 func (s *Stack) LookupVariable(name string) (*symbols.SymbolDef, error) {
-	glog.V(2).Infof("====Looking up a variable %q", name)
+	klog.V(2).Infof("====Looking up a variable %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupVariable(name)
@@ -145,7 +145,7 @@ func (s *Stack) LookupAllMethods(datatype string) (map[string]*symbols.SymbolDef
 }
 
 func (s *Stack) LookupFunction(name string) (*symbols.SymbolDef, error) {
-	glog.V(2).Infof("====Looking up a function %q", name)
+	klog.V(2).Infof("====Looking up a function %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupFunction(name)
@@ -158,7 +158,7 @@ func (s *Stack) LookupFunction(name string) (*symbols.SymbolDef, error) {
 }
 
 func (s *Stack) LookupDataType(name string) (*symbols.SymbolDef, error) {
-	glog.V(2).Infof("====Looking up a data type %q, s.Size = %v", name, s.Size)
+	klog.V(2).Infof("====Looking up a data type %q, s.Size = %v", name, s.Size)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, err := s.Tables[i].LookupDataType(name)
@@ -176,7 +176,7 @@ func (s *Stack) LookupDataType(name string) (*symbols.SymbolDef, error) {
 }
 
 func (s *Stack) LookupVariableLikeSymbol(name string) (*symbols.SymbolDef, symbols.SymbolType, error) {
-	glog.V(2).Infof("====Looking up a variablelike %q", name)
+	klog.V(2).Infof("====Looking up a variablelike %q", name)
 	// The top most item on the stack is the right most item in the simpleSlice
 	for i := s.Size - 1; i >= 0; i-- {
 		def, st, err := s.Tables[i].LookupVariableLikeSymbol(name)

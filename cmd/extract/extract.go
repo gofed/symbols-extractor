@@ -21,7 +21,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/snapshots/godeps"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -143,7 +143,7 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 			fmt.Printf("\tFile: %v\n", f)
 			at, err := allocTable.Lookup(pkg, f)
 			if err != nil {
-				glog.Fatalf("AC error: %v", err)
+				klog.Fatalf("AC error: %v", err)
 			}
 			at.Print(true)
 		}
@@ -168,7 +168,7 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 				continue
 			}
 
-			glog.V(1).Infof("Processing %v\n", toProcess[0])
+			klog.V(1).Infof("Processing %v\n", toProcess[0])
 			st, err := globalTable.Lookup(toProcess[0])
 			if err != nil {
 				return err
@@ -322,7 +322,7 @@ func getStdlibPackages() ([]string, error) {
 func processStdlib(symbolTablePath, cgoSymbolsPath, goversion string) {
 	packages, err := getStdlibPackages()
 	if err != nil {
-		glog.Fatal(err)
+		klog.Fatal(err)
 	}
 
 	generatedDir := path.Join(symbolTablePath, "golang", goversion)
@@ -334,7 +334,7 @@ func processStdlib(symbolTablePath, cgoSymbolsPath, goversion string) {
 			panic(err)
 		}
 		if err := p.Parse(pkg, false); err != nil {
-			glog.Fatalf("Parse error when parsing (%v): %v", pkg, err)
+			klog.Fatalf("Parse error when parsing (%v): %v", pkg, err)
 		}
 	}
 	return
@@ -411,6 +411,7 @@ func buildEntryPoints(packagePath string, library bool) ([]string, error) {
 // Later, one will specify a path to package symbol tables (each marked with corresponding commit)
 func main() {
 
+	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
 	command := NewSymbolsExtractorExtractCommand()

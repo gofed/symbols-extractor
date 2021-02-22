@@ -7,7 +7,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 // Participants:
@@ -128,13 +128,13 @@ func (t *Table) addSymbol(symbolType string, name string, sym *symbols.SymbolDef
 					t.methods[ident.Def] = make(map[string]*symbols.SymbolDef, 0)
 				}
 				t.methods[ident.Def][sym.Name] = sym
-				glog.V(2).Infof("Adding method %#v of data type %v", sym, ident.Def)
+				klog.V(2).Infof("Adding method %#v of data type %v", sym, ident.Def)
 			case *gotypes.Identifier:
 				if _, ok := t.methods[receiverExpr.Def]; !ok {
 					t.methods[receiverExpr.Def] = make(map[string]*symbols.SymbolDef, 0)
 				}
 				t.methods[receiverExpr.Def][sym.Name] = sym
-				glog.V(2).Infof("Adding method %#v of data type %v", sym, receiverExpr.Def)
+				klog.V(2).Infof("Adding method %#v of data type %v", sym, receiverExpr.Def)
 			default:
 				return fmt.Errorf("Receiver data type %#v of %#v not recognized", method.Receiver, method)
 			}
@@ -160,11 +160,11 @@ func (t *Table) AddFunction(sym *symbols.SymbolDef) error {
 	if def, ok := sym.Def.(*gotypes.Method); ok {
 		switch rExpr := def.Receiver.(type) {
 		case *gotypes.Identifier:
-			glog.V(2).Infof("Storing method %q into a symbol table", strings.Join([]string{rExpr.Def, sym.Name}, "."))
+			klog.V(2).Infof("Storing method %q into a symbol table", strings.Join([]string{rExpr.Def, sym.Name}, "."))
 			return t.addSymbol(symbols.FunctionSymbol, strings.Join([]string{rExpr.Def, sym.Name}, "."), sym)
 		case *gotypes.Pointer:
 			if ident, ok := rExpr.Def.(*gotypes.Identifier); ok {
-				glog.V(2).Infof("Storing method %q into a symbol table", strings.Join([]string{ident.Def, sym.Name}, "."))
+				klog.V(2).Infof("Storing method %q into a symbol table", strings.Join([]string{ident.Def, sym.Name}, "."))
 				return t.addSymbol(symbols.FunctionSymbol, strings.Join([]string{ident.Def, sym.Name}, "."), sym)
 			}
 			return fmt.Errorf("Expecting a pointer to an identifier as a receiver when adding %q method, got %#v instead", sym.Name, rExpr)

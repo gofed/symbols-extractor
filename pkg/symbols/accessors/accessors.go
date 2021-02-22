@@ -10,7 +10,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type Accessor struct {
@@ -63,7 +63,7 @@ func (a *Accessor) GetBuiltinDataType(name string) (*symbols.SymbolDef, symbols.
 func (a *Accessor) IsBuiltin(name string) bool {
 	table, err := a.globalSymbolTable.Lookup("builtin")
 	if err != nil {
-		glog.Warning(err)
+		klog.Warning(err)
 		return false
 	}
 	if _, _, err := table.Lookup(name); err == nil {
@@ -253,7 +253,7 @@ func (a *Accessor) RetrieveQid(qidprefix gotypes.DataType, item *ast.Ident) (sym
 	if !ok {
 		return nil, nil, symbols.SymbolType(""), fmt.Errorf("Expecting a qid.id when retrieving a symbol from a selector expression")
 	}
-	glog.V(2).Infof("Trying to retrieve a symbol %#v from package %v\n", item.String(), qid.Path)
+	klog.V(2).Infof("Trying to retrieve a symbol %#v from package %v\n", item.String(), qid.Path)
 	qidst, err := a.globalSymbolTable.Lookup(qid.Path)
 	if err != nil {
 		return nil, nil, symbols.SymbolType(""), fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
@@ -272,7 +272,7 @@ func (a *Accessor) RetrieveQidDataType(qidprefix gotypes.DataType, item *ast.Ide
 	if !ok {
 		return nil, nil, fmt.Errorf("Expecting a qid.id when retrieving a symbol from a selector expression")
 	}
-	glog.V(2).Infof("Trying to retrieve a symbol %#v from package %v\n", item.String(), qid.Path)
+	klog.V(2).Infof("Trying to retrieve a symbol %#v from package %v\n", item.String(), qid.Path)
 	qidst, err := a.globalSymbolTable.Lookup(qid.Path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to retrieve a symbol table for %q package: %v", qid.Path, err)
@@ -321,7 +321,7 @@ func (a *Accessor) IsDataTypeInterface(typeDef gotypes.DataType) (bool, error) {
 }
 
 func (a *Accessor) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.DataType, error) {
-	glog.V(2).Infof("FindFirstNonidDataType: %#v", typeDef)
+	klog.V(2).Infof("FindFirstNonidDataType: %#v", typeDef)
 	var symbolDef *symbols.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
@@ -352,7 +352,7 @@ func (a *Accessor) FindFirstNonidDataType(typeDef gotypes.DataType) (gotypes.Dat
 }
 
 func (a *Accessor) FindFirstNonidVariable(typeDef gotypes.DataType) (gotypes.DataType, error) {
-	glog.V(2).Infof("FindFirstNonidVariable: %#v", typeDef)
+	klog.V(2).Infof("FindFirstNonidVariable: %#v", typeDef)
 	var symbolDef *symbols.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
@@ -383,7 +383,7 @@ func (a *Accessor) FindFirstNonidVariable(typeDef gotypes.DataType) (gotypes.Dat
 }
 
 func (a *Accessor) FindFirstNonIdSymbol(typeDef gotypes.DataType) (gotypes.DataType, error) {
-	glog.V(2).Infof("FindFirstNonidSymbol: %#v", typeDef)
+	klog.V(2).Infof("FindFirstNonidSymbol: %#v", typeDef)
 	var symbolDef *symbols.SymbolDef
 	switch typeDefType := typeDef.(type) {
 	case *gotypes.Selector:
@@ -454,7 +454,7 @@ type UnderlyingType struct {
 }
 
 func (a *Accessor) ResolveToUnderlyingType(typeDef gotypes.DataType) (*UnderlyingType, error) {
-	glog.V(2).Infof("ResolveToUnderlyingType: %#v\n", typeDef)
+	klog.V(2).Infof("ResolveToUnderlyingType: %#v\n", typeDef)
 	switch d := typeDef.(type) {
 	// anonymous struct
 	case *gotypes.Struct:
@@ -639,7 +639,7 @@ func (a *Accessor) CToGoUnderlyingType(cIdent *gotypes.Identifier) (*gotypes.Ide
 
 // TODO(jchaloup): return symbol table of the returned data type
 func (a *Accessor) RetrieveInterfaceMethod(pkgsymboltable symbols.SymbolLookable, interfaceDefsymbol *symbols.SymbolDef, method string) (*FieldAttribute, error) {
-	glog.V(2).Infof("Retrieving Interface method %q from %#v\n", method, interfaceDefsymbol)
+	klog.V(2).Infof("Retrieving Interface method %q from %#v\n", method, interfaceDefsymbol)
 	if interfaceDefsymbol.Def.GetType() != gotypes.InterfaceType {
 		return nil, fmt.Errorf("Trying to retrieve a %v method from a non-interface data type: %#v", method, interfaceDefsymbol.Def)
 	}
@@ -711,7 +711,7 @@ func (a *Accessor) RetrieveInterfaceMethod(pkgsymboltable symbols.SymbolLookable
 			case *gotypes.Selector:
 				{
 					byteSlice, _ := json.Marshal(fieldType)
-					glog.V(2).Infof("++++%v\n", string(byteSlice))
+					klog.V(2).Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
 				st, sd, err := a.RetrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
@@ -731,7 +731,7 @@ func (a *Accessor) RetrieveInterfaceMethod(pkgsymboltable symbols.SymbolLookable
 		}
 	}
 
-	glog.V(2).Info("Retrieving methods from embedded interfaces")
+	klog.V(2).Info("Retrieving methods from embedded interfaces")
 	if len(embeddedInterfaces) != 0 {
 		for _, item := range embeddedInterfaces {
 			if fieldDef, err := a.RetrieveInterfaceMethod(item.symbolTable, item.symbolDef, method); err == nil {
@@ -790,7 +790,7 @@ func (f *FieldAccessor) SetDropFieldsOnly() *FieldAccessor {
 }
 
 func (a *Accessor) RetrieveStructFieldAtIndex(structDef *gotypes.Struct, idx int) (gotypes.DataType, error) {
-	glog.V(2).Infof("Retrieving struct field at %q-th position from %#v\n", idx, structDef)
+	klog.V(2).Infof("Retrieving struct field at %q-th position from %#v\n", idx, structDef)
 
 	if idx < 0 || idx >= len(structDef.Fields) {
 		return nil, fmt.Errorf("Invalid index %v out of struct's <0; %v> interval", idx, len(structDef.Fields))
@@ -821,7 +821,7 @@ type FieldAttribute struct {
 // symbol tables of other packages. Thus recursively process struct's definition up to all its embedded fields.
 // TODO(jchaloup): return symbol table of the returned data type
 func (a *Accessor) RetrieveDataTypeField(accessor *FieldAccessor) (*FieldAttribute, error) {
-	glog.V(2).Infof("Retrieving data type field %q from %#v\n", accessor.field.String(), accessor.dataTypeDef)
+	klog.V(2).Infof("Retrieving data type field %q from %#v\n", accessor.field.String(), accessor.dataTypeDef)
 	// Only data type declaration is known
 	if accessor.dataTypeDef.Def == nil {
 		return nil, fmt.Errorf("Data type definition of %q is not known", accessor.dataTypeDef.Name)
@@ -829,7 +829,7 @@ func (a *Accessor) RetrieveDataTypeField(accessor *FieldAccessor) (*FieldAttribu
 
 	if !accessor.fieldsOnly {
 		// Check data type methods
-		glog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
+		klog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
 		method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field.String())
 		if err == nil {
 			return &FieldAttribute{
@@ -842,11 +842,11 @@ func (a *Accessor) RetrieveDataTypeField(accessor *FieldAccessor) (*FieldAttribu
 	// Any data type can have its own methods.
 	// Or, a struct can embedded any data type with its own methods
 	if accessor.dataTypeDef.Def.GetType() != gotypes.StructType {
-		glog.V(2).Infof("Processing %#v", accessor.dataTypeDef.Def)
+		klog.V(2).Infof("Processing %#v", accessor.dataTypeDef.Def)
 		if accessor.dataTypeDef.Def.GetType() == gotypes.IdentifierType {
 			ident := accessor.dataTypeDef.Def.(*gotypes.Identifier)
 			// check methods of the type itself if there is any match
-			glog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
+			klog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
 			if method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field.String()); err == nil {
 				return &FieldAttribute{
 					DataType:    method.Def,
@@ -858,7 +858,7 @@ func (a *Accessor) RetrieveDataTypeField(accessor *FieldAccessor) (*FieldAttribu
 			if ident.Package == "builtin" {
 				// built-in => only methods
 				// Check data type methods
-				glog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
+				klog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
 				if method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field.String()); err == nil {
 					return &FieldAttribute{
 						DataType:    method.Def,
@@ -904,7 +904,7 @@ func (a *Accessor) RetrieveDataTypeField(accessor *FieldAccessor) (*FieldAttribu
 
 		if accessor.dataTypeDef.Def.GetType() == gotypes.SelectorType {
 			// check methods of the type itself if there is any match
-			glog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
+			klog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
 			if method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field.String()); err == nil {
 				return &FieldAttribute{
 					DataType:    method.Def,
@@ -1006,7 +1006,7 @@ ITEMS_LOOP:
 				}
 				{
 					byteSlice, _ := json.Marshal(fieldType)
-					glog.V(2).Infof("++++%v\n", string(byteSlice))
+					klog.V(2).Infof("++++%v\n", string(byteSlice))
 				}
 				// qid expected
 				st, sd, err := a.RetrieveQidDataType(fieldType.Prefix, &ast.Ident{Name: fieldType.Item})
@@ -1041,7 +1041,7 @@ ITEMS_LOOP:
 
 	// Check data type methods
 	if !accessor.fieldsOnly {
-		glog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
+		klog.V(2).Infof("Retrieving method %q of data type %q", accessor.field.String(), accessor.dataTypeDef.Name)
 		if method, err := accessor.symbolTable.LookupMethod(accessor.dataTypeDef.Name, accessor.field.String()); err == nil {
 			return &FieldAttribute{
 				DataType:    method.Def,
@@ -1051,7 +1051,7 @@ ITEMS_LOOP:
 		}
 	}
 
-	glog.V(2).Info("Retrieving fields from embedded structs")
+	klog.V(2).Info("Retrieving fields from embedded structs")
 	if len(embeddedDataTypes) != 0 {
 		if accessor.dropFieldsOnly {
 			accessor.fieldsOnly = false
@@ -1072,7 +1072,7 @@ ITEMS_LOOP:
 
 	{
 		byteSlice, _ := json.Marshal(accessor.dataTypeDef)
-		glog.V(2).Infof("++++%v\n", string(byteSlice))
+		klog.V(2).Infof("++++%v\n", string(byteSlice))
 	}
 	return nil, fmt.Errorf("Unable to find a field %v in struct %#v", accessor.field.String(), accessor.dataTypeDef)
 }

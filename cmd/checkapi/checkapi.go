@@ -18,7 +18,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/accessors"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 //////////
@@ -161,7 +161,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 
 	for tablePkg, table := range tables {
 		for file, fileItem := range table {
-			glog.V(1).Infof("Processing %q of %q\n", file, tablePkg)
+			klog.V(1).Infof("Processing %q of %q\n", file, tablePkg)
 			for pkg, symbolsSet := range fileItem.Symbols {
 				// skip anonymous symbols
 				if pkg == "" {
@@ -172,7 +172,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 					continue
 				}
 
-				glog.V(1).Infof("Processing %q\n", pkg)
+				klog.V(1).Infof("Processing %q\n", pkg)
 
 				// Datatypes
 				for _, item := range symbolsSet.Datatypes {
@@ -245,7 +245,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 	}
 
 	for symbolItem, positions := range dtNames {
-		glog.V(1).Infof("Checking %q type", symbolItem.str())
+		klog.V(1).Infof("Checking %q type", symbolItem.str())
 		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
 			return nil, err
@@ -285,7 +285,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 	}
 
 	for symbolItem, positions := range fncNames {
-		glog.V(1).Infof("Checking %q function", symbolItem.str())
+		klog.V(1).Infof("Checking %q function", symbolItem.str())
 		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
 			return nil, err
@@ -325,7 +325,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 	}
 
 	for symbolItem, positions := range varNames {
-		glog.V(1).Infof("Checking %q variable", symbolItem.str())
+		klog.V(1).Infof("Checking %q variable", symbolItem.str())
 		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
 			return nil, err
@@ -365,7 +365,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 	}
 
 	for symbolItem, positions := range methodNames {
-		glog.V(1).Infof("Checking %q method", symbolItem.str())
+		klog.V(1).Infof("Checking %q method", symbolItem.str())
 
 		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
@@ -429,7 +429,7 @@ func collectApiDiffs(tables map[string]allocglobal.PackageTable, packagePrefix s
 	}
 
 	for symbolItem, positions := range fieldNames {
-		glog.V(1).Infof("Checking %q field", symbolItem.str())
+		klog.V(1).Infof("Checking %q field", symbolItem.str())
 
 		refSTable, err := refGlobalST.Lookup(symbolItem.pkg)
 		if err != nil {
@@ -515,7 +515,7 @@ func main() {
 	}
 
 	if err := f.parse(); err != nil {
-		glog.Fatal(err)
+		klog.Fatal(err)
 	}
 
 	// Otherwise it can eat all the CPU power

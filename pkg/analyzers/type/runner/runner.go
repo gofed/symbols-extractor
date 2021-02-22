@@ -15,7 +15,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	symbolsglobal "github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type Runner struct {
@@ -202,7 +202,7 @@ func (r *Runner) isTypevarEvaluated(i typevars.Interface) bool {
 		}
 
 		v, ok := r.varTable.GetVariable(d.String())
-		// glog.V(2).Infof("isTypevarEvaluated: %v, ok: %v", d.String(), ok)
+		// klog.V(2).Infof("isTypevarEvaluated: %v, ok: %v", d.String(), ok)
 		if !ok {
 			return false
 		}
@@ -336,19 +336,19 @@ func (r *Runner) splitContracts(ctrs *contractPayload) (*contractPayload, *contr
 func (r *Runner) evaluateContract(c contracts.Contract) error {
 	getVar := func(i typevars.Interface) (*varTableItem, bool) {
 		k, ok := r.varTable.GetVariable(i.(*typevars.Variable).String())
-		// glog.V(2).Infof("Getting %v: %#v", i.(*typevars.Variable).String(), k)
+		// klog.V(2).Infof("Getting %v: %#v", i.(*typevars.Variable).String(), k)
 		return k, ok
 	}
 
 	setVar := func(i typevars.Interface, item *varTableItem) {
-		// glog.V(2).Infof("Setting %v to %#v", i.(*typevars.Variable).String(), item)
+		// klog.V(2).Infof("Setting %v to %#v", i.(*typevars.Variable).String(), item)
 		r.varTable.SetVariable(i.(*typevars.Variable).String(), item)
 	}
 
-	glog.V(2).Infof("Checking %v...", contracts.Contract2String(c))
+	klog.V(2).Infof("Checking %v...", contracts.Contract2String(c))
 
 	typevar2varTableItem := func(i typevars.Interface) (*varTableItem, error) {
-		//glog.V(2).Infof("typevar2varTableItem, i=%#v", i)
+		//klog.V(2).Infof("typevar2varTableItem, i=%#v", i)
 		switch td := i.(type) {
 		case *typevars.Constant:
 			st, err := r.globalSymbolTable.Lookup(td.Package)
@@ -503,7 +503,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			return err
 		}
 
-		//glog.V(2).Infof("xVarItem: %#v, dataType: %#v", xVarItem, xVarItem.dataType)
+		//klog.V(2).Infof("xVarItem: %#v, dataType: %#v", xVarItem, xVarItem.dataType)
 
 		yDataType, err := propagation.New(r.symbolAccessor).UnaryExpr(
 			d.OpToken,
@@ -530,22 +530,22 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			return yErr
 		}
 
-		//glog.V(2).Infof("xVarItem: %#v, dataType: %#v", xVarItem, xVarItem.dataType)
-		//glog.V(2).Infof("yVarItem: %#v, dataType: %#v", yVarItem, yVarItem.dataType)
+		//klog.V(2).Infof("xVarItem: %#v, dataType: %#v", xVarItem, xVarItem.dataType)
+		//klog.V(2).Infof("yVarItem: %#v, dataType: %#v", yVarItem, yVarItem.dataType)
 
 		// xDt, err := r.symbolAccessor.FindFirstNonIdSymbol(xVarItem.dataType)
 		// if err != nil {
 		// 	return err
 		// }
 		//
-		// glog.V(2).Infof("xDt: %#v", xDt)
+		// klog.V(2).Infof("xDt: %#v", xDt)
 		//
 		// yDt, err := r.symbolAccessor.FindFirstNonIdSymbol(yVarItem.dataType)
 		// if err != nil {
 		// 	return err
 		// }
 		//
-		// glog.V(2).Infof("yDt: %#v", yDt)
+		// klog.V(2).Infof("yDt: %#v", yDt)
 
 		// have the BinaryExpr return symbol table and the package name as well
 		// it will be either builtin or the current package
@@ -557,7 +557,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 		if err != nil {
 			return err
 		}
-		//glog.V(2).Infof("zDataType: %#v\n", zDataType)
+		//klog.V(2).Infof("zDataType: %#v\n", zDataType)
 		setVar(d.Z, &varTableItem{
 			dataType:    zDataType,
 			packageName: xVarItem.packageName,
@@ -995,7 +995,7 @@ func (r *Runner) evaluateContract(c contracts.Contract) error {
 			packageName: dtOrigin,
 			symbolTable: st,
 		}
-		//glog.V(2).Infof("yItem: %#v, yItem.dataType: %#v\n", yItem, yItem.dataType)
+		//klog.V(2).Infof("yItem: %#v, yItem.dataType: %#v\n", yItem, yItem.dataType)
 		setVar(d.Y, yItem)
 	default:
 		panic(fmt.Sprintf("Unrecognized contract: %#v", c))

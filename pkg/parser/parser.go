@@ -29,7 +29,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 var GOOS = map[string]struct{}{
@@ -163,7 +163,7 @@ func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) 
 		// See https://golang.org/cmd/cgo/
 		if qPath == "C" {
 			if pp.cgoSymbolsPath == "" {
-				glog.Fatalf("Unable to load C symbol table. cgoSymbolsPath not set.")
+				klog.Fatalf("Unable to load C symbol table. cgoSymbolsPath not set.")
 			}
 			pp.cgoSymbolTable.Flush()
 			if err := pp.cgoSymbolTable.LoadFromFile(pp.cgoSymbolsPath); err != nil {
@@ -175,7 +175,7 @@ func (pp *ProjectParser) processImports(file string, imports []*ast.ImportSpec) 
 		_, err := pp.globalSymbolTable.Lookup(qPath)
 		if err != nil {
 			missingImports = append(missingImports, &gotypes.Packagequalifier{Path: qPath})
-			glog.V(2).Infof("Package %q not yet processed\n", qPath)
+			klog.V(2).Infof("Package %q not yet processed\n", qPath)
 		}
 		// TODO(jchaloup): Check if the package is already in the package queue
 		//                 If it is it is an error (import cycles are not permitted)
@@ -219,14 +219,14 @@ func (pp *ProjectParser) getPackageFiles(packagePath string) (files []string, pa
 		pathParts := strings.Split(pp.packagePath, string(os.PathSeparator))
 		for i := len(pathParts); i >= 0; i-- {
 			vendorpath := path.Join(path.Join(pathParts[:i]...), "vendor", packagePath)
-			glog.V(1).Infof("Checking %v directory", vendorpath)
+			klog.V(1).Infof("Checking %v directory", vendorpath)
 			if l, e := listGoFiles(vendorpath, false); e == nil {
 				return l, vendorpath, e
 			}
 			searched = append(searched, vendorpath)
 		}
 
-		glog.V(1).Infof("Checking %v directory", packagePath)
+		klog.V(1).Infof("Checking %v directory", packagePath)
 		if l, e := listGoFiles(packagePath, false); e == nil {
 			return l, packagePath, e
 		}
@@ -296,7 +296,7 @@ func (pp *ProjectParser) createPackageContext(packagePath string) (*PackageConte
 
 	c.Config = config
 
-	glog.V(2).Infof("PackageContextCreated: %#v\n\n", c)
+	klog.V(2).Infof("PackageContextCreated: %#v\n\n", c)
 	return c, nil
 }
 
@@ -304,12 +304,12 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+		klog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
 		if fileContext.DataTypes != nil {
 			payload := &fileparser.Payload{
 				DataTypes: fileContext.DataTypes,
 			}
-			glog.V(2).Infof("Types before processing: %#v\n", payload.DataTypes)
+			klog.V(2).Infof("Types before processing: %#v\n", payload.DataTypes)
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
@@ -318,7 +318,7 @@ func (pp *ProjectParser) reprocessDataTypes(p *PackageContext) error {
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			glog.V(2).Infof("Types after processing: %#v\n", payload.DataTypes)
+			klog.V(2).Infof("Types after processing: %#v\n", payload.DataTypes)
 			if payload.DataTypes != nil {
 				return fmt.Errorf("There are still some postponed data types to process after the second round: %v", p.PackagePath)
 			}
@@ -342,13 +342,13 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 		counter := 0
 		for i := 0; i < fLen; i++ {
 			fileContext := p.Files[i]
-			glog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+			klog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
 			if fileContext.Variables != nil {
 				payload := &fileparser.Payload{
 					Variables:    fileContext.Variables,
 					Reprocessing: true,
 				}
-				glog.V(2).Infof("Vars before processing: %#v\n", payload.Variables)
+				klog.V(2).Infof("Vars before processing: %#v\n", payload.Variables)
 				for _, spec := range fileContext.FileAST.Imports {
 					payload.Imports = append(payload.Imports, spec)
 				}
@@ -357,12 +357,12 @@ func (pp *ProjectParser) reprocessVariables(p *PackageContext) error {
 				if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 					return err
 				}
-				glog.V(2).Infof("Vars after processing: %#v\n", payload.Variables)
+				klog.V(2).Infof("Vars after processing: %#v\n", payload.Variables)
 				fileContext.Variables = payload.Variables
 				counter += len(payload.Variables)
 			}
 		}
-		glog.V(2).Infof("len(postponed) before: %v, len(postponsed) after: %v\n", pkgPostponedCounter, counter)
+		klog.V(2).Infof("len(postponed) before: %v, len(postponsed) after: %v\n", pkgPostponedCounter, counter)
 		if counter < pkgPostponedCounter {
 			pkgPostponedCounter = counter
 			continue
@@ -384,13 +384,13 @@ func (pp *ProjectParser) reprocessConstants(p *PackageContext) error {
 		counter := 0
 		for i := 0; i < fLen; i++ {
 			fileContext := p.Files[i]
-			glog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+			klog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
 			if fileContext.Constants != nil {
 				payload := &fileparser.Payload{
 					Constants:    fileContext.Constants,
 					Reprocessing: true,
 				}
-				glog.V(2).Infof("Constants before reprocessing: %#v\n", payload.Variables)
+				klog.V(2).Infof("Constants before reprocessing: %#v\n", payload.Variables)
 				for _, spec := range fileContext.FileAST.Imports {
 					payload.Imports = append(payload.Imports, spec)
 				}
@@ -399,12 +399,12 @@ func (pp *ProjectParser) reprocessConstants(p *PackageContext) error {
 				if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 					return err
 				}
-				glog.V(2).Infof("Constants after reprocessing: %#v\n", payload.Constants)
+				klog.V(2).Infof("Constants after reprocessing: %#v\n", payload.Constants)
 				fileContext.Constants = payload.Constants
 				counter += len(payload.Variables)
 			}
 		}
-		glog.V(2).Infof("len(postponed) before: %v, len(postponsed) after: %v\n", pkgPostponedCounter, counter)
+		klog.V(2).Infof("len(postponed) before: %v, len(postponsed) after: %v\n", pkgPostponedCounter, counter)
 		if counter < pkgPostponedCounter {
 			pkgPostponedCounter = counter
 			continue
@@ -425,14 +425,14 @@ func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error 
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
-		glog.V(2).Infof("Postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
+		klog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+		klog.V(2).Infof("Postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
 		if fileContext.Functions != nil {
 			payload := &fileparser.Payload{
 				Functions:         fileContext.Functions,
 				FunctionDeclsOnly: true,
 			}
-			glog.V(2).Infof("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			klog.V(2).Infof("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
@@ -441,10 +441,10 @@ func (pp *ProjectParser) reprocessFunctionDeclarations(p *PackageContext) error 
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			glog.V(2).Infof("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			klog.V(2).Infof("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			if payload.Functions != nil {
 				for _, name := range payload.Functions {
-					glog.V(2).Infof("Function declaration of %q not yet processed", name.Name)
+					klog.V(2).Infof("Function declaration of %q not yet processed", name.Name)
 				}
 			}
 		}
@@ -463,13 +463,13 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 	fLen := len(p.Files)
 	for i := 0; i < fLen; i++ {
 		fileContext := p.Files[i]
-		glog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
-		glog.V(2).Infof("Postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
+		klog.V(2).Infof("File %q reprocessing...", path.Join(p.PackageDir, fileContext.Filename))
+		klog.V(2).Infof("Postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
 		if fileContext.Functions != nil {
 			payload := &fileparser.Payload{
 				Functions: fileContext.Functions,
 			}
-			glog.V(2).Infof("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			klog.V(2).Infof("Funcs before processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			for _, spec := range fileContext.FileAST.Imports {
 				payload.Imports = append(payload.Imports, spec)
 			}
@@ -478,10 +478,10 @@ func (pp *ProjectParser) reprocessFunctions(p *PackageContext) error {
 			if err := fileparser.NewParser(p.Config).Parse(payload); err != nil {
 				return err
 			}
-			glog.V(2).Infof("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
+			klog.V(2).Infof("Funcs after processing: %#v\n", strings.Join(printFuncNames(payload.Functions), ","))
 			if payload.Functions != nil {
 				for _, name := range payload.Functions {
-					glog.Errorf("Function %q not processed", name.Name)
+					klog.Errorf("Function %q not processed", name.Name)
 				}
 				panic(fmt.Errorf("There are still some postponed functions to process after the second round: %v", strings.Join(printFuncNames(payload.Functions), ",")))
 			}
@@ -528,7 +528,7 @@ func (pp *ProjectParser) Parse(packagePath string, allocated bool) error {
 
 	// check if the requested package is already provided
 	if pp.packageProcessed(pp.packagePath) {
-		glog.V(1).Infof("Package %q already processed\n", pp.packagePath)
+		klog.V(1).Infof("Package %q already processed\n", pp.packagePath)
 		return nil
 	}
 
@@ -555,9 +555,9 @@ PACKAGE_STACK:
 			continue
 		}
 
-		glog.V(2).Infof("\n\n\nPS processing %#v\n", p.PackageDir)
+		klog.V(2).Infof("\n\n\nPS processing %#v\n", p.PackageDir)
 		if pp.packageProcessed(p.PackagePath) {
-			glog.V(2).Infof("\n\n\nPS %#v already processed\n", p.PackageDir)
+			klog.V(2).Infof("\n\n\nPS %#v already processed\n", p.PackageDir)
 			// Pop the package from the package stack
 			pp.packageStack = pp.packageStack[1:]
 			continue
@@ -572,7 +572,7 @@ PACKAGE_STACK:
 		fLen := len(p.Files)
 		for i := p.FileIndex; i < fLen; i++ {
 			fileContext := p.Files[i]
-			glog.V(2).Infof("File %q processing...", path.Join(p.PackageDir, fileContext.Filename))
+			klog.V(2).Infof("File %q processing...", path.Join(p.PackageDir, fileContext.Filename))
 			if fileContext.FileAST == nil {
 				f, err := parser.ParseFile(token.NewFileSet(), path.Join(p.PackageDir, fileContext.Filename), nil, 0)
 				if err != nil {
@@ -592,7 +592,7 @@ PACKAGE_STACK:
 			// processed imported packages
 			if !fileContext.ImportsProcessed {
 				missingImports := pp.processImports(path.Join(p.PackagePath, fileContext.Filename), fileContext.FileAST.Imports)
-				glog.V(2).Infof("Unknown imports:\t\t%#v\n\n", missingImports)
+				klog.V(2).Infof("Unknown imports:\t\t%#v\n\n", missingImports)
 				if len(missingImports) > 0 {
 					for _, spec := range missingImports {
 						c, err := pp.createPackageContext(spec.Path)
@@ -603,7 +603,7 @@ PACKAGE_STACK:
 						pp.packageStack = append([]*PackageContext{c}, pp.packageStack...)
 					}
 					// At least one imported package is not yet processed
-					glog.V(2).Infof("----Postponing %v\n\n", p.PackageDir)
+					klog.V(2).Infof("----Postponing %v\n\n", p.PackageDir)
 					fileContext.ImportsProcessed = true
 					continue PACKAGE_STACK
 				}
@@ -627,35 +627,35 @@ PACKAGE_STACK:
 			fileContext.Constants = payload.Constants
 			fileContext.Variables = payload.Variables
 			fileContext.Functions = payload.Functions
-			glog.V(2).Infof("Storing possible postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
+			klog.V(2).Infof("Storing possible postponed symbols for file %q:\n\tD: %v\tV: %v\tF: %v", fileContext.Filename, len(fileContext.DataTypes), len(fileContext.Variables), len(fileContext.Functions))
 			p.FileIndex++
 		}
 
 		// re-process data types
-		glog.V(2).Infof("\n\n========REPROCESSING DATA TYPES========\n\n")
+		klog.V(2).Infof("\n\n========REPROCESSING DATA TYPES========\n\n")
 		if err := pp.reprocessDataTypes(p); err != nil {
 			return err
 		}
 
 		// re-process function declerations
-		glog.V(2).Infof("\n\n========REPROCESSING FUNC DECLS========\n\n")
+		klog.V(2).Infof("\n\n========REPROCESSING FUNC DECLS========\n\n")
 		if err := pp.reprocessFunctionDeclarations(p); err != nil {
-			glog.V(2).Infof("Processing function declarations with error: %v", err)
+			klog.V(2).Infof("Processing function declarations with error: %v", err)
 		}
 
 		// re-process variables
-		glog.V(2).Infof("\n\n========REPROCESSING VARIABLES========\n\n")
+		klog.V(2).Infof("\n\n========REPROCESSING VARIABLES========\n\n")
 		if err := pp.reprocessConstants(p); err != nil {
 			return err
 		}
 
 		// re-process variables
-		glog.V(2).Infof("\n\n========REPROCESSING VARIABLES========\n\n")
+		klog.V(2).Infof("\n\n========REPROCESSING VARIABLES========\n\n")
 		if err := pp.reprocessVariables(p); err != nil {
 			return err
 		}
 		// re-process functions
-		glog.V(2).Infof("\n\n========REPROCESSING FUNCTIONS========\n\n")
+		klog.V(2).Infof("\n\n========REPROCESSING FUNCTIONS========\n\n")
 		if err := pp.reprocessFunctions(p); err != nil {
 			return err
 		}
@@ -679,7 +679,7 @@ PACKAGE_STACK:
 
 		sort.Strings(table.Imports)
 
-		glog.V(2).Infof("Global storing %q\n", p.PackagePath)
+		klog.V(2).Infof("Global storing %q\n", p.PackagePath)
 		fmt.Fprintf(os.Stderr, "Package %q processed\n", p.PackagePath)
 		// TODO(jchaloup): this is hacky, the Add of the globalSymbolTable should
 		// eat tables.Table instead of the generic SymbolTable

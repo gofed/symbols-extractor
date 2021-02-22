@@ -14,7 +14,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/cmd/go/internal/load"
 	"github.com/gofed/symbols-extractor/cmd/go/internal/work"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 
 	// initialize the load.ModInit function
 	"github.com/gofed/symbols-extractor/cmd/go/internal/modload"
@@ -472,17 +472,17 @@ func GetPackageFiles(packageRoot, packagePath string) (files []string, packageLo
 		pathParts := strings.Split(packageRoot, string(os.PathSeparator))
 		for i := len(pathParts); i >= 0; i-- {
 			vendorpath := path.Join(path.Join(pathParts[:i]...), "vendor", packagePath)
-			glog.V(1).Infof("Checking %v directory", vendorpath)
+			klog.V(1).Infof("Checking %v directory", vendorpath)
 			if l, e := ListGoFiles(vendorpath, false); e == nil {
-				glog.V(1).Infof("Found %v directory", vendorpath)
+				klog.V(1).Infof("Found %v directory", vendorpath)
 				return l, vendorpath, e
 			}
 			searched = append(searched, vendorpath)
 		}
 
-		glog.V(1).Infof("Checking %v directory", packagePath)
+		klog.V(1).Infof("Checking %v directory", packagePath)
 		if l, e := ListGoFiles(packagePath, false); e == nil {
-			glog.V(1).Infof("Found %v directory", packagePath)
+			klog.V(1).Infof("Found %v directory", packagePath)
 			return l, packagePath, e
 		}
 		searched = append(searched, packagePath)

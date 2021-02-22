@@ -10,7 +10,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type Table struct {
@@ -43,11 +43,11 @@ func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 	}
 
 	file := path.Join(t.getPackagePath(pkg), "api.json")
-	glog.V(2).Infof("Global symbol table %q loading", file)
+	klog.V(2).Infof("Global symbol table %q loading", file)
 
 	raw, err := ioutil.ReadFile(file)
 	if err != nil {
-		glog.V(2).Infof("Global symbol table %q loading failed: %v", file, err)
+		klog.V(2).Infof("Global symbol table %q loading failed: %v", file, err)
 		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
 	}
 
@@ -62,7 +62,7 @@ func (t *Table) loadFromFile(pkg string) (symbols.SymbolTable, error) {
 
 func (t *Table) Lookup(pkg string) (symbols.SymbolTable, error) {
 	if table, ok := t.tables[pkg]; ok {
-		glog.V(2).Infof("Global symbol table %q found", pkg)
+		klog.V(2).Infof("Global symbol table %q found", pkg)
 		return table, nil
 	}
 
@@ -73,7 +73,7 @@ func (t *Table) Lookup(pkg string) (symbols.SymbolTable, error) {
 	}
 
 	t.tables[pkg] = table
-	glog.V(2).Infof("Global symbol table %q loaded", pkg)
+	klog.V(2).Infof("Global symbol table %q loaded", pkg)
 
 	return table, nil
 }

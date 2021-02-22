@@ -6,7 +6,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts/typevars"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type PackageContracts map[string][]contracts.Contract
@@ -25,7 +25,7 @@ func (t *Table) AddContract(contract contracts.Contract) {
 		t.Contracts[t.prefix] = make([]contracts.Contract, 0)
 	}
 	t.Contracts[t.prefix] = append(t.Contracts[t.prefix], contract)
-	glog.V(2).Infof("Adding contract: %v\n", contracts.Contract2String(contract))
+	klog.V(2).Infof("Adding contract: %v\n", contracts.Contract2String(contract))
 }
 
 func (t *Table) SetPrefix(prefix string) {

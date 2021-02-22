@@ -13,7 +13,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/stack"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 // TypeParser implementation is responsible for Go data type parsing/processing
@@ -29,7 +29,7 @@ type ExprAttribute struct {
 
 func (e *ExprAttribute) AddTypeVar(typevar typevars.Interface) *ExprAttribute {
 	e.TypeVarList = append(e.TypeVarList, typevar)
-	glog.V(2).Infof("Adding TypeVar: %v\n", typevars.TypeVar2String(typevar))
+	klog.V(2).Infof("Adding TypeVar: %v\n", typevars.TypeVar2String(typevar))
 	return e
 }
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/gofed/symbols-extractor/pkg/parser/alloctable"
 	"github.com/gofed/symbols-extractor/pkg/snapshots"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 // Table captures list of allocated symbols for each package and its files
@@ -151,7 +151,7 @@ func (t *Table) Exists(pkg string) bool {
 func (t *Table) LookupPackage(pkg string) (PackageTable, error) {
 	// the table must have at least one file processed
 	if table, ok := t.tables[pkg]; ok && len(table) > 0 {
-		glog.V(2).Infof("Package-level allocated symbol table %q found: %#v", pkg, table)
+		klog.V(2).Infof("Package-level allocated symbol table %q found: %#v", pkg, table)
 		return table, nil
 	}
 
@@ -162,7 +162,7 @@ func (t *Table) LookupPackage(pkg string) (PackageTable, error) {
 	}
 
 	t.tables[pkg] = table
-	glog.V(2).Infof("Package-level allocated symbol table %q loaded", pkg)
+	klog.V(2).Infof("Package-level allocated symbol table %q loaded", pkg)
 
 	return table, nil
 }
@@ -206,11 +206,11 @@ func (t *Table) loadFromFile(pkg string) (PackageTable, error) {
 	packagePath := t.getPackagePath(pkg)
 
 	file := path.Join(packagePath, "allocated.json")
-	glog.V(2).Infof("Global symbol table %q loading", file)
+	klog.V(2).Infof("Global symbol table %q loading", file)
 
 	raw, err := ioutil.ReadFile(file)
 	if err != nil {
-		glog.V(2).Infof("Global symbol table %q loading failed: %v", file, err)
+		klog.V(2).Infof("Global symbol table %q loading failed: %v", file, err)
 		return nil, fmt.Errorf("Unable to load %q symbol table from %q: %v", pkg, file, err)
 	}
 

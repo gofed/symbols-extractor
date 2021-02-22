@@ -7,7 +7,7 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
 	"github.com/gofed/symbols-extractor/pkg/symbols"
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 type var2Contract struct {
@@ -145,7 +145,7 @@ func (v *VarTable) GetVariable(name string) (*varTableItem, bool) {
 }
 
 func (v *VarTable) SetField(name, field string, item *varTableItem) {
-	glog.V(2).Infof("Setting field %q of %#v", field, item)
+	klog.V(2).Infof("Setting field %q of %#v", field, item)
 	if _, ok := v.fields[name]; !ok {
 		v.fields[name] = make(map[string]*varTableItem)
 	}

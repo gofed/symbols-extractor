@@ -1,6 +1,7 @@
+# github.com/go-logr/logr v0.4.0
+github.com/go-logr/logr
 # github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 ## explicit
-github.com/golang/glog
 # github.com/inconshreveable/mousetrap v1.0.0
 github.com/inconshreveable/mousetrap
 # github.com/shopspring/decimal v1.0.0
@@ -43,3 +44,6 @@ golang.org/x/xerrors/internal
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit
 gopkg.in/yaml.v2
+# k8s.io/klog/v2 v2.5.0
+## explicit
+k8s.io/klog/v2
