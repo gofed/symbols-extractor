@@ -131,13 +131,14 @@ type VarTableTest struct {
 }
 
 func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runner.VarTable) {
+	t.Logf("#### Checking variables\n")
 	for _, e := range expected {
 		tested, exists := testedVarTable.GetVariable(e.Name)
 		if !exists {
 			t.Errorf("Variable %v does not exist", e.Name)
 			continue
 		}
-		fmt.Printf("Checking %q variable...\n", e.Name)
+		t.Logf("Checking %q variable...\n", e.Name)
 		if !reflect.DeepEqual(tested.DataType(), e.DataType) {
 			tByteSlice, _ := json.Marshal(tested.DataType())
 			eByteSlice, _ := json.Marshal(e.DataType)
@@ -148,18 +149,29 @@ func CompareVarTable(t *testing.T, expected []VarTableTest, testedVarTable *runn
 	names := testedVarTable.Names()
 	if len(names) > len(expected) {
 		var eNames []string
+		eNamesMap := map[string]struct{}{}
 		for _, n := range expected {
 			eNames = append(eNames, n.Name)
+			eNamesMap[n.Name] = struct{}{}
 		}
 		sort.Strings(eNames)
 		sort.Strings(names)
-		for i := 0; i < len(eNames) && i < len(names); i++ {
-			fmt.Printf("test.name: %v\t\te.name: %v\n", names[i], eNames[i])
+		t.Logf("\n#### Once all expected variables are set, both columns will be equal\n")
+		for i := 0; i < len(names); i++ {
+			eName := ""
+			if _, exists := eNamesMap[names[i]]; exists {
+				eName = names[i]
+			}
+			fmt.Printf("test.name: %v\t\te.name: %v\n", names[i], eName)
 		}
 
-		t.Errorf("There is %v variables not yet checked", len(names)-len(expected))
-		for i := len(expected); i < len(names); i++ {
-			t.Errorf("%v variables not yet checked", names[i])
+		if len(names)-len(expected) > 0 {
+			t.Logf("\n#### There is %v variables not yet checked\n", len(names)-len(expected))
+			for _, name := range names {
+				if _, exists := eNamesMap[name]; !exists {
+					t.Errorf("%v variables not yet checked", name)
+				}
+			}
 		}
 	}
 
