@@ -466,6 +466,7 @@ func (c *Config) binaryExprNumeric(exprOp token.Token, xType, yType *opr, xDataT
 			// is the Y constant compatible with the typed variable X?
 			if yType.untyped {
 				// Y is untyped constant
+				// TODO(jchaloup): add error check for all Add?FromString calls to avoid panics
 				ma.AddXFromString(yDataType.(*gotypes.Constant).Literal)
 				if _, err := ma.XToLiteral(xType.id); err != nil {
 					return nil, fmt.Errorf("mismatched types %v and %v for %v op", xType.getOriginalType(), yType.getOriginalType(), exprOp)
