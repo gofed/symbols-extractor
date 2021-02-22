@@ -2,12 +2,10 @@ package expression
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"strings"
-	"testing"
 
 	"github.com/gofed/symbols-extractor/pkg/analyzers/type/propagation"
 	"github.com/gofed/symbols-extractor/pkg/parser/contracts"
@@ -18,13 +16,6 @@ import (
 	gotypes "github.com/gofed/symbols-extractor/pkg/types"
 	"github.com/golang/glog"
 )
-
-func init() {
-	if testing.Verbose() {
-		flag.Set("alsologtostderr", "true")
-		flag.Set("v", "5")
-	}
-}
 
 var binaryOperators = map[token.Token]struct{}{
 	token.ADD: {}, token.SUB: {}, token.MUL: {}, token.QUO: {}, token.REM: {},
@@ -397,12 +388,12 @@ func (ep *Parser) parseCompositeLit(lit *ast.CompositeLit, typeDef gotypes.DataT
 		if err != nil {
 			panic(fmt.Errorf("C global symbol table not found: %v", err))
 		}
-		fmt.Printf("item: %#v\n", qid)
+		// fmt.Printf("item: %#v\n", qid)
 		def, err := cTable.LookupDataType(selector.Item)
 		if err != nil {
 			panic(fmt.Errorf("C symbol %v not found: %v", selector.Item, err))
 		}
-		fmt.Printf("def: %#v\n", def)
+		// fmt.Printf("def: %#v\n", def)
 		nonIdentLitTypeDef = def.Def
 		glog.V(2).Infof("nonIdentLitTypeDef -> %#v", nonIdentLitTypeDef)
 	}

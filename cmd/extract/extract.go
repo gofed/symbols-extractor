@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
+	goflag "flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,61 +22,116 @@ import (
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables"
 	"github.com/gofed/symbols-extractor/pkg/symbols/tables/global"
 	"github.com/golang/glog"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
-type flags struct {
+type SymbolsExtractorExtractCommand struct {
 	// Go package entry point
-	packagePath *string
+	packagePath string
 	// Import path prefix for the entry point
-	packagePrefix *string
+	packagePrefix string
 	// location of already extracted symbols (used for storing extracted symbols as well)
-	symbolTablePath *string
+	symbolTablePath string
 	// location of symbols imported from the "C" package
-	cgoSymbolsPath *string
+	cgoSymbolsPath string
 
-	stdlib        *bool
-	allocated     *bool
-	recursiveFrom *string
-	filterPrefix  *string
-	perfile       *bool
-	pertree       *bool
-	allallocated  *bool
-	tojson        *bool
-	glidefile     *string
-	godepsfile    *string
+	stdlib        bool
+	allocated     bool
+	recursiveFrom string
+	filterPrefix  string
+	perfile       bool
+	pertree       bool
+	allallocated  bool
+	tojson        bool
+	glidefile     string
+	godepsfile    string
 	// Interpret entry point as a library instead of a reachability tree
-	library *bool
+	library bool
 }
 
-func buildFlags() *flags {
-	return &flags{
-		packagePath:     flag.String("package-path", "", "Package entry point"),
-		packagePrefix:   flag.String("package-prefix", "", "Package import path prefix in a PACKAGE:COMMIT form"),
-		symbolTablePath: flag.String("symbol-table-dir", "", "Directory with preprocessed symbol tables"),
-		// TODO(jchaloup): extend it with a hiearchy of cgo symbol files
-		cgoSymbolsPath: flag.String("cgo-symbols-path", "", "Symbol table with CGO symbols (per entire project space)"),
-		stdlib:         flag.Bool("stdlib", false, "Parse system Go std library"),
-		allocated:      flag.Bool("allocated", false, "Extract allocation of symbols"),
-		recursiveFrom:  flag.String("recursive-from", "", "Extract allocation of symbols from all prefixed paths"),
-		filterPrefix:   flag.String("filter-prefix", "", "Filter out all imported packages from allocated symbols that does not match the prefix"),
-		perfile:        flag.Bool("per-file", false, "Display allocated symbols per file"),
-		pertree:        flag.Bool("per-tree", false, "Display allocated symbols per entire tree"),
-		allallocated:   flag.Bool("all-allocated", false, "Display all allocated symbols"),
-		tojson:         flag.Bool("json", false, "Display allocated symbols in JSON"),
-		glidefile:      flag.String("glidefile", "", "Glide.lock with dependencies"),
-		godepsfile:     flag.String("godepsfile", "", "Godeps.json with dependencies"),
-		library:        flag.Bool("library", false, "Interpret package entry point as a library"),
-	}
-}
-
-func (f *flags) parse() error {
-	flag.Parse()
-
-	if !(*f.stdlib) && *(f.packagePath) == "" {
+func (command *SymbolsExtractorExtractCommand) Run() error {
+	if !command.stdlib && command.packagePath == "" {
 		return fmt.Errorf("--package-path is not set")
 	}
 
+	// Otherwise it can eat all the CPU power
+	runtime.GOMAXPROCS(1)
+
+	output, err := exec.Command("go", "version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Error running `go version`: %v", err)
+	}
+	// TODO(jchaloup): Check the version is of the form d.d for now (later extend with alpha/beta/rc...)
+	goversion := strings.Split(string(output), " ")[2][2:]
+
+	// parse the standard library
+	if command.stdlib {
+		processStdlib(command.symbolTablePath, command.cgoSymbolsPath, goversion)
+		return nil
+	}
+
+	snapshot, err := buildSnapshot(command.glidefile, command.godepsfile, command.packagePrefix)
+	if err != nil {
+		return err
+	}
+
+	p, err := parser.New(command.symbolTablePath, command.cgoSymbolsPath, goversion, snapshot)
+	if err != nil {
+		return err
+	}
+
+	entryPoints, _ := buildEntryPoints(command.packagePath, command.library)
+
+	for _, pkgPath := range entryPoints {
+		if err := p.Parse(pkgPath, command.allocated); err != nil {
+			return fmt.Errorf("Parse error: %v", err)
+		}
+	}
+
+	if command.allocated {
+		if err := printPackageAllocTables(p.GlobalAllocTable(), p.GlobalSymbolTable(), p.GlobalContractsTable(), entryPoints, &cmdFlags); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+var cmdFlags = SymbolsExtractorExtractCommand{}
+
+func NewSymbolsExtractorExtractCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "symbols-extract",
+		Short: "Go symbols extractor",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := cmdFlags.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&cmdFlags.packagePath, "package-path", cmdFlags.packagePath, "Package entry point")
+	flags.StringVar(&cmdFlags.packagePrefix, "package-prefix", cmdFlags.packagePrefix, "Package import path prefix in a PACKAGE:COMMIT form")
+	flags.StringVar(&cmdFlags.symbolTablePath, "symbol-table-dir", cmdFlags.symbolTablePath, "Directory with preprocessed symbol tables")
+	// TODO(jchaloup): extend it with a hiearchy of cgo symbol files
+	flags.StringVar(&cmdFlags.cgoSymbolsPath, "cgo-symbols-path", cmdFlags.cgoSymbolsPath, "Symbol table with CGO symbols (per entire project space)")
+	flags.BoolVar(&cmdFlags.stdlib, "stdlib", cmdFlags.stdlib, "Parse system Go std library")
+	flags.BoolVar(&cmdFlags.allocated, "allocated", cmdFlags.allocated, "Extract allocation of symbols")
+	flags.StringVar(&cmdFlags.recursiveFrom, "recursive-from", cmdFlags.recursiveFrom, "Extract allocation of symbols from all prefixed paths")
+	flags.StringVar(&cmdFlags.filterPrefix, "filter-prefix", cmdFlags.filterPrefix, "Filter out all imported packages from allocated symbols that does not match the prefix")
+	flags.BoolVar(&cmdFlags.perfile, "per-file", cmdFlags.perfile, "Display allocated symbols per file")
+	flags.BoolVar(&cmdFlags.pertree, "per-tree", cmdFlags.pertree, "Display allocated symbols per entire tree")
+	flags.BoolVar(&cmdFlags.allallocated, "all-allocated", cmdFlags.allallocated, "Display all allocated symbols")
+	flags.BoolVar(&cmdFlags.tojson, "json", cmdFlags.tojson, "Display allocated symbols in JSON")
+	flags.StringVar(&cmdFlags.glidefile, "glidefile", cmdFlags.glidefile, "Glide.lock with dependencies")
+	flags.StringVar(&cmdFlags.godepsfile, "godepsfile", cmdFlags.godepsfile, "Godeps.json with dependencies")
+	flags.BoolVar(&cmdFlags.library, "library", cmdFlags.library, "Interpret package entry point as a library")
+
+	return cmd
 }
 
 func PrintAllocTables(allocTable *allocglobal.Table) {
@@ -95,16 +150,16 @@ func PrintAllocTables(allocTable *allocglobal.Table) {
 	}
 }
 
-func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.Table, contractTable *contractglobal.Table, entryPoints []string, f *flags) error {
+func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.Table, contractTable *contractglobal.Table, entryPoints []string, cmdFlags *SymbolsExtractorExtractCommand) error {
 
-	perfile := *f.perfile
-	allallocated := *f.allallocated
-	tojson := *f.tojson
+	perfile := cmdFlags.perfile
+	allallocated := cmdFlags.allallocated
+	tojson := cmdFlags.tojson
 
 	packageAllocTables := make(map[string]allocglobal.PackageTable)
 
 	// collect all packages with a given prefix reachable from all the entry points
-	if *f.recursiveFrom != "" {
+	if cmdFlags.recursiveFrom != "" {
 		processed := make(map[string]struct{})
 		toProcess := entryPoints
 		for len(toProcess) > 0 {
@@ -132,7 +187,7 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 		}
 
 		for p := range processed {
-			if !strings.HasPrefix(p, *f.recursiveFrom) {
+			if !strings.HasPrefix(p, cmdFlags.recursiveFrom) {
 				delete(processed, p)
 				continue
 			}
@@ -154,19 +209,19 @@ func printPackageAllocTables(allocTable *allocglobal.Table, globalTable *global.
 				return err
 			}
 
-			if !tt.FilterOut(*f.filterPrefix) {
+			if !tt.FilterOut(cmdFlags.filterPrefix) {
 				packageAllocTables[p] = tt
 			}
 		}
 
 		// if per-project is set, merge all tables into one
-		if *f.pertree {
+		if cmdFlags.pertree {
 			cpTable := allocglobal.NewPackageTable()
 			for p, tt := range packageAllocTables {
 				cpTable.MergeWith(&tt)
 				delete(packageAllocTables, p)
 			}
-			packageAllocTables[*f.recursiveFrom] = *cpTable
+			packageAllocTables[cmdFlags.recursiveFrom] = *cpTable
 		}
 
 	} else {
@@ -356,50 +411,11 @@ func buildEntryPoints(packagePath string, library bool) ([]string, error) {
 // Later, one will specify a path to package symbol tables (each marked with corresponding commit)
 func main() {
 
-	f := buildFlags()
+	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
-	if err := f.parse(); err != nil {
-		glog.Fatal(err)
-	}
-
-	// Otherwise it can eat all the CPU power
-	runtime.GOMAXPROCS(1)
-
-	output, err := exec.Command("go", "version").CombinedOutput()
-	if err != nil {
-		glog.Fatal(fmt.Errorf("Error running `go version`: %v", err))
-	}
-	// TODO(jchaloup): Check the version is of the form d.d for now (later extend with alpha/beta/rc...)
-	goversion := strings.Split(string(output), " ")[2][2:]
-
-	// parse the standard library
-	if *f.stdlib {
-		processStdlib(*f.symbolTablePath, *f.cgoSymbolsPath, goversion)
-		return
-	}
-
-	snapshot, err := buildSnapshot(*f.glidefile, *f.godepsfile, *f.packagePrefix)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	p, err := parser.New(*(f.symbolTablePath), *(f.cgoSymbolsPath), goversion, snapshot)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	entryPoints, _ := buildEntryPoints(*f.packagePath, *f.library)
-
-	for _, pkgPath := range entryPoints {
-		if err := p.Parse(pkgPath, *(f.allocated)); err != nil {
-			glog.Fatalf("Parse error: %v", err)
-		}
-	}
-
-	if *(f.allocated) {
-		if err := printPackageAllocTables(p.GlobalAllocTable(), p.GlobalSymbolTable(), p.GlobalContractsTable(), entryPoints, f); err != nil {
-			fmt.Print(err)
-			os.Exit(1)
-		}
+	command := NewSymbolsExtractorExtractCommand()
+	if err := command.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 }
